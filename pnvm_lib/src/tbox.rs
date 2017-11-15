@@ -89,6 +89,7 @@ where
         self.vers_.get_access_info()
     }
 
+
     pub fn set_access_info(&self, info : Arc<TxnInfo>) {
         self.vers_.set_access_info(info)
     }
@@ -218,6 +219,19 @@ impl TRef for TInt {
 
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
+    }
+
+    //Unused
+    fn get_field_ptr(&self, _i: usize) -> *mut u8 {
+        panic!("tbox not implemented")
+    }
+    fn get_field_size(&self, _i : usize) -> usize {
+        panic!("tbox not implemented")
+    }
+
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, _i : usize) -> *mut u8 {
+        panic!("tbox not implemented")
     }
 
     fn read(&self) -> &Any {

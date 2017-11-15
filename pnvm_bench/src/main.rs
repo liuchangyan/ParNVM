@@ -1,3 +1,5 @@
+#![feature(ptr_wrapping_offset_from)]
+
 use std::mem;
 extern crate rand;
 extern crate pnvm_sys;
@@ -16,11 +18,16 @@ use std::{
 
 fn main() {
     env_logger::init().unwrap();
-    multi_threads(1);
+    //multi_threads(1);
+
+    let cus = Customer::new();
+    
+    println!("{:?}", cus.field_offset());
 }
 
 const PMEM_TEST_PATH_ABS: &str = "../data";
 
+#[repr(C)]
 #[derive(Clone)]
 pub struct Customer {
     pub c_id: i32,
@@ -97,6 +104,17 @@ impl Customer {
         }
     }
 
+    pub fn field_offset(&self) -> [u8;32] {
+        let mut fields : [u8;32] = [0;32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[0] = (&self.c_id as *const _ as *const u8)
+            .wrapping_offset_from(base) as u8;
+        fields[1] = (&self.c_d_id as *const _ as *const u8)
+            .wrapping_offset_from(base) as u8;
+
+        fields
+    }
+
 }
 
 use std::time::{Duration, Instant};
@@ -155,9 +173,6 @@ fn single_write_drain(size: usize) {
 
 }
 
-fn pmem_direct(size: usize) {
-    
-}
 
 
 fn multi_threads(thread_num : usize) {

@@ -142,6 +142,8 @@ pub trait BoxRef<T> {
 
 pub trait TRef : fmt::Debug{
     fn get_ptr(&self) -> *mut u8;
+    fn get_field_ptr(&self, usize) -> *mut u8;
+    fn get_field_size(&self, usize) -> usize;
     fn get_layout(&self) -> Layout;
     fn install(&self, id: Tid);
     fn box_clone(&self) -> Box<dyn TRef>;
@@ -158,6 +160,8 @@ pub trait TRef : fmt::Debug{
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8;
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, usize) -> *mut u8;
 }
 
 
@@ -365,6 +369,7 @@ where
 //    }
 //}
 
+pub type FieldArray = Vec<usize>;
 
 //#[derive(PartialEq, Eq, Hash)]
 pub struct TTag
@@ -374,6 +379,9 @@ pub struct TTag
     pub oid_:      ObjectId,
     //write_val_:    Option<Box<Any>>,
     pub has_write_: bool,
+    pub fields_ : Option<FieldArray>, /* Fix length of the fields idx buffer */
+
+
     is_lock_ : bool,
     pub vers_:     u32, /* 0 means empty */
 
@@ -392,6 +400,7 @@ impl TTag
             vers_:      0,
             has_write_: false,
             is_lock_: false,
+            fields_ :None, 
         }
     }
     
@@ -463,6 +472,9 @@ impl TTag
         self.has_write_ = true;
     }
 
+    pub fn set_fields(&mut self, fields: FieldArray) {
+        self.fields_ = Some(fields);
+    }
 
     //#[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
@@ -491,6 +503,12 @@ impl TTag
         self.tobj_ref_.write(val);
         self.has_write_ = true; 
     }
+
+
+   // pub fn write_field(&mut self, vals: &[(usize, &Any)], val_cnt: usize) {
+   //     self.tobj_ref_.replace_field(vals, val_cnt);
+   //     self.has_write_ = true;
+   // }
     
     //FIXME: pmem flush
     #[cfg(any(feature = "pmem", feature = "disk"))]
@@ -499,13 +517,27 @@ impl TTag
             return;
         }
 
-        let pmemaddr = self.tobj_ref_.get_pmem_addr();
 
         #[cfg(feature = "pmem")] 
-        {
-            pnvm_sys::memcpy_nodrain(pmemaddr,
-                                     self.tobj_ref_.get_ptr(),
-                                     self.tobj_ref_.get_layout().size());
+        match self.fields_ {
+            Some(ref fields) => {
+                for field in fields.iter() {
+                    let pmemaddr = self.tobj_ref_.get_pmem_field_addr(*field);
+                    let size = self.tobj_ref_.get_field_size(*field);
+                    let vaddr = self.tobj_ref_.get_field_ptr(*field);
+                    warn!("[{:?}] [persit_data] name : {:?}, paddr: {:p}, vaddr: {:p}, size: {}", 
+                          self.tobj_ref_.get_id(), self.name_, pmemaddr, vaddr, size);
+                    pnvm_sys::memcpy_nodrain(pmemaddr,
+                                             vaddr,
+                                             size);
+
+                }
+            }, 
+            None => {
+                    pnvm_sys::memcpy_nodrain(self.tobj_ref_.get_pmem_addr(),
+                                             self.tobj_ref_.get_ptr(),
+                                             self.tobj_ref_.get_layout().size());
+            }
         }
 
 
@@ -548,6 +580,14 @@ impl fmt::Debug for TTag
             self.oid_, self.vers_
         )
     }
+}
+
+
+#[derive(Clone,Copy, Debug,PartialEq, Eq, Hash)]
+pub enum Operation {
+    RWrite,
+    Delete,
+    Push,
 }
 
 
