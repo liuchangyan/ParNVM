@@ -72,15 +72,15 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     let mut tables = if conf.partition != 0 {
         let par = conf.partition;
         Tables {
-            warehouse: Table::new_with_buckets(par, conf.wh_num as usize, "warehouse"),
-            district: Table::new_with_buckets(par, num_dis as usize, "district"),
-            customer: CustomerTable::new_with_buckets(par, 4096, "customer"),
-            neworder: NewOrderTable::new_with_buckets(par, 4096*16*scale_ratio, "neworder"),
-            order: OrderTable::new_with_buckets(par, 32768 * 2 * scale_ratio, "order"),
-            orderline: OrderLineTable::new_with_buckets(par, 8096*64 * scale_ratio, "orderline"),
+            warehouse: Table::new_with_buckets(par, conf.wh_num as usize* total_wd , "warehouse"),
+            district: Table::new_with_buckets(par, num_dis as usize * total_wd, "district"),
+            customer: CustomerTable::new_with_buckets(par, 4096 * total_wd, "customer"),
+            neworder: NewOrderTable::new_with_buckets(par, 4096*16*scale_ratio * total_wd, "neworder"),
+            order: OrderTable::new_with_buckets(par, 32768 * 2 * scale_ratio * total_wd, "order"),
+            orderline: OrderLineTable::new_with_buckets(par, 8096*64 * scale_ratio * total_wd, "orderline"),
             item: Table::new_with_buckets(512, 256, "item"),
-            history: Table::new_with_buckets(par, 51200 *scale_ratio, "history"),
-            stock: Table::new_with_buckets(par, 65536 *2 ,"stock"),
+            history: Table::new_with_buckets(par, 51200 *scale_ratio * total_wd, "history"),
+            stock: Table::new_with_buckets(par, 65536 *2  * total_wd,"stock"),
         }
     } else {
         Tables {
