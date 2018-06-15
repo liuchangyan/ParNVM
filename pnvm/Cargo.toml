@@ -1,0 +1,7 @@
+[package]
+name = "pnvm"
+version = "0.1.0"
+authors = ["Ricky Chen Xu <xuchen@u.nus.edu>"]
+
+[dependencies]
+pnvm_lib = {path = "../pnvm_lib" }
