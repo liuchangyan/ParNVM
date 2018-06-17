@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Ricky Chen Xu <xuchen@u.nus.edu>"]
 
 [dependencies]
+num_cpus = "1.0"
