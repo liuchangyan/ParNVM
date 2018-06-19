@@ -1,28 +1,26 @@
 [TOC]
 
-
-
 ------
 
 
 
-
+:construction_worker: [WORK IN PROGRESS....]
 
 ## Offline Chopper
 
-##### What is the input of the chopper 
+### What is the input of the chopper 
 
-##### What does the chopper do 
+### What does the chopper do 
 
-##### What is the output of the chopper
+### What is the output of the chopper
 
-##### What is the structure of the transaction and piece 
+### What is the structure of the transaction and piece 
 
 
 
 ## Runtime Scheduling 
 
-#### Overview 
+### Overview 
 
 A per-core scheduler thread is responsible for executing the transactions in the correct order, as well as making the data persistent. Upon receiving a dispatched transaction, the scheduler will execute the transaction's pieces in the program order. 
 
@@ -40,19 +38,19 @@ When all the pieces have been sucessfully executed, the scheduler needs to check
 
 
 
-#### Details
+### Details
 
-###### A1
+#### A1
 
-###### 	How to find out if there are conflicting pieces running?
+#### 	How to find out if there are conflicting pieces running?
 
 > Assuming information of all conflicting pieces and their respective transactions are known, a global data structure can be used to keep track of the running pieces from each transaction at each core.  
 
 
 
-###### A2
+#### A2
 
-###### 	How to find out if dependency source transactions have already executed the conflicting pieces? 
+#### 	How to find out if dependency source transactions have already executed the conflicting pieces? 
 
 > A global data structure could allow lookup of transaction and piece' identity can be shared among cores. A scheduler can find out what are pieces that conflicting transactions have ran, and delay its execution according to that information. 
 >
@@ -60,17 +58,17 @@ When all the pieces have been sucessfully executed, the scheduler needs to check
 
 
 
-###### A3
+#### A3
 
-###### 	Can the pieces from another transaction to be ran instead of blocking here?
+#### 	Can the pieces from another transaction to be ran instead of blocking here?
 
 > Intuitively, since the logging pieces from the next transaction can be run in parrallel with any part of another transaction (<u>proof required</u>), we can save time by avoiding busy waiting. 
 
 
 
-###### A4
+#### A4
 
-###### 	How to compute the TID?
+#### 	How to compute the TID?
 
 > The computation of TID should avoid a single syncrhonization point, and I borrowed the idea of TID generation from Silo. The TID can be computed from the versions of data access by the transactions and the conflicting transactions.  In a nutshell, the TID of a commiting transaction should have the following gaurantee : 
 >
@@ -79,9 +77,9 @@ When all the pieces have been sucessfully executed, the scheduler needs to check
 
 
 
-###### A5
+#### A5
 
-###### 	How to do logging?
+#### 	How to do logging?
 
 > - Undo logging has to capture the dependecy between conflicting transactions so that the undo logs to the same location (data object) can be replayed in the correct order when recovery. Only write-write conflicts need to be captured for recovery since read recovery does not concern of read events. However, R-W conflicts still have to be obeyed at runtime. 
 > - An extra read/load might be necessary to obtain relevant information to construct an undo log. 
@@ -105,9 +103,9 @@ When all the pieces have been sucessfully executed, the scheduler needs to check
 
 
 
-###### A6
+#### A6
 
-###### 	How to commit a transaction?
+## 	How to commit a transaction?
 
 > Correct recovery requires the final commit of a transaction to be ordered after all the data mutations from the transaction to be visible in NVM. (Otherwise if a crash happens between the commit persist and the pending data persists, the recovery manager will not be able to recover the transaction )
 >
@@ -129,7 +127,7 @@ When all the pieces have been sucessfully executed, the scheduler needs to check
 
 ## Notes 
 
-##### Integration of Rust features 
+#### Integration of Rust features 
 
 - [Dynamic and manual piece labelling] The idea of ownership might help to define the boundaries of pieces in terms of data dependency. 
 
