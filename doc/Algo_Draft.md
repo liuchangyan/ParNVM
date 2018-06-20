@@ -1,5 +1,4 @@
 ---
-typora-root-url: ./assets
 typora-copy-images-to: ./assets
 ---
 
@@ -33,7 +32,7 @@ The chopper does something similar to the offline analysis of Callas:
 
 The output is a depdency graph of pieces between transactions. For example:
 
-![image-20180620165616400](/image-20180620165616400.png)
+![image-20180620165616400](assets/image-20180620165616400.png)
 
 ### What is the structure of the transaction and piece 
 
@@ -66,7 +65,7 @@ Transaction{
 
 
 
-![image-20180620172356158](/image-20180620172356158.png)
+![image-20180620172356158](assets/image-20180620172356158.png)
 
 - **TxTracker**: An abstract global data structure that keeps track of running pieces and transactions. 
 
@@ -183,7 +182,7 @@ void execute_piece(Piece piece) {
 >
 > - For conflicting W-W pieces, the cache coherence protocol at runtime is crucial to enforce correct-ordering of writes to the memory locations(R3). So that the resultant value at the conflicting locations will eventually be correct. And the Persist barriers between the logs and the data ensure that if data mutation is persisted, its associated undo logs must have been persisted(R2). In addition, the logs must be persist in the correct order as well(R1). (This is pretty much what Peter Chen proposes for DCT strand persistency) 
 >
->   ![image-20180620181605799](/image-20180620181605799.png)
+>   ![image-20180620181605799](assets/image-20180620181605799.png)
 >
 >   
 >
