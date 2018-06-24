@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::rc::Rc;
 use std::sync::Mutex;
-use std::cell::RefCell;
 
 pub struct Dep {
     btree_ : Mutex<BTreeMap<Arc<String>, u32>>

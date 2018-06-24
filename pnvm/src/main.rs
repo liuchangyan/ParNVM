@@ -13,18 +13,16 @@ fn main() {
 
 /******** Utility Functions ********/
 
-fn say_hi() {
-    println!("Hello there!");
-}
+fn test_single() {
 
-fn workload() {
-    let dep = Arc::new(RefCell::new(deps::Dep::new()));
-    for i in 1..10 {
-        let dep = Arc::clone(&dep);
-        let mut tx = txn::Transaction::new(say_hi, i, dep);
-        let dep = vec![format!("a{}", i%3),format!("{}", i%3)];
-        tx.add_deps(dep);
-        tx.execute();
-        tx.commit();
+    
+
+
+       // let dep = Arc::clone(&dep);
+       // let mut tx = txn::Transaction::new(say_hi, i, dep);
+       // let dep = vec![format!("a{}", i%3),format!("{}", i%3)];
+       // tx.add_deps(dep);
+       // tx.execute();
+       // tx.commit();
     }
 }

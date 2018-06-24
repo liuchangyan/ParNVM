@@ -1,5 +1,0 @@
-    use std::thread;
-    use std::sync::Arc;
-    pub struct Scheduler<T>
-    where
-        T: Fn() + Send + Sync + 'static
