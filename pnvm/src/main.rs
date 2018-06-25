@@ -1,6 +1,6 @@
 extern crate pnvm_lib;
 
-use pnvm_lib::*;
+use pnvm_lib::txn::*;
 use std::sync::Arc;
 use std::cell::RefCell;
 
@@ -15,7 +15,17 @@ fn main() {
 
 fn test_single() {
 
-    
+        let tb = TBox<u32>(1);
+
+        {
+            let mut tx = Transaction::new(1);
+
+            tx.write(tb, 2);
+
+            tx.try_commit();
+            
+            assert!(tb.raw_read() == 2);
+        }
 
 
        // let dep = Arc::clone(&dep);

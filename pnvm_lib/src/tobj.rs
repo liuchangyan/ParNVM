@@ -28,6 +28,7 @@ pub struct Tid(u32);
 //TTag is attached with each logical segment (identified by key)
 //for a TObject. 
 //TTag is a local object to the thread.
+#[derive(PartialEq, Eq, Hash)]
 pub struct TTag<'a, T: 'a> {
     tobj_ref_:  &'a TObject<T>,
     key_:       u32,

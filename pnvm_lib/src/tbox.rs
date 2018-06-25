@@ -1,15 +1,32 @@
 use tobj::{TValue, TVersion, TTag, TObject};
-use txn::Transaction;
+use txn::{Tid,Transaction};
+use util;
 
 
+pub type TObject<T> = Rc<RefCell<_TObject<T>>;
+
+pub struct ObjectId(u32);
 
 pub struct TBox<T> {
     tvalue_: TValue<T>,
     vers_:   TVersion,
+    id_ : ObjectId,
 }
 
 
-impl<T> TObject<T> for TBox<T> {
+impl<T> _TObject<T> for TBox<T> {
+    fn new(val : T) -> Self {
+        let id = util::random_id();
+        TBox {
+            tvalue_ : val,
+            id_ : id,
+            vers_: Tversion {
+                last_writer_ : None,
+                lock_ : Arc::new(Mutex::new(false))
+            }
+        }
+    }
+
     /*Access callbacks */
     fn read(&self) -> &T {
         let tag = ttag::tag(&self, 0);
@@ -26,8 +43,8 @@ impl<T> TObject<T> for TBox<T> {
     }
 
     /*Commit callbacks*/
-    fn lock(&mut self, _:TTag<T>, tx : &Transaction) -> bool {
-        tx.lock(&mut self.vers_)
+    fn lock(&mut self, tid : Tid) -> bool {
+         
     }
 
     fn check(&self, _ : TTag<T>, tx: &Transaction) -> bool {
@@ -42,5 +59,14 @@ impl<T> TObject<T> for TBox<T> {
      fn unlock(&mut self) {
         self.vers_.unlock(); 
     }
+
+     /* No Trans Access method */
+     fn raw_read(&self) -> T {
+        self.tvalue_.data_
+     }
+
+     fn raw_write(&mut self, val : T){
+        self.tvalue_.data_ = val
+     }
 
 }
