@@ -1,55 +1,66 @@
-use std::sync::{Arc, Mutex};
-use std::result;
-use txn::Transaction;
+use std::sync::{ Mutex};
+use std::rc::Rc;
+use std::cell::RefCell;
+use txn::{Transaction, Tid};
 
 //Base trait for all the data structure
-pub trait TObject<T> 
+pub type TObject<T> = Rc<RefCell<_TObject<T>>>;
+
+pub trait _TObject<T> 
+where T: Clone
     {
-    fn lock(&mut self, TTag<T>, &Transaction) -> bool;
-    fn check(&self, TTag<T>, &Transaction) -> bool;
-    fn install(&mut self, TTag<T>, &Transaction);
+    fn lock(&mut self, Tid) -> bool;
+    fn check(&self, TTag<T>, &Transaction<T>) -> bool;
+    fn install(&mut self, TTag<T>, &Transaction<T>);
     fn unlock(&mut self);
+    fn get_id(&self) -> ObjectId;
+    fn get_data(&self) -> T;
 }
 
-pub struct TValue<T> {
-    data_: T,
-}
+#[derive(PartialEq,Copy, Clone, Debug, Eq, Hash)]
+pub struct ObjectId(u32);
+
 
 //[TODO:]To be optimized later
 pub struct TVersion {
-    last_writer_: Option<Tid>,
-    lock_:        Arc<Mutex<bool>>,
+    pub last_writer_: Option<Tid>,
+    //lock_:        Arc<Mutex<bool>>,
+    pub lock_owner_:  Mutex<Option<Tid>>
     //lock_owner_:  Option<Tid>,
 }
 
-#[derive(PartialEq,Copy, Clone, Debug)]
-pub struct Tid(u32);
 
 //TTag is attached with each logical segment (identified by key)
 //for a TObject. 
 //TTag is a local object to the thread.
-#[derive(PartialEq, Eq, Hash)]
-pub struct TTag<'a, T: 'a> {
-    tobj_ref_:  &'a TObject<T>,
-    key_:       u32,
-    write_val_: Option<T>,
-    read_val_: Option<Tvalue<T>>,
-}
 
 impl TVersion {
-    pub fn lock(&mut self) -> bool {
-        let mut locked = self.lock_.lock().unwrap();
-        if *locked {
-            false
-        } else {
-            *locked = true;
-            true  
-        }
-    }
+    pub fn lock(&mut self, tid: Tid) -> bool {
+        let mut lock_owner = self.lock_owner_.lock().unwrap();
+        let (success, empty) = match *lock_owner {
+            Some(ref cur_owner) => {
+                if *cur_owner == tid {
+                    (true, false)
+                } else {
+                    (false, false)
+                }
+            },
+            None => {
+                (true, true)
+            }
+        };
 
+        if empty {
+            *lock_owner = Some(tid)
+        }
+        success
+    }
+    
+
+    //Caution: whoever has access to self can unlock
     pub fn unlock(&mut self) {
-        let mut locked = self.lock_.lock().unwrap();
-        *locked = false;
+        let mut lock_owner = self.lock_owner_.lock().unwrap();
+        *lock_owner = None;
     }
 
     pub fn check_version(&self, tid: Tid) -> bool {
@@ -69,28 +80,64 @@ impl TVersion {
     }
 }
 
-impl<T> TValue<T> {
+pub struct TValue<T>
+where T:Clone
+{
+    pub data_: T,
+}
+
+impl<T> TValue<T> 
+where T:Clone
+{
     pub fn store(&mut self, data: T) {
         self.data_ = data;
     }
+
+    pub fn load(&self) -> T {
+        self.data_.clone()
+    }
 }
 
-impl<'a, T> TTag<'a, T>
-where
-    T: 'a,
+#[derive(PartialEq, Eq, Hash)]
+pub struct TTag<T> {
+    //tobj_ref_:  &'a TObject<T>,
+    pub oid_:       ObjectId,
+    write_val_: Option<T>,
+}
+
+impl<T> TTag<T>
+where T:Clone
 {
-    pub fn write_value(self) -> T {
+    pub fn new(oid: ObjectId, write_value: Option<T>) -> Self {
+        TTag{
+            oid_: oid,
+            write_val_: write_value
+        }
+    }
+
+    pub fn write_value(&self) -> T {
         match self.write_val_ {
-            Some(t) => t,
+            Some(ref t) => T::clone(t),
             None => panic!("Write Tag Should Have Write Value")
         }
     }
 
-    pub fn has_read(&self) -> bool {
+    pub fn has_write(&self) -> bool {
         match self.write_val_ {
             Some(_) => true,
             None => false
         }
     }
 
+    pub fn has_read(&self) -> bool {
+        !self.has_write()
+    }
+}
+
+
+static mut OBJECTID: u32 = 1;
+pub unsafe fn next_id() -> ObjectId {
+    let ret = OBJECTID;
+    OBJECTID += 1;
+    ObjectId(ret)
 }
