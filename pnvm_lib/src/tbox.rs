@@ -1,7 +1,8 @@
 use txn::{Tid,Transaction};
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::sync::{Mutex};
+use std::fmt;
+//use std::rc::Rc;
+//use std::cell::RefCell;
+use std::sync::{RwLock, Mutex, Arc};
 use tobj::{TValue, TVersion, TTag,  ObjectId, _TObject, TObject};
 use tobj;
 
@@ -24,13 +25,13 @@ where T: Clone
          self.vers_.lock(tid)
     }
 
-    fn check(&self, _ : TTag<T>, tx: &Transaction<T>) -> bool {
-        self.vers_.check_version(tx.commit_id())
+    fn check(&self, tid : &Option<Tid>) -> bool {
+        self.vers_.check_version(tid)
     }
     
-    fn install(&mut self, tag : TTag<T>, tx: &Transaction<T>) {
-        self.tvalue_.store(tag.write_value());
-        self.vers_.set_version(tx.commit_id());
+    fn install(&mut self, val :T, tid: Tid) {
+        self.tvalue_.store(val);
+        self.vers_.set_version(tid);
     }
 
     fn unlock(&mut self) {
@@ -45,20 +46,30 @@ where T: Clone
         self.id_
     }
 
-     
+    fn get_version(&self) -> Option<Tid> {
+       self.vers_.get_version()
+    }
 
+     /* No Trans Access method */
+     fn raw_read(&self) -> T {
+        self.tvalue_.load()
+     }
+
+     fn raw_write(&mut self, val : T){
+        self.tvalue_.store(val);
+     }
 }
 
 impl<T> TBox<T> 
 where T: Clone
 {
 
-    pub fn new(val : T) -> Rc<RefCell<TBox<T>>> {
+    pub fn new(val : T) -> Arc<RwLock<TBox<T>>> {
         let id;
         unsafe {
             id = tobj::next_id();
         }
-        Rc::new(RefCell::new(TBox{
+        Arc::new(RwLock::new(TBox{
             tvalue_ : TValue{
                 data_: val
             },
@@ -70,14 +81,6 @@ where T: Clone
         }))
     }
 
-     /* No Trans Access method */
-     fn raw_read(&self) -> T {
-        self.tvalue_.load()
-     }
-
-     fn raw_write(&mut self, val : T){
-        self.tvalue_.store(val);
-     }
 
 
 }

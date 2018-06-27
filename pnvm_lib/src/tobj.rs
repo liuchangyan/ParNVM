@@ -1,21 +1,27 @@
-use std::sync::{ Mutex};
-use std::rc::Rc;
-use std::cell::RefCell;
-use txn::{Transaction, Tid};
+use std::sync::{ Arc, RwLock,Mutex};
+//use std::rc::Rc;
+//use std::cell::RefCell;
+use txn::{Tid};
+use std::fmt;
 
 //Base trait for all the data structure
-pub type TObject<T> = Rc<RefCell<_TObject<T>>>;
+pub type TObject<T> = Arc<RwLock<_TObject<T>>>;
 
 
 pub trait _TObject<T> 
-where T: Clone
+where T: Clone 
     {
     fn lock(&mut self, Tid) -> bool;
-    fn check(&self, TTag<T>, &Transaction<T>) -> bool;
-    fn install(&mut self, TTag<T>, &Transaction<T>);
+    fn check(&self, &Option<Tid>) -> bool;
+    fn install(&mut self, T, Tid);
     fn unlock(&mut self);
     fn get_id(&self) -> ObjectId;
     fn get_data(&self) -> T;
+    fn get_version(&self) -> Option<Tid>;
+
+    //For debug
+    fn raw_read(&self) -> T;
+    fn raw_write(&mut self, T) ;
 }
 
 
@@ -51,7 +57,6 @@ impl TVersion {
                 (true, true)
             }
         };
-
         if empty {
             *lock_owner = Some(tid)
         }
@@ -65,10 +70,19 @@ impl TVersion {
         *lock_owner = None;
     }
 
-    pub fn check_version(&self, tid: Tid) -> bool {
-        match self.last_writer_ {
-            Some(ref cur_tid) => *cur_tid == tid,
-            None => false,
+    pub fn check_version(&self, tid: &Option<Tid>) -> bool {
+        println!("--- [Checking Version] {:?} <-> {:?}", tid, self.last_writer_);
+        let lock_owner = self.lock_owner_.lock().unwrap();
+        match (tid, self.last_writer_, *lock_owner) {
+            (Some(ref cur_tid), Some(ref tid), None) => {
+                if *cur_tid == *tid {
+                    true
+                } else {
+                    false 
+                }
+            },
+            (None, None, None)  => true,
+            (_ , _, _) => false
         }
     }
 
@@ -100,20 +114,23 @@ where T:Clone
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+//#[derive(PartialEq, Eq, Hash)]
 pub struct TTag<T> {
-    //tobj_ref_:  &'a TObject<T>,
-    pub oid_:       ObjectId,
+    pub tobj_ref_:  TObject<T>,
+    pub oid_:   ObjectId,
     write_val_: Option<T>,
+    pub vers_ : Option<Tid>
 }
 
 impl<T> TTag<T>
 where T:Clone
 {
-    pub fn new(oid: ObjectId, write_value: Option<T>) -> Self {
+    pub fn new(oid: ObjectId, tobj_ref: TObject<T>) -> Self {
         TTag{
             oid_: oid,
-            write_val_: write_value
+            tobj_ref_ : tobj_ref,
+            write_val_: None,
+            vers_ : None
         }
     }
 
@@ -133,6 +150,21 @@ where T:Clone
 
     pub fn has_read(&self) -> bool {
         !self.has_write()
+    }
+
+    pub fn add_version(&mut self, vers: Option<Tid>) {
+        self.vers_ = vers;
+    }
+
+    pub fn write(&mut self, val : T) {
+        self.write_val_ = Some(val);
+    }
+}
+
+impl<T> fmt::Debug for TTag<T> 
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TTag {{  Oid: {:?} ,  Vers : {:?}}}", self.oid_,  self.vers_)
     }
 }
 
