@@ -6,6 +6,7 @@ use txn::{Transaction, Tid};
 //Base trait for all the data structure
 pub type TObject<T> = Rc<RefCell<_TObject<T>>>;
 
+
 pub trait _TObject<T> 
 where T: Clone
     {
@@ -16,6 +17,7 @@ where T: Clone
     fn get_id(&self) -> ObjectId;
     fn get_data(&self) -> T;
 }
+
 
 #[derive(PartialEq,Copy, Clone, Debug, Eq, Hash)]
 pub struct ObjectId(u32);

@@ -3,7 +3,7 @@ use std::rc::Rc;
 //use std::cell::RefCell;
 //use std::thread;
 //use deps::Dep;
-use tobj::{TTag, TObject, ObjectId};
+use tobj::{TTag,_TObject, TObject, ObjectId};
 use std::collections::HashMap;
 
 #[derive(PartialEq,Copy, Clone, Debug)]
@@ -70,33 +70,33 @@ where T: Clone
        //     
        // }
 
-        pub fn read(&mut self, tobj: &TObject<T>) -> Result<T, AbortReason> {
+        pub fn read(&mut self, tobj: &TObject<T>) -> T {
             let tobj = Rc::clone(tobj);
 
-            if !self.try_lock(&tobj) {
-                return Err(AbortReason::AbortReasonError);
-            }
+            //if !self.try_lock(&tobj) {
+            //    return Err(AbortReason::AbortReasonError);
+            //}
 
             let _tobj = tobj.borrow();
             let id = _tobj.get_id(); 
             let tag  = self.retrieve_tag(id);
             if tag.has_write() {
-                Ok(tag.write_value())
+                tag.write_value()
             } else {
-                Ok(_tobj.get_data())
+                _tobj.get_data()
             }
         }
 
-        pub fn try_lock(&mut self, tobj : &TObject<T>) -> bool {
-            match tobj.try_borrow_mut() {
-                Ok(mut _tobj) => {
-                    _tobj.lock(self.commit_id()) //TODO
-                },
-                Err(_) => {
-                    false
-                }
-            }
-        }
+       // pub fn try_lock(&mut self, tobj : &TObject<T>) -> bool {
+       //     match tobj.try_borrow_mut() {
+       //         Ok(mut _tobj) => {
+       //             _tobj.lock(self.commit_id()) //TODO
+       //         },
+       //         Err(_) => {
+       //             false
+       //         }
+       //     }
+       // }
 
         pub fn retrieve_tag(&mut self, id: ObjectId) -> &TTag<T> {
             self.deps_.entry(id)
