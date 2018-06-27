@@ -1,9 +1,8 @@
-use txn::{Tid,Transaction};
-use std::fmt;
+use txn::{Tid};
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use std::sync::{RwLock, Mutex, Arc};
-use tobj::{TValue, TVersion, TTag,  ObjectId, _TObject, TObject};
+use tobj::{TValue, TVersion,   ObjectId, _TObject};
 use tobj;
 
 

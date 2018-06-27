@@ -1,5 +1,5 @@
 use std::sync::Arc;    
-use tobj::{TTag,_TObject, TObject, ObjectId};
+use tobj::{TTag, TObject, ObjectId};
 use std::collections::HashMap;
 
 #[derive(PartialEq,Copy, Clone, Debug)]
@@ -42,12 +42,12 @@ where T: Clone
 
             //Stage 1: lock [TODO: Bounded lock or try_lock syntax]
             if !self.lock() {
-                self.abort(AbortReason::FailedLocking);
+                return self.abort(AbortReason::FailedLocking);
             }
 
             //Stage 2: Check 
             if !self.check() {
-                self.abort(AbortReason::FailedLocking);
+                return self.abort(AbortReason::FailedLocking);
             }
             
             //Stage 3: Commit 
@@ -99,6 +99,7 @@ where T: Clone
                        let mut _tobj = _tag.tobj_ref_.write().unwrap();
                        _tobj.unlock();
                     }
+                    println!("{:#?} failed to locked!", tag);
                     return false;
                 } else {
                     locks.push(tag);
@@ -151,12 +152,17 @@ where T: Clone
 
 
        /*Non Transaction Functions*/
-        pub fn notrans_read(&self, tobj: &TObject<T>) -> T {
+        pub fn notrans_read(tobj: &TObject<T>) -> T {
             let tobj = Arc::clone(tobj);
             let _tobj = tobj.read().unwrap();
             _tobj.raw_read()
         }
 
+        pub fn notrans_lock(tobj: &TObject<T>, tid :Tid) -> bool {
+            let tobj = Arc::clone(tobj);
+            let mut _tobj = tobj.write().unwrap();
+             _tobj.lock(tid)
+        }
 
 
     }
