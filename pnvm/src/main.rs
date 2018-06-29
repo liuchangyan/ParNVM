@@ -43,7 +43,7 @@ fn main() -> std::io::Result<()> {
     let mapped_lenp = &mut mapped_len as *mut _;
     let mut is_pmem: i32 = unsafe { uninitialized() };
     let is_pmemp = &mut is_pmem as *mut _;
-    let filepath = CString::new("myfile").unwrap();
+    let filepath = CString::new("../../data/myfile").unwrap();
     let filepath_ptr = filepath.as_ptr();
     let res = unsafe {
         pmem_map_file(

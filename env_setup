@@ -1,0 +1,17 @@
+1.Install rust (stable) 
+curl https://sh.rustup.rs -sSf | sh
+
+2. Install PMDK v1.4
+git clone https://github.com/pmem/pmdk.git
+cd pmdk && make 
+sudo make install (install to sys) 
+[Deps]: pkg-config, autoconf, doxygen
+
+3. Setup persistent memory
+Follow article http://pmem.io/2016/02/22/pm-emulation.html
+Use Kernel verison: 4.14.52
+[Deps]: libelf-dev
+
+
+
+
