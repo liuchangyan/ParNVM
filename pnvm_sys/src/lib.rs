@@ -141,6 +141,17 @@ impl<'a>  PMem<'a>  {
         }
     }
 
+
+    pub fn is_pmem(ptr: *mut u8, size : usize) -> bool {
+        let res = unsafe { pmem_is_pmem(ptr as *const c_void, size)};
+        println!("result {}", res);
+        if res == 1 {
+           true 
+        } else {
+           false 
+        }
+    }
+
 }
 
 
@@ -175,15 +186,17 @@ impl fmt::Debug for MemKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const PMEM_TEST_PATH_ABS : &str = "/home/v-xuc/ParNVM/data";
+    const PMEM_TEST_PATH_ABS : &str = "/dev/pmem0";
     const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
     #[test]
     fn test_create_ok() {
+        //absolute path
         let pmem = PMem::new(String::from(PMEM_TEST_PATH_ABS), 16*super::PMEM_MIN_SIZE);
         assert_eq!(pmem.is_some(), true);
         assert_eq!(pmem.unwrap().check(), true);
 
+        //relative path
         let pmem = PMem::new(String::from("../data"), 16*super::PMEM_MIN_SIZE);
         assert_eq!(pmem.is_some(), true);
         assert_eq!(pmem.unwrap().check(), true);
@@ -206,6 +219,17 @@ mod tests {
         let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
         let res =  pmem.alloc(Layout::new::<u32>());
         assert_eq!(res.is_ok(), true);
+        //FIXME: This assert is never true due to pmem_is_pmem(3) caveats 
+        //More details at: http://pmem.io/pmdk/manpages/linux/v1.4/libpmem/pmem_is_pmem.3
+        //assert_eq!(PMem::is_pmem(res.unwrap(), size_of::<u32>()), true);
+    }
+
+    #[test]
+    fn test_non_pem_check() {
+        let mut pmem = PMem::new(String::from("../dat"),  super::PMEM_MIN_SIZE *4).unwrap();
+        let res =  pmem.alloc(Layout::new::<u32>());
+        assert_eq!(res.is_ok(), true);
+        //assert_eq!(PMem::is_pmem(res.unwrap(), size_of::<u32>()), false);
     }
 
     #[test]
