@@ -95,13 +95,13 @@ impl<'a>  PMem<'a>  {
 
         if max_size < PMEM_MIN_SIZE {
             panic!("pmem size too small");
-            return None;
+            //return None;
         }
 
         let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr)};
         if err != PMEM_ERROR_OK {
             panic!("pemem failed create {}", err);
-            return None;
+            //return None;
         }
 
         Some(PMem{
@@ -213,6 +213,13 @@ mod tests {
         let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
         let res =  pmem.alloc(Layout::from_size_align(PMEM_MIN_SIZE * 5, 4).unwrap());
         assert_eq!(res.is_err(), true);
+    }
+    
+    #[test]
+    fn test_dealloc_ok() {
+        let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
+        let res =  pmem.alloc(Layout::new::<u32>());
+        pmem.dealloc(res.unwrap(), Layout::new::<u32>());
     }
 }
 
