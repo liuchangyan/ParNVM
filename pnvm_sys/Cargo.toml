@@ -1,0 +1,7 @@
+[package]
+name = "pnvm_sys"
+version = "0.1.0"
+authors = ["Xu <xuchen@u.nus.edu>"]
+
+[dependencies]
+libc = "0.2"

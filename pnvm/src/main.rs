@@ -1,69 +1,79 @@
-extern crate libc;
-//extern crate nvml_sys;
+extern crate pnvm_sys;
 
-use libc::*;
-use std::ffi::CString;
-use std::fs::File;
-use std::mem::*;
-
-#[link(name = "pmem")]
-extern "C" {
-    pub fn pmem_check_version(major_required: c_uint, minor_required: c_uint) -> *const c_char;
-    pub fn pmem_deep_drain(addr: *const c_void, len: usize) -> c_int;
-    pub fn pmem_deep_flush(addr: *const c_void, len: usize);
-    pub fn pmem_deep_persist(addr: *const c_void, len: usize) -> c_int;
-    pub fn pmem_drain();
-    pub fn pmem_errormsg() -> *const c_char;
-    pub fn pmem_flush(addr: *const c_void, len: usize);
-    pub fn pmem_has_hw_drain() -> c_int;
-    pub fn pmem_is_pmem(addr: *const c_void, len: usize) -> c_int;
-    pub fn pmem_map_file(
-        path: *const c_char,
-        len: usize,
-        flags: c_int,
-        mode: mode_t,
-        mapped_lenp: *mut usize,
-        is_pmemp: *mut c_int,
-    ) -> *mut c_void;
-    pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
-    pub fn pmem_persist(addr: *const c_void, len: usize);
-    pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
-
+#[repr(C)]
+pub struct MemKind {
+    ops_ptr : *mut c_void,
+    partitions : c_uint,
+    name : [u8; 64],
+    init_once : c_int, //No matching type in libc tho
+    arena_map_len : c_uint,
+    arena_map : *mut c_uint,
+    arena_key : pthread_key_t,
+    _priv : *mut c_void,
+    arena_map_mask: c_uint,
+    arena_zero : c_uint
 }
 
-pub const PMEM_FILE_CREATE: c_int = 1;
-pub const PMEM_FILE_EXCL: c_int = 2;
-pub const PMEM_FILE_SPARSE: c_int = 4;
-pub const PMEM_FILE_TMPFILE: c_int = 8;
 
-const PMEM_LEN: usize = 4096;
+impl fmt::Debug for MemKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MemKind {{
+            ops_ptr : {:p}
+            partitions : {:?}
+            name : {:?}
+            init_once : {:?}
+            arena_map_len : {:?}
+            arena_map : {:p}
+            arena_key: {:?}
+            _priv: {:p}
+            arena_map_mask : {:}
+            arena_zero: {:?}
+        }}", 
+        self.ops_ptr, 
+        self.partitions,
+        unsafe { str::from_utf8_unchecked(&(self.name))}, 
+        self.init_once,
+        self.arena_map_len,
+        self.arena_map,
+        self.arena_key,
+        self._priv,
+        self.arena_map_mask,
+        self.arena_zero)
+    }
+}
 
 fn main() -> std::io::Result<()> {
-    let mut mapped_len: usize = unsafe { uninitialized() };
-    let mapped_lenp = &mut mapped_len as *mut _;
-    let mut is_pmem: i32 = unsafe { uninitialized() };
-    let is_pmemp = &mut is_pmem as *mut _;
-    let filepath = CString::new("../../data/myfile").unwrap();
-    let filepath_ptr = filepath.as_ptr();
-    let res = unsafe {
-        pmem_map_file(
-            filepath_ptr,
-            PMEM_LEN,
-            PMEM_FILE_CREATE,
-            0666,
-            mapped_lenp,
-            is_pmemp,
-        )
-    };
-
-    if res.is_null() {
-        println!("Null pointer...");
-    } else if is_pmem == 0 {
-        println!("No pesistent memory..");
-    } else if is_pmem == 1 {
-        println!("WOWOWYOOHOH!");
+    let dir = CString::new("/home/v-xuc/ParNVM/data").unwrap();
+    let dir_ptr = dir.as_ptr();
+    let mut kind_ptr : *mut MemKind= null_mut();
+    let kind_ptr2 = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
+    let pmem_max_size: usize = 1024 * 1024 * 16 * 16;
+    let err =  unsafe { memkind_create_pmem(dir_ptr, pmem_max_size, kind_ptr2)};
+    //println!("Return code {}", err);
+    //println!("Debug : {:?}", unsafe {&(**kind_ptr2)});
+    //println!("Debug : {:?}", unsafe {&(*kind_ptr)});
+    if err == 0 {
+        println!("yes got you!");
     } else {
-        panic!("pmem_map_file returns crap");
+        println!("GG create failed");
+        panic!("noooooo!");
+    }
+    let kind_ref = unsafe {&mut *(kind_ptr)};
+
+    let data =  unsafe { memkind_malloc(kind_ref, size_of::<u32>()) };
+    
+    if data.is_null() {
+        println!("Malloc failed");
+    } else {
+
+        println!("Malloc ok @ {:p}", data);
+
+        let val : &mut u32 = unsafe {&mut *(data as *mut u32)};
+        println!("Val : {:?}", val);
+        *val = 10;
+        println!("Val : {:?}", val);
+        println!("Val address : {:p}", val);
+        unsafe { memkind_free(kind_ref, data)};
     }
 
     Ok(())

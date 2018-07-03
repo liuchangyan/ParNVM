@@ -1,5 +1,7 @@
-1.Install rust (stable) 
+1.Install rust (nightly 2018-04-11) 
 curl https://sh.rustup.rs -sSf | sh
+rustup override set nightly-2018-04-11
+
 
 2. Install PMDK v1.4
 git clone https://github.com/pmem/pmdk.git
@@ -11,6 +13,13 @@ sudo make install (install to sys)
 Follow article http://pmem.io/2016/02/22/pm-emulation.html
 Use Kernel verison: 4.14.52
 [Deps]: libelf-dev
+
+
+
+Troubleshoot:
+1. `error while loading shared libraries`
+- https://github.com/rust-lang/rust/issues/24677
+- Add /usr/local/lib to /etc/ld.so.conf && ldconfig
 
 
 
