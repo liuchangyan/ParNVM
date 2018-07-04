@@ -14,7 +14,9 @@ use std::{
     ptr, 
     mem::*, 
     string::String,
-    ffi::CString
+    ffi::CString,
+    cell::RefCell,
+    rc::Rc,
 };
 
 
@@ -55,10 +57,14 @@ extern "C" {
     pub fn memkind_malloc(kind : *mut MemKind, size: size_t) -> *mut u8;
     pub fn memkind_free(kind : *mut MemKind, ptr : *mut u8);
     pub fn memkind_check_available(kind :*mut MemKind) -> c_int;
+
+    pub fn memkind_pmem_destroy(kind : *mut MemKind) -> c_int;
 }
 
 pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
+pub const PMEM_DEFAULT_SIZE : usize = 2 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK : c_int = 0;
+const PMEM_FILE_DIR : &'static str = "../data";
 
 #[repr(C)]
 pub struct MemKind {
@@ -81,6 +87,28 @@ pub struct PMem {
     size : usize,
     dir : String
 }
+
+
+thread_local!{
+    //This init should just be dummy
+    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE).unwrap()));
+}
+
+
+/* ************* 
+ * Exposed APIS 
+ * **************/
+pub fn alloc(layout : Layout) -> Result<*mut u8, AllocErr> {
+    PMEM_ALLOCATOR.with(|pmem_cell| {
+        pmem_cell.borrow_mut().alloc(layout)
+    })
+}
+
+pub fn dealloc(ptr : *mut u8, layout: Layout) {
+    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
+}
+
+
 
 
 //FIXME::Potentially could implement Alloc Trait from rust
@@ -154,6 +182,16 @@ impl  PMem  {
 
 }
 
+impl Drop for PMem {
+    fn drop(&mut self) {
+        println!("Dropiing");
+          let res = unsafe { memkind_pmem_destroy(self.kind)}; 
+          if res != 0 {
+              panic!("destroy failed");
+          }
+    }
+}
+
 
 impl fmt::Debug for MemKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -189,7 +227,7 @@ mod tests {
     const PMEM_TEST_PATH_ABS : &str = "/home/v-xuc/ParNVM/data";
    // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
-    #[test]
+    #[test] 
     fn test_create_ok() {
         //absolute path
         let pmem = PMem::new(String::from(PMEM_TEST_PATH_ABS), 16*super::PMEM_MIN_SIZE);
@@ -197,9 +235,9 @@ mod tests {
         assert_eq!(pmem.unwrap().check(), true);
 
         //relative path
-        let pmem = PMem::new(String::from("../data"), 16*super::PMEM_MIN_SIZE);
-        assert_eq!(pmem.is_some(), true);
-        assert_eq!(pmem.unwrap().check(), true);
+        //let pmem = PMem::new(String::from("../data"), 16*super::PMEM_MIN_SIZE);
+        //assert_eq!(pmem.is_some(), true);
+        //assert_eq!(pmem.unwrap().check(), true);
     }
     
     #[test]
@@ -244,6 +282,19 @@ mod tests {
         let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
         let res =  pmem.alloc(Layout::new::<u32>());
         pmem.dealloc(res.unwrap(), Layout::new::<u32>());
+    }
+
+    #[test]
+    fn test_malloc_thread_ok() {
+        let res = super::alloc(Layout::new::<u32>());
+        assert_eq!(res.is_ok(), true);
+    }
+
+    #[test]
+    fn test_free_thread_ok() {
+        let res = super::alloc(Layout::new::<u32>());
+        assert_eq!(res.is_ok(), true);
+        super::dealloc(res.unwrap(), Layout::new::<u32>());
     }
 }
 
