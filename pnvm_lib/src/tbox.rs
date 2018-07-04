@@ -2,8 +2,8 @@ use txn::{Tid};
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use std::sync::{RwLock, Mutex, Arc};
-use tobj::{TValue, TVersion,   ObjectId, _TObject};
-use tobj;
+use tcore::{TValue, TVersion,   ObjectId, _TObject};
+use tcore;
 
 
 pub struct TBox<T> 
@@ -66,7 +66,7 @@ where T: Clone
     pub fn new(val : T) -> Arc<RwLock<TBox<T>>> {
         let id;
         unsafe {
-            id = tobj::next_id();
+            id = tcore::next_id();
         }
         Arc::new(RwLock::new(TBox{
             tvalue_ : TValue{
@@ -79,7 +79,4 @@ where T: Clone
             }
         }))
     }
-
-
-
 }

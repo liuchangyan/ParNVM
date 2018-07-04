@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tobj::{ObjectId, TObject, TTag};
+use tcore::{ObjectId, TObject, TTag};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct Tid(u32);

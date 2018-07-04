@@ -52,9 +52,9 @@ extern "C" {
         kind : *mut *mut MemKind
     ) -> c_int;
 
-    pub fn memkind_malloc(kind : &mut MemKind, size: size_t) -> *mut u8;
-    pub fn memkind_free(kind : &mut MemKind, ptr : *mut u8);
-    pub fn memkind_check_available(kind :&mut MemKind) -> c_int;
+    pub fn memkind_malloc(kind : *mut MemKind, size: size_t) -> *mut u8;
+    pub fn memkind_free(kind : *mut MemKind, ptr : *mut u8);
+    pub fn memkind_check_available(kind :*mut MemKind) -> c_int;
 }
 
 pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
@@ -76,17 +76,17 @@ pub struct MemKind {
 
 
 #[derive(Debug)]
-pub struct PMem<'a> {
-    kind : &'a mut MemKind,
+pub struct PMem {
+    kind : *mut MemKind,
     size : usize,
     dir : String
 }
 
 
 //FIXME::Potentially could implement Alloc Trait from rust
-impl<'a>  PMem<'a>  {
+impl  PMem  {
     //Allocate max_size pmem and returns the memory allocator
-    pub fn new(dir: String, max_size : usize) -> Option<PMem<'a>> {
+    pub fn new(dir: String, max_size : usize) -> Option<PMem> {
         let _dir = String::clone(&dir);
         let dir = CString::new(dir).unwrap();
         let dir_ptr = dir.as_ptr();
@@ -186,8 +186,8 @@ impl fmt::Debug for MemKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const PMEM_TEST_PATH_ABS : &str = "/dev/pmem0";
-    const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
+    const PMEM_TEST_PATH_ABS : &str = "/home/v-xuc/ParNVM/data";
+   // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
     #[test]
     fn test_create_ok() {

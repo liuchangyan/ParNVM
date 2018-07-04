@@ -1,10 +1,11 @@
 //pub mod sched;
+extern crate pnvm_sys;
 
-pub mod tobj;
+pub mod tcore;
 pub mod txn;
-//pub mod deps;
 pub mod tbox;
-
+pub mod conf;
+pub mod tthread;
 
 #[cfg(test)]
 mod tests {

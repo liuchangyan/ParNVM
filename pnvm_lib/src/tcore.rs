@@ -4,6 +4,16 @@ use std::sync::{ Arc, RwLock,Mutex};
 use txn::{Tid};
 use std::fmt;
 
+/* Module Level Exposed Function Calls */
+
+
+
+
+
+
+
+
+
 //Base trait for all the data structure
 pub type TObject<T> = Arc<RwLock<_TObject<T>>>;
 
@@ -175,3 +185,7 @@ pub unsafe fn next_id() -> ObjectId {
     OBJECTID += 1;
     ObjectId(ret)
 }
+
+
+
+
