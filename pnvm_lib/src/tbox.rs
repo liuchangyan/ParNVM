@@ -2,60 +2,70 @@ use txn::{Tid};
 use std::rc::Rc;
 //use std::cell::RefCell;
 use std::sync::{RwLock, Mutex, Arc};
-use tcore::{TValue, TVersion,   ObjectId, _TObject};
+use tcore::{TValue, TVersion,   ObjectId};
 use tcore;
 
 
 pub struct TBox<T> 
 where T : Clone
 {
-    tvalue_: TValue<T>,
-    vers_:   TVersion,
+    tvalue_: RwLock<TValue<T>>,
+    vers_:   RwLock<TVersion>,
     id_ : ObjectId,
 }
 
 
-impl<T> _TObject<T> for TBox<T>
+//impl<T> _TObject<T> for TBox<T>
+impl<T> TBox<T>
 where T: Clone
     {
 
     /*Commit callbacks*/
-    fn lock(&mut self, tid : Tid) -> bool {
-         self.vers_.lock(tid)
+    pub fn lock(&self, tid : Tid) -> bool {
+        let mut vers = self.vers_.write().unwrap();
+        vers.lock(tid)
     }
 
-    fn check(&self, tid : &Option<Tid>) -> bool {
-        self.vers_.check_version(tid)
+    pub fn check(&self, tid : &Option<Tid>) -> bool {
+        let vers = self.vers_.read().unwrap();
+        vers.check_version(tid)
     }
     
-    fn install(&mut self, val :T, tid: Tid) {
-        self.tvalue_.store(val);
-        self.vers_.set_version(tid);
+    pub fn install(&self, val :T, tid: Tid) {
+        let mut tvalue = self.tvalue_.write().unwrap();
+        let mut vers = self.vers_.write().unwrap();
+        tvalue.store(val);
+        vers.set_version(tid);
     }
 
-    fn unlock(&mut self) {
-        self.vers_.unlock(); 
+    pub fn unlock(&self) {
+        let mut vers = self.vers_.write().unwrap();
+        vers.unlock(); 
     }
 
-    fn get_data(&self) -> T {
-        T::clone(self.tvalue_.load())
+    pub fn get_data(&self) -> T {
+        let tvalue = self.tvalue_.read().unwrap();
+        T::clone(tvalue.load())
     }
 
-    fn get_id(&self) -> ObjectId {
+    pub fn get_id(&self) -> ObjectId {
         self.id_
     }
 
-    fn get_version(&self) -> Option<Tid> {
-       self.vers_.get_version()
+    pub fn get_version(&self) -> Option<Tid> {
+        let vers = self.vers_.read().unwrap();
+        vers.get_version()
     }
 
      /* No Trans Access method */
-     fn raw_read(&self) -> T {
-        T::clone(self.tvalue_.load())
+     pub fn raw_read(&self) -> T {
+        let tvalue = self.tvalue_.read().unwrap();
+        T::clone(tvalue.load())
      }
 
-     fn raw_write(&mut self, val : T){
-        self.tvalue_.store(val);
+     pub fn raw_write(&mut self, val : T){
+         let mut tvalue = self.tvalue_.write().unwrap();
+        tvalue.store(val);
      }
 }
 
@@ -63,18 +73,18 @@ impl<T> TBox<T>
 where T: Clone
 {
 
-    pub fn new(val : T) -> Arc<RwLock<TBox<T>>> {
+    pub fn new(val : T) -> Arc<TBox<T>> {
         let id;
         unsafe {
             id = tcore::next_id();
         }
-        Arc::new(RwLock::new(TBox{
-            tvalue_ : TValue::new(val),
+        Arc::new(TBox{
+            tvalue_ : RwLock::new(TValue::new(val)),
             id_ : id,
-            vers_: TVersion {
+            vers_: RwLock::new(TVersion {
                 last_writer_ : None,
-                lock_owner_: Mutex::new(None)
-            }
-        }))
+                lock_owner_: None
+            })
+        })
     }
 }

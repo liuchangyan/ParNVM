@@ -13,7 +13,7 @@ mod tests {
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
     use super::txn;
-    use super::tcore::{_TObject, TObject};
+    use super::tcore::{TObject};
 
     #[test]
     fn test_single_read() {

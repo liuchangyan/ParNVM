@@ -1,6 +1,7 @@
 use std::sync::{ Arc, RwLock,Mutex};
 //use std::rc::Rc;
 //use std::cell::RefCell;
+use tbox::TBox;
 use txn::{Tid};
 use std::{
     self,
@@ -24,25 +25,28 @@ use pnvm_sys::{
 
 
 
-//Base trait for all the data structure
-pub type TObject<T> = Arc<RwLock<_TObject<T>>>;
+pub type TObject<T> = Arc<TBox<T>>;
+//Base trait for all the data structure 
+//Using trait object cannot be derefed 
+//when wrapped with Arc
+//pub type TObject<T> = Arc<_TObject<T>>;
 
 
-pub trait _TObject<T> 
-where T: Clone 
-    {
-    fn lock(&mut self, Tid) -> bool;
-    fn check(&self, &Option<Tid>) -> bool;
-    fn install(&mut self, T, Tid);
-    fn unlock(&mut self);
-    fn get_id(&self) -> ObjectId;
-    fn get_data(&self) -> T;
-    fn get_version(&self) -> Option<Tid>;
-
-    //For debug
-    fn raw_read(&self) -> T;
-    fn raw_write(&mut self, T) ;
-}
+//pub trait _TObject<T> 
+//where T: Clone 
+//    {
+//    fn lock(&mut self, Tid) -> bool;
+//    fn check(&self, &Option<Tid>) -> bool;
+//    fn install(&mut self, T, Tid);
+//    fn unlock(&mut self);
+//    fn get_id(&self) -> ObjectId;
+//    fn get_data(&self) -> T;
+//    fn get_version(&self) -> Option<Tid>;
+//
+//    //For debug
+//    fn raw_read(&self) -> T;
+//    fn raw_write(&mut self, T) ;
+//}
 
 
 #[derive(PartialEq,Copy, Clone, Debug, Eq, Hash)]
@@ -53,7 +57,7 @@ pub struct ObjectId(u32);
 pub struct TVersion {
     pub last_writer_: Option<Tid>,
     //lock_:        Arc<Mutex<bool>>,
-    pub lock_owner_:  Mutex<Option<Tid>>
+    pub lock_owner_:  Option<Tid>
     //lock_owner_:  Option<Tid>,
 }
 
@@ -64,36 +68,31 @@ pub struct TVersion {
 
 impl TVersion {
     pub fn lock(&mut self, tid: Tid) -> bool {
-        let mut lock_owner = self.lock_owner_.lock().unwrap();
-        let (success, empty) = match *lock_owner {
+        match self.lock_owner_ {
             Some(ref cur_owner) => {
-                if *cur_owner == tid {
-                    (true, false)
+                if *cur_owner != tid  {
+                    false
                 } else {
-                    (false, false)
+                    true
                 }
             },
             None => {
-                (true, true)
+                self.lock_owner_ = Some(tid);
+                true
             }
-        };
-        if empty {
-            *lock_owner = Some(tid)
         }
-        success
     }
     
 
     //Caution: whoever has access to self can unlock
     pub fn unlock(&mut self) {
-        let mut lock_owner = self.lock_owner_.lock().unwrap();
-        *lock_owner = None;
+        self.lock_owner_ = None;
     }
 
     pub fn check_version(&self, tid: &Option<Tid>) -> bool {
         println!("--- [Checking Version] {:?} <-> {:?}", tid, self.last_writer_);
-        let lock_owner = self.lock_owner_.lock().unwrap();
-        match (tid, self.last_writer_, *lock_owner) {
+        //let lock_owner = self.lock_owner_.lock().unwrap();
+        match (tid, self.last_writer_, self.lock_owner_) {
             (Some(ref cur_tid), Some(ref tid), None) => {
                 if *cur_tid == *tid {
                     true
@@ -163,7 +162,9 @@ where T:Clone
 }
 
 //#[derive(PartialEq, Eq, Hash)]
-pub struct TTag<T> {
+pub struct TTag<T> 
+where T:Clone
+{
     pub tobj_ref_:  TObject<T>,
     pub oid_:   ObjectId,
     write_val_: Option<T>,
@@ -195,8 +196,7 @@ where T:Clone
         }
 
         let val = self.write_value();
-        let mut _tobj = self.tobj_ref_.write().unwrap();
-        _tobj.install(val, id);
+        (*self.tobj_ref_).install(val, id);
     }
 
    // pub fn consume_value(&mut self) -> T {
@@ -227,6 +227,7 @@ where T:Clone
 }
 
 impl<T> fmt::Debug for TTag<T> 
+where T : Clone
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "TTag {{  Oid: {:?} ,  Vers : {:?}}}", self.oid_,  self.vers_)

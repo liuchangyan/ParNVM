@@ -68,22 +68,25 @@ where
     pub fn read(&mut self, tobj: &TObject<T>) -> T {
         let tobj = Arc::clone(tobj);
 
-        let _tobj = tobj.read().unwrap();
-        let id = _tobj.get_id();
+        let id = tobj.get_id();
         let tag = self.retrieve_tag(id, Arc::clone(&tobj));
-        tag.add_version(_tobj.get_version());
+        tag.add_version(tobj.get_version());
         if tag.has_write() {
             tag.write_value()
         } else {
-            _tobj.get_data()
+            tobj.get_data()
         }
     }
 
     pub fn write(&mut self, tobj: &TObject<T>, val: T) {
         let tobj = Arc::clone(tobj);
 
-        let _tobj = tobj.write().unwrap();
-        let tag = self.retrieve_tag(_tobj.get_id(), Arc::clone(&tobj));
+        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(&tobj));
+        //if !tag.has_read() {
+        //    //persist log 
+        //    let log = PLog(tobj);
+        //     
+        //}
         tag.write(val);
     }
 
@@ -94,11 +97,12 @@ where
             if !tag.has_write() {
                 continue;
             }
-            let mut _tobj = tag.tobj_ref_.write().unwrap();
+            let _tobj = Arc::clone(&tag.tobj_ref_);
             if !_tobj.lock(self.commit_id()) {
                 while let Some(_tag) = locks.pop() {
-                    let mut _tobj = _tag.tobj_ref_.write().unwrap();
-                    _tobj.unlock();
+                    //let mut _tobj = _tag.tobj_ref_.write().unwrap();
+                    //_tobj.unlock();
+                    _tag.tobj_ref_.unlock();
                 }
                 println!("{:#?} failed to locked!", tag);
                 return false;
@@ -117,8 +121,7 @@ where
                 continue;
             }
 
-            let _tobj = tag.tobj_ref_.read().unwrap();
-            if !_tobj.check(&tag.vers_) {
+            if !tag.tobj_ref_.check(&tag.vers_) {
                 return false;
             }
         }
@@ -140,8 +143,7 @@ where
     fn clean_up(&mut self) {
         for tag in self.deps_.values() {
             if tag.has_write() {
-                let mut _tobj = tag.tobj_ref_.write().unwrap();
-                _tobj.unlock();
+                tag.tobj_ref_.unlock();
             }
         }
     }
@@ -153,14 +155,12 @@ where
     /*Non Transaction Functions*/
     pub fn notrans_read(tobj: &TObject<T>) -> T {
         //let tobj = Arc::clone(tobj);
-        let _tobj = tobj.read().unwrap();
-        _tobj.raw_read()
+        tobj.raw_read()
     }
 
     pub fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool {
         let tobj = Arc::clone(tobj);
-        let mut _tobj = tobj.write().unwrap();
-        _tobj.lock(tid)
+        tobj.lock(tid)
     }
 }
 
