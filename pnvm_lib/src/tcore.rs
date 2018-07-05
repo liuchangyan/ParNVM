@@ -124,7 +124,7 @@ impl<T> TValue<T>
 where T:Clone
 {
     pub fn new(val :T) -> TValue<T> {
-        let ptr = unsafe { pnvm_sys::alloc(Layout::new::<T>())};
+        let ptr = pnvm_sys::alloc(Layout::new::<T>());
 
         match ptr {
             Ok(ptr) => {
@@ -158,6 +158,15 @@ where T:Clone
     //
     pub fn get_ref(&self) -> Rc<T> {
         unsafe {Rc::from_raw(self.ptr_.as_ref())}        
+    }
+}
+
+impl<T> Drop for TValue<T>
+where T:Clone 
+{
+    fn drop(&mut self) 
+    {
+         pnvm_sys::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>())
     }
 }
 
