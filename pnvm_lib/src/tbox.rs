@@ -1,5 +1,5 @@
 use txn::{Tid};
-//use std::rc::Rc;
+use std::rc::Rc;
 //use std::cell::RefCell;
 use std::sync::{RwLock, Mutex, Arc};
 use tcore::{TValue, TVersion,   ObjectId, _TObject};
@@ -38,7 +38,7 @@ where T: Clone
     }
 
     fn get_data(&self) -> T {
-        self.raw_read()
+        T::clone(self.tvalue_.load())
     }
 
     fn get_id(&self) -> ObjectId {
@@ -51,7 +51,7 @@ where T: Clone
 
      /* No Trans Access method */
      fn raw_read(&self) -> T {
-        self.tvalue_.load()
+        T::clone(self.tvalue_.load())
      }
 
      fn raw_write(&mut self, val : T){
@@ -69,9 +69,7 @@ where T: Clone
             id = tcore::next_id();
         }
         Arc::new(RwLock::new(TBox{
-            tvalue_ : TValue{
-                data_: val
-            },
+            tvalue_ : TValue::new(val),
             id_ : id,
             vers_: TVersion {
                 last_writer_ : None,

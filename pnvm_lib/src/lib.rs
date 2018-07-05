@@ -1,4 +1,5 @@
 //pub mod sched;
+#![feature(allocator_api)]
 extern crate pnvm_sys;
 
 pub mod tcore;
@@ -12,7 +13,7 @@ mod tests {
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
     use super::txn;
-    use super::tobj::{_TObject, TObject};
+    use super::tcore::{_TObject, TObject};
 
     #[test]
     fn test_single_read() {

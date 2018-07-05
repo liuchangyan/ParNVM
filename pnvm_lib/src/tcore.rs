@@ -2,7 +2,17 @@ use std::sync::{ Arc, RwLock,Mutex};
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use txn::{Tid};
-use std::fmt;
+use std::{
+    self,
+    fmt,
+    ptr::NonNull,
+    mem,
+    rc::Rc,
+};
+use pnvm_sys::{
+    self,
+    Layout,
+};
 
 /* Module Level Exposed Function Calls */
 
@@ -107,20 +117,48 @@ impl TVersion {
 }
 
 pub struct TValue<T>
-where T:Clone
-{
-    pub data_: T,
+where T:Clone {
+    ptr_: NonNull<T>,
 }
 
 impl<T> TValue<T> 
 where T:Clone
 {
+    pub fn new(val :T) -> TValue<T> {
+        let ptr = unsafe { pnvm_sys::alloc(Layout::new::<T>())};
+
+        match ptr {
+            Ok(ptr) => {
+                let ptr = unsafe {
+                    mem::transmute::<*mut u8, *mut T>(ptr)
+                };
+                unsafe {ptr.write(val)};
+                TValue{ 
+                    ptr_ : NonNull::new(ptr).expect("Tvalue::new failed"),
+                }
+            },
+            Err(_) => panic!("Tvalue::new failed")
+        }
+    }
     pub fn store(&mut self, data: T) {
-        self.data_ = data;
+        unsafe {self.ptr_.as_ptr().write(data) };
     }
 
-    pub fn load(&self) -> T {
-        self.data_.clone()
+    pub fn load(&self) -> &T {
+        unsafe {self.ptr_.as_ref()}
+    }
+   
+
+    //FIXME::This is super dangerous...
+    //But it might be a feasible option. Wrapping the underlying data with 
+    //Rc<RefCell<T>> could be a way to pass the data as a ref all
+    //the way up to the user. A main intended advantage is to avoid 
+    //copying the underlying data. 
+    //However, there seems to be no direct methods that place
+    //data from a pointer to a refcell. 
+    //
+    pub fn get_ref(&self) -> Rc<T> {
+        unsafe {Rc::from_raw(self.ptr_.as_ref())}        
     }
 }
 
@@ -151,6 +189,23 @@ where T:Clone
         }
     }
 
+    pub fn commit(&mut self, id : Tid) {
+        if !self.has_write() {
+            return;
+        }
+
+        let val = self.write_value();
+        let mut _tobj = self.tobj_ref_.write().unwrap();
+        _tobj.install(val, id);
+    }
+
+   // pub fn consume_value(&mut self) -> T {
+   //     match self.write_val_ {
+   //         Some(t) => Rc::try_unwrap(t).ok().unwrap(),
+   //         None => panic!("Write Tag Should Have Write Value")
+   //     }
+   // }
+
     pub fn has_write(&self) -> bool {
         match self.write_val_ {
             Some(_) => true,
@@ -167,7 +222,7 @@ where T:Clone
     }
 
     pub fn write(&mut self, val : T) {
-        self.write_val_ = Some(val);
+        self.write_val_ = Some(val)
     }
 }
 

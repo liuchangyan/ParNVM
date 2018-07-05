@@ -1,5 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    rc::Rc,
+};
 use tcore::{ObjectId, TObject, TTag};
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -123,11 +126,11 @@ where
     }
 
     fn commit(&mut self) -> bool {
-        for tag in self.deps_.values() {
-            if tag.has_write() {
-                let mut _tobj = tag.tobj_ref_.write().unwrap();
-                _tobj.install(tag.write_value(), self.commit_id());
-            }
+        let id = self.commit_id();
+        for tag in self.deps_.values_mut() {
+               // let mut _tobj = tag.tobj_ref_.write().unwrap();
+               // _tobj.install(tag.consume_value(), self.commit_id());
+                tag.commit(id);
         }
 
         self.clean_up();
@@ -149,7 +152,7 @@ where
 
     /*Non Transaction Functions*/
     pub fn notrans_read(tobj: &TObject<T>) -> T {
-        let tobj = Arc::clone(tobj);
+        //let tobj = Arc::clone(tobj);
         let _tobj = tobj.read().unwrap();
         _tobj.raw_read()
     }

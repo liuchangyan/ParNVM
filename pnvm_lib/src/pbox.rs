@@ -9,6 +9,22 @@
  * */
 
 
+pub struct PBox<T> {
+    prt : Unique<T>,
+
+}
+
+impl<T> PBox<T> {
+        
+    pub fn new(val : T) -> Arc<RwLock<PBox<T>> {
+        let ptr = unsafe { pnvm_sys::alloc(Layout::new::<T>()) };
+        let ptr = Unique::new(ptr).unwrap();  
+
+
+    }
+
+
+}
 
 
 

@@ -3,7 +3,7 @@ extern crate libc;
 extern crate alloc;
 
 use libc::*;
-use alloc::allocator::{
+pub use alloc::allocator::{
     AllocErr,
     Layout
 };
