@@ -213,6 +213,8 @@ void execute_piece(Piece piece) {
 
 
 
+
+
 #### A6
 
 #### 	How to commit a transaction?
@@ -220,6 +222,114 @@ void execute_piece(Piece piece) {
 > Correct recovery requires the final commit of a transaction to be ordered after all the data mutations from the transaction to be visible in NVM. (Otherwise if a crash happens between the commit persist and the pending data persists, the recovery manager will not be able to recover the transaction )
 >
 > However, there doesn't have to be a `sfence` between the previous transaction's commit and the next transaction since the reordering of them is fine [<u>TODO: proof required as the Peter's Paper seems to state otherwise, in particular the PB before lock in DST strand persistency</u>]
+
+
+
+#### How to implement logging?
+
+> **Format**:
+>
+> A log will have the below format : 
+>
+> ```
+> LogEntry{
+>     LogHeader{
+>         len : variable size of the log data 
+>         tid : info of the running transaction (eg: the original transaction id) 
+>         vers: info of the version of data (eg: the version number)
+>     }
+>     LogData{
+>         data: .....
+>     }
+> }
+> 
+> Graphically: 
+> --------------------------------------------------------
+> | len | tid | vers  | data....oh.....data....oh....data | 
+> --------------------------------------------------------
+> <-Log Header(fixed)-><-----Log data (variable size)----->
+> ```
+>
+> 
+>
+> 
+>
+> **Implementation**:
+>
+> - Dedicated logging threads 
+>
+>  -  Logging thread should refrain from being involved in the concurrency management
+>
+>  -  Waits until all the other working thread exit
+>
+>  -  Use [channel](https://docs.rs/chan/0.1.21/chan/) to communicate with the working thread <u>asynchronously</u>:
+>
+>      -  **Receiving logs** created by working thread 
+>         - !! log must be Sync+Send
+>
+> - The actual data might be deep copy into the log and send through the channel. (TODO: pass references around ) 
+>
+> - Logs are written to the log file using [libpmemlog](http://pmem.io/pmdk/manpages/linux/master/libpmemlog/libpmemlog.7.html)
+>
+>   
+>
+> **Ordering with other logs**:
+>
+> - **Logs from the same transaction** do not need to be ordered 
+>
+>   - these logs must be to different locations 
+>   - write to the same location will only emit one log => the state before the first write 
+>
+> - **Logs from non-conflicting transactions** do not need to be ordered 
+>
+>   - Non-conflicting implies that the write sets are different 
+>
+> - **Logs from conflicting transactions**
+>
+>   - They have to be ordered with respect to the volatile order (follows the dependency graph)
+>
+>   - ````
+>     log history : | log, log, log 
+>     
+>     if new log has to be ordered behind another log, insert a barrier before it
+>     log history:  | LOG
+>     ````
+>
+> 
+>
+> **Ordering with data persist**:
+>
+> - Log must persist before corresponding data, a `pmem_persit` at every log append (like what `libpmemlog` is doing)
+> - Rely on non-temporal flushing without persist .... 
+>
+> 
+>
+> **libpmemlog**: 
+>
+> 1. Check the implementation and source codes of libpmemlog 
+>
+>    - how are data flushed into the pmem
+>      - It calls `pmem_persist` or `pmem_msync` on every invocation of `append` 
+>
+>    
+
+
+
+
+
+#### How to persist the data?
+
+> **Implementation** :
+>
+> - Data will be flushed by calling  `pmem_flush` + `pmem_drain` / `pmem_persist` with virtual address before commit. Transaction commits after it. (TODO: users can in fact indicate to the library when a write is the last write in the transaction, and `pmem_flush` can then be early)
+> - :question: This is done by the working thread?
+>
+> 
+>
+> **Conflicting Transactions**:
+>
+> - When a transaction commits: 
+>   - If it has no other running transactions that depend on it: 
 
 
 
@@ -247,6 +357,10 @@ Recovery should be fast since the recovery manager can skip any committed transa
 
 
 
+
+
+
+
 ------
 
 
@@ -263,7 +377,10 @@ Recovery should be fast since the recovery manager can skip any committed transa
 
 ## Questions 
 
-- How much information is known at offline chopping. (All transactions known in advance so they can be labelled?)
+- ~~How much information is known at offline chopping. (All transactions known in advance so they can be labelled?)~~
+- Per-thread logging vs number of log threads? 
+- Using own log APIs rather than libpmemlog because libpmemlog enforces barrier at each append?
+- Write sets marking before hand so that logs are done at the beginning of a piece/tx, or logs are done on the fly?
 
 
 
