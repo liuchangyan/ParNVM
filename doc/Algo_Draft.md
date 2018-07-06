@@ -326,10 +326,14 @@ void execute_piece(Piece piece) {
 >
 > 
 >
-> **Conflicting Transactions**:
+> **Commiting Transaction**
 >
 > - When a transaction commits: 
->   - If it has no other running transactions that depend on it: 
+>   - If it has no dependency: persist data + persist commit. 
+>   - if it has depedency running: persist data + wait for commit 
+>   - if it has other transaction depending on it: 
+>     - [There is room for optimizaiton here **to reduce number of pmem calls**:
+>       - Some data might have already been flushed out of the cache by other depdendent thread. A redundant call is not necessary. 
 
 
 
