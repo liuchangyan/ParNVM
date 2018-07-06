@@ -1,6 +1,8 @@
 #![feature(alloc, allocator_api)]
 extern crate libc;
 extern crate alloc;
+#[macro_use]
+extern crate log;
 
 use libc::*;
 pub use alloc::allocator::{
@@ -19,6 +21,7 @@ use std::{
     rc::Rc,
 };
 
+const LPREFIX : &'static str = "pnvm_sys";
 
 #[link(name = "pmem")]
 extern "C" {
@@ -109,12 +112,20 @@ pub fn dealloc(ptr : *mut u8, layout: Layout) {
 }
 
 
+pub fn flush(ptr : *mut u8, layout: Layout) {
+    info!("flush {:p} , {}", ptr, layout.size());    
+    unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
+}
+
+
+
 
 
 //FIXME::Potentially could implement Alloc Trait from rust
 impl  PMem  {
     //Allocate max_size pmem and returns the memory allocator
     pub fn new(dir: String, max_size : usize) -> Option<PMem> {
+        info!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
         let _dir = String::clone(&dir);
         let dir = CString::new(dir).unwrap();
         let dir_ptr = dir.as_ptr();
@@ -224,12 +235,16 @@ impl fmt::Debug for MemKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    extern crate env_logger;
+
     const PMEM_TEST_PATH_ABS : &str = "/home/v-xuc/ParNVM/data";
    // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
     #[test] 
     fn test_create_ok() {
         //absolute path
+        let _ = env_logger::init();
         let pmem = PMem::new(String::from(PMEM_TEST_PATH_ABS), 16*super::PMEM_MIN_SIZE);
         assert_eq!(pmem.is_some(), true);
         assert_eq!(pmem.unwrap().check(), true);
@@ -243,17 +258,20 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_create_non_exist() {
+        let _ = env_logger::init();
         let pmem = PMem::new(String::from("../../data"), 16*super::PMEM_MIN_SIZE);
     }
 
     #[test]
     #[should_panic]
     fn test_size_too_small() {
+        let _ = env_logger::init();
         let pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE / 2);
     }
 
     #[test]
     fn test_malloc_ok() {
+        let _ = env_logger::init();
         let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
         let res =  pmem.alloc(Layout::new::<u32>());
         assert_eq!(res.is_ok(), true);
@@ -264,6 +282,8 @@ mod tests {
 
     #[test]
     fn test_non_pem_check() {
+        let _ = env_logger::init();
+
         let mut pmem = PMem::new(String::from("../dat"),  super::PMEM_MIN_SIZE *4).unwrap();
         let res =  pmem.alloc(Layout::new::<u32>());
         assert_eq!(res.is_ok(), true);
@@ -272,6 +292,7 @@ mod tests {
 
     #[test]
     fn test_malloc_fail() {
+        let _ = env_logger::init();
         let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
         let res =  pmem.alloc(Layout::from_size_align(PMEM_MIN_SIZE * 5, 4).unwrap());
         assert_eq!(res.is_err(), true);
@@ -285,16 +306,28 @@ mod tests {
     }
 
     #[test]
-    fn test_malloc_thread_ok() {
+    fn test_alloc_ok(){
+        let _ = env_logger::init();
         let res = super::alloc(Layout::new::<u32>());
         assert_eq!(res.is_ok(), true);
     }
 
     #[test]
     fn test_free_thread_ok() {
+        let _ = env_logger::init();
         let res = super::alloc(Layout::new::<u32>());
         assert_eq!(res.is_ok(), true);
         super::dealloc(res.unwrap(), Layout::new::<u32>());
+    }
+
+    #[test]
+    fn test_flush_ok(){
+        let _ = env_logger::init();
+        let res = super::alloc(Layout::new::<u32>());
+        let value = res.unwrap();
+        unsafe {*value = 10};
+        info!("here");
+        super::flush(value, Layout::new::<u32>());
     }
 }
 

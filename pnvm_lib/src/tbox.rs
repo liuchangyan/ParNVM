@@ -57,6 +57,11 @@ where T: Clone
         vers.get_version()
     }
 
+    pub fn get_ptr(&self) -> *mut T {
+        let tvalue = self.tvalue_.read().unwrap();
+        tvalue.get_ptr()
+    }
+
      /* No Trans Access method */
      pub fn raw_read(&self) -> T {
         let tvalue = self.tvalue_.read().unwrap();

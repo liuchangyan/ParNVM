@@ -82,11 +82,11 @@ where
         let tobj = Arc::clone(tobj);
 
         let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(&tobj));
-        //if !tag.has_read() {
-        //    //persist log 
-        //    let log = PLog(tobj);
-        //     
-        //}
+        if !tag.has_read() {
+            //persist log 
+            //let log = PLog(tobj);
+             
+        }
         tag.write(val);
     }
 
@@ -100,8 +100,6 @@ where
             let _tobj = Arc::clone(&tag.tobj_ref_);
             if !_tobj.lock(self.commit_id()) {
                 while let Some(_tag) = locks.pop() {
-                    //let mut _tobj = _tag.tobj_ref_.write().unwrap();
-                    //_tobj.unlock();
                     _tag.tobj_ref_.unlock();
                 }
                 println!("{:#?} failed to locked!", tag);
@@ -130,12 +128,25 @@ where
 
     fn commit(&mut self) -> bool {
         let id = self.commit_id();
+
+        //Install write sets into the underlying data
         for tag in self.deps_.values_mut() {
-               // let mut _tobj = tag.tobj_ref_.write().unwrap();
-               // _tobj.install(tag.consume_value(), self.commit_id());
-                tag.commit(id);
+                tag.commit(id); 
+                //FIXME: delegating to tag for commiting? 
+        }
+        
+        //Persist the data
+        for tag in self.deps_.values() {
+            tag.persist(id);  
         }
 
+        //Spinning on checking on depedency
+        //self.wait_for_deps();
+
+        //Persist commit the transaction 
+        //self.persist_commit();
+        
+        //Clean up local data structures.
         self.clean_up();
         true
     }

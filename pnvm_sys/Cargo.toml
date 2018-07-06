@@ -5,4 +5,7 @@ authors = ["Xu <xuchen@u.nus.edu>"]
 
 [dependencies]
 lazy_static = "1.0"
+log = "0.4.0"
+env_logger = "~0.4"
 libc = "0.2"
+

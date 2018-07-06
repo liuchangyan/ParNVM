@@ -7,9 +7,12 @@ pub mod txn;
 pub mod tbox;
 pub mod conf;
 pub mod tthread;
+//pub mod plog;
 
 #[cfg(test)]
 mod tests {
+    extern crate env_logger;
+
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
     use super::txn;
@@ -17,6 +20,7 @@ mod tests {
 
     #[test]
     fn test_single_read() {
+        let _ = env_logger::init();
         let tb : TObject<u32> = TBox::new(1);
 
         {
@@ -28,6 +32,7 @@ mod tests {
 
     #[test]
     fn test_single_write() {
+        let _ = env_logger::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
             let tx = &mut Transaction::new(Tid::new(1));

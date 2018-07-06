@@ -146,6 +146,10 @@ where T:Clone
     pub fn load(&self) -> &T {
         unsafe {self.ptr_.as_ref()}
     }
+
+    pub fn get_ptr(&self) -> *mut T {
+        self.ptr_.as_ptr()
+    }
    
 
     //FIXME::This is super dangerous...
@@ -232,6 +236,13 @@ where T:Clone
 
     pub fn write(&mut self, val : T) {
         self.write_val_ = Some(val)
+    }
+
+    pub fn persist(&self, id: Tid) {
+        if !self.has_write() {
+            return;
+        }
+        pnvm_sys::flush((*self.tobj_ref_).get_ptr() as *mut u8, Layout::new::<T>());
     }
 }
 
