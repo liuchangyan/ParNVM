@@ -10,6 +10,8 @@ pub use alloc::allocator::{
     Layout
 };
 
+extern crate rand;
+
 use std::{
     fmt, 
     str, 
@@ -48,6 +50,16 @@ extern "C" {
 
 }
 
+#[link(name = "pmemlog")]
+extern "C" {
+    pub fn pmemlog_create(path : *const c_char, poolsize: usize, mode: mode_t) ->*mut LogPool;
+    pub fn pmemlog_open(path : *const c_char) -> *mut LogPool;
+    pub fn pmemlog_close(plp : *mut LogPool);
+    
+    pub fn pmemlog_append(plp : *mut LogPool, buf : *const c_void, count : usize) -> c_int;
+    pub fn pmemlog_tell(plp : *mut LogPool) -> c_longlong;
+}
+
 #[link(name = "memkind")]
 extern "C" {
     //Memkind Wrappers
@@ -68,6 +80,9 @@ pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE : usize = 2 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK : c_int = 0;
 const PMEM_FILE_DIR : &'static str = "../data";
+const PLOG_FILE_PATH : &'static str = "../data/log";
+const PLOG_MIN_SIZE : usize = 1024 * 1024 * 2;
+const PLOG_DEFAULT_SIZE : usize = 2 * PLOG_MIN_SIZE;
 
 #[repr(C)]
 pub struct MemKind {
@@ -83,6 +98,70 @@ pub struct MemKind {
     arena_zero : c_uint
 }
 
+#[repr(C)]
+pub struct LogPool {
+    hdr : LogHeader,
+
+    start_offset : uint64_t,
+    end_offset : uint64_t, 
+    write_offset : uint64_t,
+
+    addr : *const c_void,
+    size : usize,
+    is_pmem: c_int, 
+    rdonly : c_int, 
+    rwlockp : *mut c_void, //FIXME: casting assumed
+    is_dev_dax : c_int, 
+    set : *mut c_void, //FIXME: casting assumed 
+}
+
+
+const POOL_HDR_SIG_LEN : usize = 8;
+#[repr(C)]
+pub struct LogHeader {
+    signature : [c_char; POOL_HDR_SIG_LEN],
+    major : uint32_t,
+    compat_feat : uint32_t,
+    incompat_feat : uint32_t,
+    ro_compat_feat: uint32_t,
+    poolset_uuid : uuid_t,
+    uuid :  uuid_t,
+    prev_part_uuid : uuid_t,
+    next_part_uuid : uuid_t,
+    prev_repl_uuid : uuid_t,
+    next_repl_uuid : uuid_t,
+
+    crtime : uint64_t,
+    arch_flags : ArchFlags,
+    unused : [c_uchar ; 1888],
+
+    unused2 : [c_uchar ; 1992],
+
+    sds : ShutdownState,
+    checksum : uint64_t,
+}
+
+type uuid_t  = [c_uchar ; 16];
+
+
+#[repr(C)]
+pub struct ArchFlags {
+    align_desc : uint64_t,
+    machine_class : uint8_t,
+    data : uint8_t,
+    reserved : [uint8_t ; 4],
+    machine : uint16_t,
+}
+
+#[repr(C)]
+pub struct ShutdownState {
+    usc : uint64_t,
+    uuid : uint64_t,
+    dirty : uint8_t,
+    reserved : [uint8_t; 39],
+    checksum : uint64_t,
+}
+
 
 #[derive(Debug)]
 pub struct PMem {
@@ -95,6 +174,9 @@ pub struct PMem {
 thread_local!{
     //This init should just be dummy
     pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE).unwrap()));
+
+    pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, true)));
+
 }
 
 
@@ -115,6 +197,11 @@ pub fn dealloc(ptr : *mut u8, layout: Layout) {
 pub fn flush(ptr : *mut u8, layout: Layout) {
     info!("flush {:p} , {}", ptr, layout.size());    
     unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
+}
+
+pub fn persist_txn(id: u32) {
+    info!("persit_txn::(id : {})", id);
+    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append(id));
 }
 
 
@@ -195,7 +282,7 @@ impl  PMem  {
 
 impl Drop for PMem {
     fn drop(&mut self) {
-        println!("Dropiing");
+            info!("PMem::drop");
           let res = unsafe { memkind_pmem_destroy(self.kind)}; 
           if res != 0 {
               panic!("destroy failed");
@@ -203,6 +290,56 @@ impl Drop for PMem {
     }
 }
 
+
+#[derive(Debug)]
+pub struct PLog {
+    plp : *mut LogPool,
+    size : usize,
+    path : String
+}
+
+impl PLog {
+    fn new(path : String , size :usize, random_file : bool) -> PLog {
+        info!("{:}Plog::new(path: {:}, size:{:})", LPREFIX, path, size);
+        let mut _path = String::clone(&path);
+        if random_file {
+            let seed = rand::random::<u8>();
+            _path.push_str(seed.to_string().as_str());
+        }
+        let path = CString::new(String::clone(&_path)).unwrap();
+        let pathp = path.as_ptr();
+
+        let mut plp : *mut LogPool  = unsafe { pmemlog_create(pathp, size, S_IWUSR | S_IRUSR)};
+        if plp.is_null() {
+            plp  = unsafe { pmemlog_open(pathp)};
+            if plp.is_null() {
+                panic!("pmemlog_created failed ");
+            }
+        }
+
+        PLog{
+            plp: plp,
+            size : size,
+            path: _path
+        }
+    }
+
+    fn append(&self, tid : u32) {
+        unsafe { pmemlog_append(self.plp, &tid as *const u32 as *const c_void, size_of::<u32>()) };
+    }
+
+    fn tell(&self) -> i64 {
+        unsafe {pmemlog_tell(self.plp)}
+    }
+
+}
+
+impl Drop for PLog {
+    fn drop(&mut self) {
+        info!("PLog::drop");
+        unsafe {pmemlog_close(self.plp)};
+    }
+}
 
 impl fmt::Debug for MemKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -328,6 +465,19 @@ mod tests {
         unsafe {*value = 10};
         info!("here");
         super::flush(value, Layout::new::<u32>());
+    }
+
+    #[test]
+    fn test_append_log_ok() {
+        let _ = env_logger::init();
+        let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
+        let offset_before = plog.tell();
+        info!("offset_before : {}", offset_before);
+        let tid = 999;
+        plog.append(tid);
+        let offset_after = plog.tell();
+        info!("offset_after : {}", offset_after);
+        assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
     }
 }
 
