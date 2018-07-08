@@ -2,6 +2,9 @@
 #![feature(allocator_api)]
 extern crate pnvm_sys;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod tcore;
 pub mod txn;
 pub mod tbox;

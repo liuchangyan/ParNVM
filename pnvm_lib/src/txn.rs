@@ -1,16 +1,47 @@
 use std::{
     collections::HashMap,
-    sync::Arc,
+    sync::{ RwLock, Arc},
     rc::Rc,
+
 };
 use tcore::{ObjectId, TObject, TTag};
+use pnvm_sys;
+use lazy_static;
 
-#[derive(PartialEq, Copy, Clone, Debug)]
+
+
+lazy_static! {
+    static ref TXN_RUNNING : Arc<RwLock<HashMap<Tid, bool>>> = {
+        Arc::new(RwLock::new(HashMap::new()))
+    };
+}
+pub fn mark_commit(tid: Tid) {
+    TXN_RUNNING.write()
+        .unwrap()
+        .remove(&tid)
+        .expect("mark_commit : txn not in the map");
+}
+
+
+pub fn mark_start(tid : Tid) {
+    TXN_RUNNING.write()
+        .unwrap()
+        .insert(tid, true)
+        .is_none();
+}
+
+#[derive(PartialEq, Copy, Clone, Debug, Eq, Hash)]
 pub struct Tid(u32);
 
 impl Tid {
     pub fn new(id: u32) -> Tid {
         Tid(id)
+    }
+}
+
+impl Into<u32> for Tid {
+    fn into(self) -> u32 {
+        self.0
     }
 }
 
@@ -28,6 +59,7 @@ where
     T: Clone,
 {
     pub fn new(tid_: Tid) -> Transaction<T> {
+        self::mark_start(tid_);
         Transaction {
             tid_,
             state_: TxState::EMBRYO,
@@ -141,14 +173,23 @@ where
         }
 
         //Spinning on checking on depedency
-        //self.wait_for_deps();
+        self.wait_for_deps();
 
         //Persist commit the transaction 
-        //self.persist_commit();
+        self.persist_commit();
         
         //Clean up local data structures.
         self.clean_up();
         true
+    }
+
+    fn persist_commit(&self) {
+        pnvm_sys::persist_txn(self.commit_id().into());
+        self::mark_commit(self.commit_id());
+    }
+
+    fn wait_for_deps(&self) {
+        
     }
 
     fn clean_up(&mut self) {
