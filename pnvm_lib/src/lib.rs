@@ -1,16 +1,19 @@
 //pub mod sched;
 #![feature(allocator_api)]
+#![feature(libc)]
 extern crate pnvm_sys;
 
 #[macro_use]
 extern crate lazy_static;
 
+extern crate libc;
+
 pub mod tcore;
+pub mod plog;
 pub mod txn;
 pub mod tbox;
 pub mod conf;
 pub mod tthread;
-//pub mod plog;
 
 #[cfg(test)]
 mod tests {

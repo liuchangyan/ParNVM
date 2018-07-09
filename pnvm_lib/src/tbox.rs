@@ -1,7 +1,10 @@
 use txn::{Tid};
-use std::rc::Rc;
 //use std::cell::RefCell;
-use std::sync::{RwLock, Mutex, Arc};
+use std::{
+    rc::Rc,
+    sync::{RwLock, Mutex, Arc},
+    ptr::NonNull,
+};
 use tcore::{TValue, TVersion,   ObjectId};
 use tcore;
 
@@ -60,6 +63,11 @@ where T: Clone
     pub fn get_ptr(&self) -> *mut T {
         let tvalue = self.tvalue_.read().unwrap();
         tvalue.get_ptr()
+    }
+
+    pub fn get_addr(&self) -> NonNull<T> {
+        let tvalue = self.tvalue_.read().unwrap();
+        tvalue.get_addr()
     }
 
      /* No Trans Access method */

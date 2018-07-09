@@ -283,6 +283,8 @@ void execute_piece(Piece piece) {
 > - **Logs from non-conflicting transactions** do not need to be ordered 
 >
 >   - Non-conflicting implies that the write sets are different 
+>   - The only persist barrier is between logs and data 
+>     - Because Intel's new persistent domain:  flag -> crash [-> data], such sequence will not be possible anymore at crash recovery. 
 >
 > - **Logs from conflicting transactions**
 >

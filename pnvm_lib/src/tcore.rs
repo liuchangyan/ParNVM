@@ -1,8 +1,11 @@
+#[allow(unused_imports)]
 use std::sync::{ Arc, RwLock,Mutex};
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use tbox::TBox;
 use txn::{Tid};
+
+#[allow(unused_imports)]
 use std::{
     self,
     fmt,
@@ -14,6 +17,8 @@ use pnvm_sys::{
     self,
     Layout,
 };
+
+use plog::PLog;
 
 /* Module Level Exposed Function Calls */
 
@@ -150,6 +155,10 @@ where T:Clone
     pub fn get_ptr(&self) -> *mut T {
         self.ptr_.as_ptr()
     }
+
+      pub fn get_addr(&self) -> NonNull<T> {
+        self.ptr_
+    }
    
 
     //FIXME::This is super dangerous...
@@ -203,7 +212,7 @@ where T:Clone
         }
     }
 
-    pub fn commit(&mut self, id : Tid) {
+    pub fn commit_data(&mut self, id : Tid) {
         if !self.has_write() {
             return;
         }
@@ -238,11 +247,15 @@ where T:Clone
         self.write_val_ = Some(val)
     }
 
-    pub fn persist(&self, id: Tid) {
+    pub fn persist_data(&self, id: Tid) {
         if !self.has_write() {
             return;
         }
         pnvm_sys::flush((*self.tobj_ref_).get_ptr() as *mut u8, Layout::new::<T>());
+    }
+
+    pub fn make_log(&self, id : Tid) -> PLog<T> {
+        PLog::new(&Arc::clone(&self.tobj_ref_), id )
     }
 }
 

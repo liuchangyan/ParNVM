@@ -25,6 +25,41 @@ use std::{
 
 const LPREFIX : &'static str = "pnvm_sys";
 
+/* ************* 
+ * Exposed APIS 
+ * **************/
+pub fn alloc(layout : Layout) -> Result<*mut u8, AllocErr> {
+    PMEM_ALLOCATOR.with(|pmem_cell| {
+        pmem_cell.borrow_mut().alloc(layout)
+    })
+}
+
+pub fn dealloc(ptr : *mut u8, layout: Layout) {
+    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
+}
+
+
+pub fn flush(ptr : *mut u8, layout: Layout) {
+    info!("flush {:p} , {}", ptr, layout.size());    
+    unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
+}
+
+pub fn persist_txn(id: u32) {
+    info!("persit_txn::(id : {})", id);
+    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append(id));
+}
+
+pub fn persist_log(iovecs : &Vec<iovec>) {
+    info!("persist_log : {:} item", iovecs.len());
+    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().appendv(iovecs, iovecs.len()));
+}
+
+
+/* *****************
+ *   Mappings
+ * ****************/
+
+
 #[link(name = "pmem")]
 extern "C" {
     pub fn pmem_check_version(major_required: c_uint, minor_required: c_uint) -> *const c_char;
@@ -57,6 +92,7 @@ extern "C" {
     pub fn pmemlog_close(plp : *mut LogPool);
     
     pub fn pmemlog_append(plp : *mut LogPool, buf : *const c_void, count : usize) -> c_int;
+    pub fn pmemlog_appendv(plp : *mut LogPool, iov : *const iovec, iovecnt : usize) -> c_int;
     pub fn pmemlog_tell(plp : *mut LogPool) -> c_longlong;
 }
 
@@ -179,30 +215,6 @@ thread_local!{
 
 }
 
-
-/* ************* 
- * Exposed APIS 
- * **************/
-pub fn alloc(layout : Layout) -> Result<*mut u8, AllocErr> {
-    PMEM_ALLOCATOR.with(|pmem_cell| {
-        pmem_cell.borrow_mut().alloc(layout)
-    })
-}
-
-pub fn dealloc(ptr : *mut u8, layout: Layout) {
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
-}
-
-
-pub fn flush(ptr : *mut u8, layout: Layout) {
-    info!("flush {:p} , {}", ptr, layout.size());    
-    unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
-}
-
-pub fn persist_txn(id: u32) {
-    info!("persit_txn::(id : {})", id);
-    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append(id));
-}
 
 
 
@@ -330,6 +342,12 @@ impl PLog {
 
     fn tell(&self) -> i64 {
         unsafe {pmemlog_tell(self.plp)}
+    }
+
+    fn appendv(&self, iovecs: &Vec<iovec>, size : usize) {
+        info!("appendv : {} items", size);
+        unsafe { pmemlog_appendv(self.plp, iovecs.as_ptr() as *const iovec, size)};
+        
     }
 
 }

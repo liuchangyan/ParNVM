@@ -1,12 +1,13 @@
+#[allow(unused_imports)]
 use std::{
     collections::HashMap,
     sync::{ RwLock, Arc},
     rc::Rc,
-
 };
 use tcore::{ObjectId, TObject, TTag};
+use plog;
 use pnvm_sys;
-use lazy_static;
+
 
 
 
@@ -161,19 +162,16 @@ where
     fn commit(&mut self) -> bool {
         let id = self.commit_id();
 
+        //Persist the write set logs 
+        self.persist_log();
+        
+
         //Install write sets into the underlying data
-        for tag in self.deps_.values_mut() {
-                tag.commit(id); 
-                //FIXME: delegating to tag for commiting? 
-        }
+        self.install_data();
         
         //Persist the data
-        for tag in self.deps_.values() {
-            tag.persist(id);  
-        }
+        self.persist_data();
 
-        //Spinning on checking on depedency
-        self.wait_for_deps();
 
         //Persist commit the transaction 
         self.persist_commit();
@@ -184,13 +182,40 @@ where
     }
 
     fn persist_commit(&self) {
+        //FIXME:: Can it be async? 
         pnvm_sys::persist_txn(self.commit_id().into());
         self::mark_commit(self.commit_id());
     }
 
-    fn wait_for_deps(&self) {
-        
+    fn persist_log(&self) {
+        let mut logs = vec![];
+        let id = self.commit_id();
+        for tag in self.deps_.values() {
+            if tag.has_write() {
+                logs.push(tag.make_log(id));
+            }
+        }
+
+        plog::persist_log(logs);
+
     }
+
+    fn persist_data(&self) {
+        for tag in self.deps_.values() {
+            tag.persist_data(self.commit_id());  
+        }
+
+    }
+
+    fn install_data(&mut self) {
+        let id = self.commit_id();
+        for tag in self.deps_.values_mut() {
+                tag.commit_data(id); 
+                //FIXME: delegating to tag for commiting? 
+        }
+
+    }
+
 
     fn clean_up(&mut self) {
         for tag in self.deps_.values() {
