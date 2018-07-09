@@ -23,7 +23,7 @@ use std::{
     rc::Rc,
 };
 
-const LPREFIX : &'static str = "pnvm_sys";
+const LPREFIX : &'static str = "pnvm_sys::";
 
 /* ************* 
  * Exposed APIS 
@@ -44,21 +44,28 @@ pub fn flush(ptr : *mut u8, layout: Layout) {
     unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
 }
 
-pub fn persist_txn(id: u32) {
-    info!("persit_txn::(id : {})", id);
-    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append(id));
-}
+//pub fn persist_single(addr : *const c_void, size : usize) {
+//    info!("persit_single::(addr : {:p}, size : {})", addr, size);
+//    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_single(addr, size));
+//}
 
 pub fn persist_log(iovecs : &Vec<iovec>) {
     info!("persist_log : {:} item", iovecs.len());
-    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().appendv(iovecs, iovecs.len()));
+    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_many(iovecs, iovecs.len()));
 }
+
+pub fn walk(chunksize: usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
+-> c_int) {
+    info!("walk : chunksize = {}", chunksize);
+    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
+}
+
+
 
 
 /* *****************
  *   Mappings
  * ****************/
-
 
 #[link(name = "pmem")]
 extern "C" {
@@ -85,6 +92,9 @@ extern "C" {
 
 }
 
+
+
+
 #[link(name = "pmemlog")]
 extern "C" {
     pub fn pmemlog_create(path : *const c_char, poolsize: usize, mode: mode_t) ->*mut LogPool;
@@ -94,6 +104,11 @@ extern "C" {
     pub fn pmemlog_append(plp : *mut LogPool, buf : *const c_void, count : usize) -> c_int;
     pub fn pmemlog_appendv(plp : *mut LogPool, iov : *const iovec, iovecnt : usize) -> c_int;
     pub fn pmemlog_tell(plp : *mut LogPool) -> c_longlong;
+    pub fn pmemlog_walk(plp: *mut LogPool,
+                        chunksize: usize,
+                        process_chunk: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
+                        -> c_int,
+                        arg: *mut c_void);
 }
 
 #[link(name = "memkind")]
@@ -336,19 +351,29 @@ impl PLog {
         }
     }
 
-    fn append(&self, tid : u32) {
-        unsafe { pmemlog_append(self.plp, &tid as *const u32 as *const c_void, size_of::<u32>()) };
+    fn append_single(&self, addr : *const c_void, size : usize) {
+        unsafe { pmemlog_append(self.plp, addr, size) };
     }
 
     fn tell(&self) -> i64 {
         unsafe {pmemlog_tell(self.plp)}
     }
 
-    fn appendv(&self, iovecs: &Vec<iovec>, size : usize) {
+    fn append_many(&self, iovecs: &Vec<iovec>, size : usize) {
         info!("appendv : {} items", size);
         unsafe { pmemlog_appendv(self.plp, iovecs.as_ptr() as *const iovec, size)};
         
     }
+
+    fn walk(&self, chunk_size : usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
+                        -> c_int
+) 
+        {
+            unsafe { 
+                let arg = &1 as *const _ as *mut c_void;
+                pmemlog_walk(self.plp, chunk_size, callback,arg)
+            };
+        }
 
 }
 

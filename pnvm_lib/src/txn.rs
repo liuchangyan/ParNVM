@@ -183,7 +183,7 @@ where
 
     fn persist_commit(&self) {
         //FIXME:: Can it be async? 
-        pnvm_sys::persist_txn(self.commit_id().into());
+        plog::persist_txn(self.commit_id().into());
         self::mark_commit(self.commit_id());
     }
 
