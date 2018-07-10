@@ -40,23 +40,23 @@ pub fn dealloc(ptr : *mut u8, layout: Layout) {
 
 
 pub fn flush(ptr : *mut u8, layout: Layout) {
-    info!("flush {:p} , {}", ptr, layout.size());    
+    trace!("flush {:p} , {}", ptr, layout.size());    
     unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
 }
 
 //pub fn persist_single(addr : *const c_void, size : usize) {
-//    info!("persit_single::(addr : {:p}, size : {})", addr, size);
+//    trace!("persit_single::(addr : {:p}, size : {})", addr, size);
 //    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_single(addr, size));
 //}
 
 pub fn persist_log(iovecs : &Vec<iovec>) {
-    info!("persist_log : {:} item", iovecs.len());
+    trace!("persist_log : {:} item", iovecs.len());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_many(iovecs, iovecs.len()));
 }
 
 pub fn walk(chunksize: usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
 -> c_int) {
-    info!("walk : chunksize = {}", chunksize);
+    trace!("walk : chunksize = {}", chunksize);
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
 
@@ -239,7 +239,7 @@ thread_local!{
 impl  PMem  {
     //Allocate max_size pmem and returns the memory allocator
     pub fn new(dir: String, max_size : usize) -> Option<PMem> {
-        info!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
+        trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
         let _dir = String::clone(&dir);
         let dir = CString::new(dir).unwrap();
         let dir_ptr = dir.as_ptr();
@@ -326,7 +326,7 @@ pub struct PLog {
 
 impl PLog {
     fn new(path : String , size :usize, random_file : bool) -> PLog {
-        info!("{:}Plog::new(path: {:}, size:{:})", LPREFIX, path, size);
+        trace!("{:}Plog::new(path: {:}, size:{:})", LPREFIX, path, size);
         let mut _path = String::clone(&path);
         if random_file {
             let seed = rand::random::<u8>();
@@ -359,7 +359,7 @@ impl PLog {
     }
 
     fn append_many(&self, iovecs: &Vec<iovec>, size : usize) {
-        info!("appendv : {} items", size);
+        trace!("appendv : {} items", size);
         unsafe { pmemlog_appendv(self.plp, iovecs.as_ptr() as *const iovec, size)};
         
     }
@@ -504,7 +504,7 @@ mod tests {
         let res = super::alloc(Layout::new::<u32>());
         let value = res.unwrap();
         unsafe {*value = 10};
-        info!("here");
+        trace!("here");
         super::flush(value, Layout::new::<u32>());
     }
 
@@ -513,11 +513,11 @@ mod tests {
         let _ = env_logger::init();
         let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
         let offset_before = plog.tell();
-        info!("offset_before : {}", offset_before);
+        trace!("offset_before : {}", offset_before);
         let tid = 999;
         plog.append(tid);
         let offset_after = plog.tell();
-        info!("offset_after : {}", offset_after);
+        trace!("offset_after : {}", offset_after);
         assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
     }
 }
