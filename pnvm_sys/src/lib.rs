@@ -130,8 +130,8 @@ extern "C" {
 pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE : usize = 2 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK : c_int = 0;
-const PMEM_FILE_DIR : &'static str = "../data";
-const PLOG_FILE_PATH : &'static str = "../data/log";
+const PMEM_FILE_DIR : &'static str = "/home/v-xuc/ParNVM/data";
+const PLOG_FILE_PATH : &'static str = "/home/v-xuc/ParNVM/data/log";
 const PLOG_MIN_SIZE : usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE : usize = 2 * PLOG_MIN_SIZE;
 
@@ -309,7 +309,6 @@ impl  PMem  {
 
 impl Drop for PMem {
     fn drop(&mut self) {
-            info!("PMem::drop");
           let res = unsafe { memkind_pmem_destroy(self.kind)}; 
           if res != 0 {
               panic!("destroy failed");
@@ -379,7 +378,6 @@ impl PLog {
 
 impl Drop for PLog {
     fn drop(&mut self) {
-        info!("PLog::drop");
         unsafe {pmemlog_close(self.plp)};
     }
 }

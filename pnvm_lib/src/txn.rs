@@ -6,7 +6,6 @@ use std::{
 };
 use tcore::{ObjectId, TObject, TTag};
 use plog;
-use pnvm_sys;
 
 
 
@@ -160,7 +159,6 @@ where
     }
 
     fn commit(&mut self) -> bool {
-        let id = self.commit_id();
 
         //Persist the write set logs 
         self.persist_log();

@@ -1,9 +1,9 @@
 use txn::{Tid};
 //use std::cell::RefCell;
 use std::{
-    rc::Rc,
-    sync::{RwLock, Mutex, Arc},
-    ptr::NonNull,
+    //rc::Rc,
+    sync::{RwLock, Arc},
+    ptr::Unique,
 };
 use tcore::{TValue, TVersion,   ObjectId};
 use tcore;
@@ -65,7 +65,7 @@ where T: Clone
         tvalue.get_ptr()
     }
 
-    pub fn get_addr(&self) -> NonNull<T> {
+    pub fn get_addr(&self) -> Unique<T> {
         let tvalue = self.tvalue_.read().unwrap();
         tvalue.get_addr()
     }

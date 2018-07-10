@@ -1,6 +1,8 @@
 //pub mod sched;
+#![allow(dead_code)]
 #![feature(allocator_api)]
 #![feature(libc)]
+#![feature(ptr_internals)]
 extern crate pnvm_sys;
 
 #[macro_use]
@@ -141,5 +143,25 @@ mod tests {
             assert_eq!(Transaction::notrans_read(&tb), 1);
         }
         
+    }
+
+    #[test]
+    fn test_read_string() {
+    
+        let tb : TObject<String> = TBox::new(String::from("hillo"));
+
+        {
+
+            let tx = &mut Transaction::new(Tid::new(1));
+            assert_eq!(tx.read(&tb), String::from("hillo"));
+
+            tx.write(&tb, String::from("world"));
+            assert_eq!(tx.read(&tb), String::from("world"));
+
+            assert_eq!(Transaction::notrans_read(&tb), String::from("hillo"));
+            assert_eq!(tx.try_commit(), true);
+            assert_eq!(Transaction::notrans_read(&tb), String::from("world"));
+        }
+
     }
 }

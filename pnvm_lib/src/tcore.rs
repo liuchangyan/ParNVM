@@ -9,7 +9,7 @@ use txn::{Tid};
 use std::{
     self,
     fmt,
-    ptr::NonNull,
+    ptr::Unique,
     mem,
     rc::Rc,
 };
@@ -122,7 +122,7 @@ impl TVersion {
 
 pub struct TValue<T>
 where T:Clone {
-    ptr_: NonNull<T>,
+    ptr_: Unique<T>,
 }
 
 impl<T> TValue<T> 
@@ -138,7 +138,7 @@ where T:Clone
                 };
                 unsafe {ptr.write(val)};
                 TValue{ 
-                    ptr_ : NonNull::new(ptr).expect("Tvalue::new failed"),
+                    ptr_ : Unique::new(ptr).expect("Tvalue::new failed"),
                 }
             },
             Err(_) => panic!("Tvalue::new failed")
@@ -156,7 +156,7 @@ where T:Clone
         self.ptr_.as_ptr()
     }
 
-      pub fn get_addr(&self) -> NonNull<T> {
+      pub fn get_addr(&self) -> Unique<T> {
         self.ptr_
     }
    
@@ -247,7 +247,7 @@ where T:Clone
         self.write_val_ = Some(val)
     }
 
-    pub fn persist_data(&self, id: Tid) {
+    pub fn persist_data(&self, _: Tid) {
         if !self.has_write() {
             return;
         }

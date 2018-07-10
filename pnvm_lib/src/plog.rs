@@ -1,7 +1,7 @@
 use tcore::TObject;
 use txn::Tid;
 use std::{
-    ptr::NonNull,
+    ptr::Unique,
     mem::size_of,
 
 };
@@ -29,7 +29,7 @@ pub struct PLogHeader {
 pub struct PLogData<T>
 where T : Clone
 {
-    addr : NonNull<T>,
+    addr : Unique<T>,
     size : usize
 }
 
@@ -41,8 +41,6 @@ where T : Clone
 {
     
     pub fn new(obj : &TObject<T>, id : Tid) -> PLog<T> {
-        let ver = obj.get_version().unwrap_or(Tid::new(0));
-
         let addr = (obj).get_addr();
         
         PLog {
@@ -121,7 +119,7 @@ pub fn persist_txn(id : u32) {
         },
 
         data : PLogData {
-            addr : NonNull::from(&id),
+            addr : Unique::from(&id),
             size : size_of::<u32>()
         }
     };
@@ -136,13 +134,11 @@ pub fn persist_txn(id : u32) {
     //pnvm_sys::walk(0, visit_log);
 }
 
-
-extern "C" fn visit_log(buf: *const libc::c_void, len: libc::size_t, arg: *mut libc::c_void) -> libc::c_int
+extern "C" fn visit_log(buf: *const libc::c_void, len: libc::size_t, _: *mut libc::c_void) -> libc::c_int
 {
-    unsafe {
         println!("------Starting Walk[{:p}, {}]-------", buf, len);
         let mut buf = buf as *mut u8;
-        let end = buf.add(len);
+        let end = unsafe {buf.add(len)};
 
         while buf < end {
             let headerp = buf as *const PLogHeader;
@@ -152,14 +148,13 @@ extern "C" fn visit_log(buf: *const libc::c_void, len: libc::size_t, arg: *mut l
             println!("Len : {}", header.len);
             println!("Kind : {}", header.log_kind);
 
-            buf = buf.add(size_of::<PLogHeader>());
+            buf = unsafe {buf.add(size_of::<PLogHeader>())};
 
             let datap = buf as *const u32;
             let data = unsafe { *datap};
             println!("Data : {}", data);
 
-            buf = buf.add(size_of::<u32>());
+            buf = unsafe {buf.add(size_of::<u32>())};
         }
-    }
     0
 }
