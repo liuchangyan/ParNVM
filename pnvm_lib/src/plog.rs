@@ -81,22 +81,30 @@ where T : Clone
     }
 }
 
-pub fn persist_log<T: Clone>(logs : Vec<PLog<T>>){
+pub fn into_iovec<T :Clone>(log :PLog<T>) -> (libc::iovec, libc::iovec) {
+    let mut log = log;
+    let iovp_header = libc::iovec {
+        iov_base : &mut log.header as *mut _ as *mut libc::c_void,
+        iov_len : size_of::<PLogHeader>()
+    };
+
+    let iovp_data = libc::iovec {
+        iov_base : log.data.addr.as_ptr() as *mut libc::c_void,
+        iov_len : log.data.size 
+    };
+
+    (iovp_header, iovp_data)
+}
+
+pub fn persist_log<T: Clone>(logs :Vec<PLog<T>>){
     let mut iovecs = Vec::with_capacity(logs.len());
-    for mut log in logs {
-        let iovp_header = libc::iovec {
-            iov_base : &mut log.header as *mut _ as *mut libc::c_void,
-            iov_len : size_of::<PLogHeader>()
-        };
-
-        let iovp_data = libc::iovec {
-            iov_base : log.data.addr.as_ptr() as *mut libc::c_void,
-            iov_len : log.data.size 
-        };
-
-        iovecs.push(iovp_header);
-        iovecs.push(iovp_data);
+    
+    
+    for (iov_header, iov_data) in logs.into_iter().map(move |log| into_iovec(log)){
+        iovecs.push(iov_header);
+        iovecs.push(iov_data);
     }
+
     iovecs.shrink_to_fit();
     debug_assert!(iovecs.capacity() == iovecs.len());
     pnvm_sys::persist_log(&iovecs);
@@ -119,12 +127,13 @@ pub fn persist_txn(id : u32) {
     };
 
     iovecs.push(log.header.into());
+    println!("{:p}", &log.data);
     iovecs.push(log.data.into());
 
     iovecs.shrink_to_fit();
     debug_assert!(iovecs.capacity() == iovecs.len());
     pnvm_sys::persist_log(&iovecs);
-    pnvm_sys::walk(0, visit_log);
+    //pnvm_sys::walk(0, visit_log);
 }
 
 
