@@ -56,7 +56,7 @@ pub fn persist_log(iovecs : &Vec<iovec>) {
 }
 
 pub fn walk(chunksize: usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
--> c_int) {
+            -> c_int) {
     trace!("walk : chunksize = {}", chunksize);
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
@@ -106,7 +106,7 @@ extern "C" {
     pub fn pmemlog_create(path : *const c_char, poolsize: usize, mode: mode_t) ->*mut LogPool;
     pub fn pmemlog_open(path : *const c_char) -> *mut LogPool;
     pub fn pmemlog_close(plp : *mut LogPool);
-    
+
     pub fn pmemlog_append(plp : *mut LogPool, buf : *const c_void, count : usize) -> c_int;
     pub fn pmemlog_appendv(plp : *mut LogPool, iov : *const iovec, iovecnt : usize) -> c_int;
     pub fn pmemlog_tell(plp : *mut LogPool) -> c_longlong;
@@ -259,7 +259,7 @@ impl  PMem  {
 
         let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr)};
         if err != PMEM_ERROR_OK {
-            panic!("pemem failed create {}", err);
+            panic!("pemem failed create {} @ {:} {:} ", err, _dir, max_size);
             //return None;
         }
 
@@ -303,9 +303,9 @@ impl  PMem  {
         let res = unsafe { pmem_is_pmem(ptr as *const c_void, size)};
         println!("result {}", res);
         if res == 1 {
-           true 
+            true 
         } else {
-           false 
+            false 
         }
     }
 
@@ -313,10 +313,10 @@ impl  PMem  {
 
 impl Drop for PMem {
     fn drop(&mut self) {
-          let res = unsafe { memkind_pmem_destroy(self.kind)}; 
-          if res != 0 {
-              panic!("destroy failed");
-          }
+        let res = unsafe { memkind_pmem_destroy(self.kind)}; 
+        if res != 0 {
+            panic!("destroy failed");
+        }
     }
 }
 
@@ -364,18 +364,18 @@ impl PLog {
     fn append_many(&self, iovecs: &Vec<iovec>, size : usize) {
         trace!("appendv : {} items", size);
         unsafe { pmemlog_appendv(self.plp, iovecs.as_ptr() as *const iovec, size)};
-        
+
     }
 
     fn walk(&self, chunk_size : usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
-                        -> c_int
-) 
-        {
-            unsafe { 
-                let arg = &1 as *const _ as *mut c_void;
-                pmemlog_walk(self.plp, chunk_size, callback,arg)
-            };
-        }
+            -> c_int
+    ) 
+    {
+        unsafe { 
+            let arg = &1 as *const _ as *mut c_void;
+            pmemlog_walk(self.plp, chunk_size, callback,arg)
+        };
+    }
 
 
     fn check(&self) {
@@ -423,11 +423,11 @@ impl fmt::Debug for MemKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     extern crate env_logger;
 
     const PMEM_TEST_PATH_ABS : &str = "/home/v-xuc/ParNVM/data";
-   // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
+    // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
     #[test] 
     fn test_create_ok() {
@@ -441,12 +441,13 @@ mod tests {
         //assert_eq!(pmem.is_some(), true);
         //assert_eq!(pmem.unwrap().check(), true);
     }
-    
+
     #[test]
     #[should_panic]
     fn test_create_non_exist() {
         let _ = env_logger::init();
         let pmem = PMem::new(String::from("../../data"), 16*super::PMEM_MIN_SIZE);
+        assert_eq!(pmem.is_some(), false);
     }
 
     #[test]
@@ -454,6 +455,7 @@ mod tests {
     fn test_size_too_small() {
         let _ = env_logger::init();
         let pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE / 2);
+        assert_eq!(pmem.is_some(), false);
     }
 
     #[test]
@@ -484,7 +486,7 @@ mod tests {
         let res =  pmem.alloc(Layout::from_size_align(PMEM_MIN_SIZE * 5, 4).unwrap());
         assert_eq!(res.is_err(), true);
     }
-    
+
     #[test]
     fn test_dealloc_ok() {
         let mut pmem = PMem::new(String::from("../data"),  super::PMEM_MIN_SIZE *4).unwrap();
@@ -517,18 +519,35 @@ mod tests {
         super::flush(value, Layout::new::<u32>());
     }
 
-   // #[test]
-   // fn test_append_log_ok() {
-   //     let _ = env_logger::init();
-   //     let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
-   //     let offset_before = plog.tell();
-   //     trace!("offset_before : {}", offset_before);
-   //     let tid = 999;
-   //     plog.append(tid);
-   //     let offset_after = plog.tell();
-   //     trace!("offset_after : {}", offset_after);
-   //     assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
-   // }
+    // #[test]
+    // fn test_append_log_ok() {
+    //     let _ = env_logger::init();
+    //     let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
+    //     let offset_before = plog.tell();
+    //     trace!("offset_before : {}", offset_before);
+    //     let tid = 999;
+    //     plog.append(tid);
+    //     let offset_after = plog.tell();
+    //     trace!("offset_after : {}", offset_after);
+    //     assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
+    // }
+    #[test]
+    fn  test_multiple_create() {
+        //let mut pmems = vec![];
+        let mut handles = vec![];
+        for i in 1..20 {
+
+            let handle = thread::spawn(|| {
+                let pmem1 = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 2).unwrap();
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
 }
 
 
