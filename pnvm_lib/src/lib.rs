@@ -7,6 +7,8 @@ extern crate pnvm_sys;
 
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 
 extern crate libc;
 
@@ -29,8 +31,8 @@ mod tests {
     #[test]
     fn test_single_read() {
         let _ = env_logger::init();
+        super::tcore::init();
         let tb : TObject<u32> = TBox::new(1);
-
         {
             let tx = &mut Transaction::new(Tid::new(1));
             let val = tx.read(&tb);
@@ -41,6 +43,7 @@ mod tests {
     #[test]
     fn test_single_write() {
         let _ = env_logger::init();
+        super::tcore::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
             let tx = &mut Transaction::new(Tid::new(1));
@@ -52,6 +55,7 @@ mod tests {
 
     #[test]
     fn test_concurrent_read(){
+        super::tcore::init();
         let tb1 : TObject<u32> = TBox::new(1);
         let tb2 : TObject<u32> = TBox::new(2);
 
@@ -74,6 +78,7 @@ mod tests {
 
     #[test]
     fn test_dirty_read_should_abort(){
+        super::tcore::init();
         let tb1 : TObject<u32> = TBox::new(1);
 
         {
@@ -92,6 +97,7 @@ mod tests {
     
     #[test]
     fn test_writes_in_order() {
+        super::tcore::init();
 
         let tb1 : TObject<u32> = TBox::new(1);
 
@@ -113,6 +119,7 @@ mod tests {
 
     #[test]
     fn test_read_own_write() {
+        super::tcore::init();
         let tb1 : TObject<u32> = TBox::new(1);
 
         {
@@ -131,6 +138,7 @@ mod tests {
     #[test]
     fn test_conflict_write_aborts() {
         
+        super::tcore::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
             let tx = &mut Transaction::new(Tid::new(1));
@@ -148,6 +156,7 @@ mod tests {
     #[test]
     fn test_read_string() {
     
+        super::tcore::init();
         let tb : TObject<String> = TBox::new(String::from("hillo"));
 
         {

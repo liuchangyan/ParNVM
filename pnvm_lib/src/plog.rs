@@ -125,7 +125,6 @@ pub fn persist_txn(id : u32) {
     };
 
     iovecs.push(log.header.into());
-    println!("{:p}", &log.data);
     iovecs.push(log.data.into());
 
     iovecs.shrink_to_fit();

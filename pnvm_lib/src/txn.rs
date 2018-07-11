@@ -72,7 +72,7 @@ where
     }
 
     pub fn try_commit(&mut self) -> bool {
-        println!("Tx[{:?}] is commiting", self.tid_);
+        debug!("Tx[{:?}] is commiting", self.tid_);
         self.state_ = TxState::COMMITTED;
 
         //Stage 1: lock [TODO: Bounded lock or try_lock syntax]
@@ -91,7 +91,7 @@ where
     }
 
     pub fn abort(&mut self, _: AbortReason) -> bool {
-        println!("Tx[{:?}] is aborting.", self.tid_);
+        debug!("Tx[{:?}] is aborting.", self.tid_);
         self.state_ = TxState::ABORTED;
         self.clean_up();
         false
@@ -134,12 +134,12 @@ where
                 while let Some(_tag) = locks.pop() {
                     _tag.tobj_ref_.unlock();
                 }
-                println!("{:#?} failed to locked!", tag);
+                debug!("{:#?} failed to locked!", tag);
                 return false;
             } else {
                 locks.push(tag);
             }
-            println!("{:#?} locked!", tag);
+            debug!("{:#?} locked!", tag);
         }
 
         true

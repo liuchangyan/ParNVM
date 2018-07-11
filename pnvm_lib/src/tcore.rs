@@ -20,9 +20,13 @@ use pnvm_sys::{
 
 use plog::PLog;
 
+
 /* Module Level Exposed Function Calls */
 
-
+pub fn init() {
+    //init the pmem
+    pnvm_sys::init(); 
+}
 
 
 
@@ -95,7 +99,7 @@ impl TVersion {
     }
 
     pub fn check_version(&self, tid: &Option<Tid>) -> bool {
-        println!("--- [Checking Version] {:?} <-> {:?}", tid, self.last_writer_);
+        trace!("--- [Checking Version] {:?} <-> {:?}", tid, self.last_writer_);
         //let lock_owner = self.lock_owner_.lock().unwrap();
         match (tid, self.last_writer_, self.lock_owner_) {
             (Some(ref cur_tid), Some(ref tid), None) => {

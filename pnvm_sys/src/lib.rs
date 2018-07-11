@@ -21,6 +21,7 @@ use std::{
     ffi::CString,
     cell::RefCell,
     rc::Rc,
+    thread,
 };
 
 const LPREFIX : &'static str = "pnvm_sys::";
@@ -60,6 +61,11 @@ pub fn walk(chunksize: usize, callback : extern "C" fn(buf: *const c_void, len: 
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
 
+
+pub fn init() {
+    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
+    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().check());
+}
 
 
 
@@ -285,12 +291,10 @@ impl  PMem  {
         unsafe { memkind_free(self.kind, ptr) };
     }
 
-    pub fn check(&mut self) -> bool {
+    pub fn check(&mut self)  {
         let res = unsafe { memkind_check_available(self.kind)};
         if res != 0 {
-            false
-        } else {
-            true
+            panic!("memkeind check failed");
         }
     }
 
@@ -325,12 +329,11 @@ pub struct PLog {
 }
 
 impl PLog {
-    fn new(path : String , size :usize, random_file : bool) -> PLog {
-        trace!("{:}Plog::new(path: {:}, size:{:})", LPREFIX, path, size);
+    fn new(path : String , size :usize, thread_local : bool) -> PLog {
+        trace!("{:}Plog::new(path: {:}, size:{:})",LPREFIX, path, size);
         let mut _path = String::clone(&path);
-        if random_file {
-            let seed = rand::random::<u8>();
-            _path.push_str(seed.to_string().as_str());
+        if thread_local {
+            _path.push_str(thread::current().name().expect("thrad local needs to have named threads"));
         }
         let path = CString::new(String::clone(&_path)).unwrap();
         let pathp = path.as_ptr();
@@ -373,6 +376,13 @@ impl PLog {
                 pmemlog_walk(self.plp, chunk_size, callback,arg)
             };
         }
+
+
+    fn check(&self) {
+        if self.plp.is_null() {
+            panic!("pmemlog check failed");
+        }
+    }
 
 }
 
@@ -425,8 +435,7 @@ mod tests {
         let _ = env_logger::init();
         let pmem = PMem::new(String::from(PMEM_TEST_PATH_ABS), 16*super::PMEM_MIN_SIZE);
         assert_eq!(pmem.is_some(), true);
-        assert_eq!(pmem.unwrap().check(), true);
-
+        pmem.unwrap().check();
         //relative path
         //let pmem = PMem::new(String::from("../data"), 16*super::PMEM_MIN_SIZE);
         //assert_eq!(pmem.is_some(), true);
@@ -508,18 +517,18 @@ mod tests {
         super::flush(value, Layout::new::<u32>());
     }
 
-    #[test]
-    fn test_append_log_ok() {
-        let _ = env_logger::init();
-        let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
-        let offset_before = plog.tell();
-        trace!("offset_before : {}", offset_before);
-        let tid = 999;
-        plog.append(tid);
-        let offset_after = plog.tell();
-        trace!("offset_after : {}", offset_after);
-        assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
-    }
+   // #[test]
+   // fn test_append_log_ok() {
+   //     let _ = env_logger::init();
+   //     let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
+   //     let offset_before = plog.tell();
+   //     trace!("offset_before : {}", offset_before);
+   //     let tid = 999;
+   //     plog.append(tid);
+   //     let offset_after = plog.tell();
+   //     trace!("offset_after : {}", offset_after);
+   //     assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
+   // }
 }
 
 
