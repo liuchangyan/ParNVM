@@ -180,6 +180,7 @@ dependencies = [
  "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pnvm_lib 0.1.0",
  "rand 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zipf 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -402,6 +403,14 @@ dependencies = [
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
+[[package]]
+name = "zipf"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "rand 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
 [metadata]
 "checksum aho-corasick 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ca972c2ea5f742bfce5687b9aef75506a764f61d37f8f649047846a9686ddb66"
 "checksum aho-corasick 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)" = "f0ba20154ea1f47ce2793322f049c5646cc6d0fa9759d5f333f286e507bf8080"
@@ -454,3 +463,4 @@ dependencies = [
 "checksum winapi-i686-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
 "checksum winapi-x86_64-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 "checksum yaml-rust 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "57ab38ee1a4a266ed033496cf9af1828d8d6e6c1cfa5f643a2809effcae4d628"
+"checksum zipf 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "44358b28adad817725a0ae75b8c9b5a410a85de6eb998d66d0e38c81f4520e4c"

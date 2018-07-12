@@ -1,10 +1,16 @@
-
 /target
 **/*.rs.bk
 
 .DS_Store
 
-/data
-
+# dev notes
 TODO
 TO_DISCUSS
+
+# test results
+*.csv
+*.log
+benchmark/
+
+# pmem dir
+/data

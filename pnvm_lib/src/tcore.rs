@@ -12,6 +12,8 @@ use std::{
     ptr::Unique,
     mem,
     rc::Rc,
+    time,
+    cell::RefCell,
 };
 use pnvm_sys::{
     self,
@@ -29,8 +31,61 @@ pub fn init() {
 }
 
 
+//#[cfg(benchmark)]
+thread_local!{
+    pub static COUNTER: RefCell<BenchmarkCounter> = RefCell::new(BenchmarkCounter::new());
+}
 
 
+//#[cfg(benchmark)]
+#[derive(Copy, Clone, Debug)]
+pub struct BenchmarkCounter {
+    pub success_cnt: u32,
+    pub abort_cnt : u32, 
+    pub duration: time::Duration
+}
+
+//#[cfg(benchmark)]
+impl BenchmarkCounter {
+    pub fn new() -> BenchmarkCounter {
+        BenchmarkCounter{
+            success_cnt : 0,
+            abort_cnt: 0,
+            duration : time::Duration::default(),
+        }
+    }
+
+    #[inline]
+    pub fn success() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).success_cnt+=1;
+        });
+    }
+
+    #[inline]
+    pub fn abort() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).abort_cnt+=1;
+        });
+    }
+
+    #[inline]
+    pub fn set_duration(dur: time::Duration) {
+        COUNTER.with(|c| (*c.borrow_mut()).duration = dur)
+    }
+
+    #[inline]
+    pub fn copy() -> BenchmarkCounter {
+        COUNTER.with(|c| {
+            *c.borrow()
+        })
+    }
+
+    #[inline]
+    pub fn add_time(dur : time::Duration) {
+        COUNTER.with( |c| (*c.borrow_mut()).duration += dur)
+    }
+}
 
 
 

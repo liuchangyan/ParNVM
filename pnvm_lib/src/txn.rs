@@ -4,7 +4,7 @@ use std::{
     sync::{ RwLock, Arc},
     rc::Rc,
 };
-use tcore::{ObjectId, TObject, TTag};
+use tcore::{self, ObjectId, TObject, TTag};
 use plog;
 
 
@@ -29,6 +29,10 @@ pub fn mark_start(tid : Tid) {
         .insert(tid, true)
         .is_none();
 }
+
+
+
+
 
 #[derive(PartialEq, Copy, Clone, Debug, Eq, Hash)]
 pub struct Tid(u32);
@@ -87,11 +91,14 @@ where
 
         //Stage 3: Commit
         self.commit();
+
         true
     }
 
     pub fn abort(&mut self, _: AbortReason) -> bool {
         debug!("Tx[{:?}] is aborting.", self.tid_);
+        //#[cfg(benchmark)]
+        tcore::BenchmarkCounter::abort();
         self.state_ = TxState::ABORTED;
         self.clean_up();
         false
@@ -159,6 +166,9 @@ where
     }
 
     fn commit(&mut self) -> bool {
+
+        //#[cfg(benchmark)]
+        tcore::BenchmarkCounter::success();
 
         //Persist the write set logs 
         self.persist_log();

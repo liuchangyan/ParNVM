@@ -17,7 +17,6 @@ pub mod plog;
 pub mod txn;
 pub mod tbox;
 pub mod conf;
-pub mod tthread;
 
 #[cfg(test)]
 mod tests {
