@@ -1,0 +1,3 @@
+[submodule "pnvm-process"]
+	path = pnvm-process
+	url = https://github.com/githubxxcc/pnvm-process.git
