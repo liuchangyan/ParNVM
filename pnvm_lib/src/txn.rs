@@ -56,18 +56,20 @@ where
     tid_: Tid,
     state_: TxState,
     deps_: HashMap<ObjectId, TTag<T>>,
+    persistent_ : bool
 }
 
 impl<T> Transaction<T>
 where
     T: Clone,
 {
-    pub fn new(tid_: Tid) -> Transaction<T> {
+    pub fn new(tid_: Tid, use_pmem: bool) -> Transaction<T> {
         self::mark_start(tid_);
         Transaction {
             tid_,
             state_: TxState::EMBRYO,
             deps_: HashMap::new(),
+            persistent_ : use_pmem
         }
     }
 
@@ -171,20 +173,27 @@ where
         tcore::BenchmarkCounter::success();
 
         //Persist the write set logs 
-        self.persist_log();
+        if self.persistent_ {
+             self.persist_log();
+        }
         
 
         //Install write sets into the underlying data
         self.install_data();
         
         //Persist the data
-        self.persist_data();
+        if self.persistent_{
+            self.persist_data();
+        }
 
 
         //Persist commit the transaction 
-        self.persist_commit();
+        if self.persistent_{  
+            self.persist_commit();
+        }
         
         //Clean up local data structures.
+        self::mark_commit(self.commit_id());
         self.clean_up();
         true
     }
@@ -192,7 +201,6 @@ where
     fn persist_commit(&self) {
         //FIXME:: Can it be async? 
         plog::persist_txn(self.commit_id().into());
-        self::mark_commit(self.commit_id());
     }
 
     fn persist_log(&self) {

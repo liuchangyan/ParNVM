@@ -34,7 +34,7 @@ fn main() {
     pnvm_lib::tcore::init();
     
     let conf = read_env();
-    debug!("{:?}", conf);
+    warn!("{:?}", conf);
 
     let mtx = Arc::new(Mutex::new(0));
     let mut objs = prepare_data(&conf);
@@ -61,7 +61,7 @@ fn main() {
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
                 BenchmarkCounter::add_time(now.elapsed());
 
-                let tx = &mut Transaction::new(Tid::new(id));
+                let tx = &mut Transaction::new(Tid::new(id), conf.use_pmem);
             
 
                 for read in read_set.iter() {
@@ -102,14 +102,15 @@ fn main() {
     }
    let total_time =  start.elapsed() - spin_time;
 
-    println!("{}, {}, {}, {}, {}, {}, {:?}", 
+    println!("{}, {}, {}, {}, {}, {}, {:?}, {}", 
              conf.thread_num,
              conf.obj_num,
              conf.set_size,
              conf.zipf_coeff,
              total_success,
              total_abort,
-             total_time.as_secs() as u32 *1000  + total_time.subsec_millis()
+             total_time.as_secs() as u32 *1000  + total_time.subsec_millis(),
+             conf.use_pmem
              )
 
 }
@@ -173,7 +174,8 @@ struct Config {
     obj_num:usize,
     set_size:usize,
     round_num:usize,
-    zipf_coeff: f64
+    zipf_coeff: f64,
+    use_pmem: bool,
 }
 
 fn read_env() -> Config {
@@ -190,6 +192,7 @@ fn read_env() -> Config {
         set_size : settings.get_int("SET_SIZE").unwrap() as usize,
         round_num : settings.get_int("ROUND_NUM").unwrap() as usize,
         zipf_coeff: settings.get_float("ZIPF_COEFF").unwrap() as f64,
+        use_pmem : settings.get_bool("USE_PMEM").unwrap() as bool,
     }
 
 }

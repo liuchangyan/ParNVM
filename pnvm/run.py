@@ -21,7 +21,6 @@ def run():
 
     command = ["../target/debug/pnvm"]
     env = dict(os.environ)
-    env["RUST_LOG"] = "pnvm=info"
 
     for thread_num in micro_bench_config["thread_num"] :
         for (idx, obj_num) in enumerate(micro_bench_config["obj_num"]):
@@ -32,7 +31,7 @@ def run():
                         'PNVM_THREAD_NUM' : str(thread_num),
                         'PNVM_OBJ_NUM' : str(obj_num),
                         'PNVM_SET_SIZE' : str(set_size),
-                        'RUST_LOG' : 'pnvm=warn',
+                        'PNVM_USE_PMEM' : 'false',
                         }
 
                 # out_name = "benchmark/out.{}.{}.{}.{}".format(thread_num, obj_num, set_size, zipf)
@@ -41,13 +40,13 @@ def run():
                 run_exp(env, command, out_fd)
                 # process_result(out_name, thread_num, obj_num, set_size, zipf)
 
-    print("thread,obj_num,set_size,zipf,success,abort,time", file=out_fd)
+    print("thread,obj_num,set_size,zipf,success,abort,time, pmem", file=out_fd)
 
 
 
 def run_exp(env, command, out_fd):
     #print(env)
-    for i in range(0,10):
+    for i in range(0,5):
         subprocess.run(command,shell=True, env=env, stderr=out_fd, stdout=out_fd)
 
 

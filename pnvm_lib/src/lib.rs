@@ -33,7 +33,7 @@ mod tests {
         super::tcore::init();
         let tb : TObject<u32> = TBox::new(1);
         {
-            let tx = &mut Transaction::new(Tid::new(1));
+            let tx = &mut Transaction::new(Tid::new(1), true);
             let val = tx.read(&tb);
             tx.try_commit();
         }
@@ -45,7 +45,7 @@ mod tests {
         super::tcore::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
-            let tx = &mut Transaction::new(Tid::new(1));
+            let tx = &mut Transaction::new(Tid::new(1), true);
             tx.write(&tb, 2);
             assert_eq!(tx.try_commit(), true);
             assert_eq!(Transaction::notrans_read(&tb), 2);
@@ -59,8 +59,8 @@ mod tests {
         let tb2 : TObject<u32> = TBox::new(2);
 
         {
-            let tx1 = &mut Transaction::new(Tid::new(1));
-            let tx2 = &mut Transaction::new(Tid::new(2));
+            let tx1 = &mut Transaction::new(Tid::new(1), true);
+            let tx2 = &mut Transaction::new(Tid::new(2), true);
 
             assert_eq!(tx1.read(&tb1), 1);
             assert_eq!(tx2.read(&tb1), 1);
@@ -82,8 +82,8 @@ mod tests {
 
         {
             
-            let tx1 = &mut Transaction::new(Tid::new(1));
-            let tx2 = &mut Transaction::new(Tid::new(2));
+            let tx1 = &mut Transaction::new(Tid::new(1), true);
+            let tx2 = &mut Transaction::new(Tid::new(2), true);
 
             assert_eq!(tx1.read(&tb1), 1);
             tx2.write(&tb1, 2);
@@ -102,8 +102,8 @@ mod tests {
 
         {
             
-            let tx1 = &mut Transaction::new(Tid::new(1));
-            let tx2 = &mut Transaction::new(Tid::new(2));
+            let tx1 = &mut Transaction::new(Tid::new(1), true);
+            let tx2 = &mut Transaction::new(Tid::new(2), true);
 
             tx1.write(&tb1, 10);
             tx2.write(&tb1, 9999);
@@ -123,7 +123,7 @@ mod tests {
 
         {
             
-            let tx1 = &mut Transaction::new(Tid::new(1));
+            let tx1 = &mut Transaction::new(Tid::new(1), true);
             assert_eq!(tx1.read(&tb1), 1); 
             tx1.write(&tb1, 10);
             assert_eq!(tx1.read(&tb1), 10); 
@@ -140,7 +140,7 @@ mod tests {
         super::tcore::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
-            let tx = &mut Transaction::new(Tid::new(1));
+            let tx = &mut Transaction::new(Tid::new(1), true);
             tx.write(&tb, 2);
             assert_eq!(tx.read(&tb), 2); 
 
@@ -160,7 +160,7 @@ mod tests {
 
         {
 
-            let tx = &mut Transaction::new(Tid::new(1));
+            let tx = &mut Transaction::new(Tid::new(1), true);
             assert_eq!(tx.read(&tb), String::from("hillo"));
 
             tx.write(&tb, String::from("world"));
