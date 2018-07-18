@@ -18,6 +18,7 @@ pub mod txn;
 pub mod tbox;
 pub mod conf;
 pub mod piece;
+pub mod occ;
 
 #[cfg(test)]
 mod tests {
@@ -25,6 +26,7 @@ mod tests {
 
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
+    use super::occ::occ_txn::{TransactionOCC};
     use super::txn;
     use super::tcore::{TObject};
 
@@ -34,7 +36,7 @@ mod tests {
         super::tcore::init();
         let tb : TObject<u32> = TBox::new(1);
         {
-            let tx = &mut Transaction::new(Tid::new(1), true);
+            let tx = &mut TransactionOCC::new(Tid::new(1), true);
             let val = tx.read(&tb);
             tx.try_commit();
         }
@@ -46,10 +48,10 @@ mod tests {
         super::tcore::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
-            let tx = &mut Transaction::new(Tid::new(1), true);
+            let tx = &mut TransactionOCC::new(Tid::new(1), true);
             tx.write(&tb, 2);
             assert_eq!(tx.try_commit(), true);
-            assert_eq!(Transaction::notrans_read(&tb), 2);
+            assert_eq!(TransactionOCC::notrans_read(&tb), 2);
         }
     }
 
@@ -60,8 +62,8 @@ mod tests {
         let tb2 : TObject<u32> = TBox::new(2);
 
         {
-            let tx1 = &mut Transaction::new(Tid::new(1), true);
-            let tx2 = &mut Transaction::new(Tid::new(2), true);
+            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+            let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
 
             assert_eq!(tx1.read(&tb1), 1);
             assert_eq!(tx2.read(&tb1), 1);
@@ -83,8 +85,8 @@ mod tests {
 
         {
             
-            let tx1 = &mut Transaction::new(Tid::new(1), true);
-            let tx2 = &mut Transaction::new(Tid::new(2), true);
+            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+            let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
 
             assert_eq!(tx1.read(&tb1), 1);
             tx2.write(&tb1, 2);
@@ -103,16 +105,16 @@ mod tests {
 
         {
             
-            let tx1 = &mut Transaction::new(Tid::new(1), true);
-            let tx2 = &mut Transaction::new(Tid::new(2), true);
+            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+            let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
 
             tx1.write(&tb1, 10);
             tx2.write(&tb1, 9999);
             
             assert_eq!(tx2.try_commit(), true);
-            assert_eq!(Transaction::notrans_read(&tb1), 9999);
+            assert_eq!(TransactionOCC::notrans_read(&tb1), 9999);
             assert_eq!(tx1.try_commit(), true);
-            assert_eq!(Transaction::notrans_read(&tb1), 10);
+            assert_eq!(TransactionOCC::notrans_read(&tb1), 10);
         }
         
     }
@@ -124,14 +126,14 @@ mod tests {
 
         {
             
-            let tx1 = &mut Transaction::new(Tid::new(1), true);
+            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
             assert_eq!(tx1.read(&tb1), 1); 
             tx1.write(&tb1, 10);
             assert_eq!(tx1.read(&tb1), 10); 
-            assert_eq!(Transaction::notrans_read(&tb1), 1);
+            assert_eq!(TransactionOCC::notrans_read(&tb1), 1);
 
             assert_eq!(tx1.try_commit(), true);
-            assert_eq!(Transaction::notrans_read(&tb1), 10);
+            assert_eq!(TransactionOCC::notrans_read(&tb1), 10);
         }
     }
 
@@ -141,14 +143,14 @@ mod tests {
         super::tcore::init();
         let tb : TObject<u32> = TBox::new(1); 
         {
-            let tx = &mut Transaction::new(Tid::new(1), true);
+            let tx = &mut TransactionOCC::new(Tid::new(1), true);
             tx.write(&tb, 2);
             assert_eq!(tx.read(&tb), 2); 
 
-            Transaction::notrans_lock(&tb, Tid::new(99));
+            TransactionOCC::notrans_lock(&tb, Tid::new(99));
 
             assert_eq!(tx.try_commit(), false);
-            assert_eq!(Transaction::notrans_read(&tb), 1);
+            assert_eq!(TransactionOCC::notrans_read(&tb), 1);
         }
         
     }
@@ -161,15 +163,15 @@ mod tests {
 
         {
 
-            let tx = &mut Transaction::new(Tid::new(1), true);
+            let tx = &mut TransactionOCC::new(Tid::new(1), true);
             assert_eq!(tx.read(&tb), String::from("hillo"));
 
             tx.write(&tb, String::from("world"));
             assert_eq!(tx.read(&tb), String::from("world"));
 
-            assert_eq!(Transaction::notrans_read(&tb), String::from("hillo"));
+            assert_eq!(TransactionOCC::notrans_read(&tb), String::from("hillo"));
             assert_eq!(tx.try_commit(), true);
-            assert_eq!(Transaction::notrans_read(&tb), String::from("world"));
+            assert_eq!(TransactionOCC::notrans_read(&tb), String::from("world"));
         }
 
     }
