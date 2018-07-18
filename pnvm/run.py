@@ -10,7 +10,7 @@ import numpy as np
 micro_bench_config = {
         "thread_num" :np.linspace(4, 28, num=4, dtype=np.int16),
         "obj_num" : [10],
-        "set_size" : [100],
+        "set_size" : [2000],
         "zipf": np.linspace(0.050, 1.000, num=100),
 }
 
@@ -31,7 +31,7 @@ def run():
                         'PNVM_THREAD_NUM' : str(thread_num),
                         'PNVM_OBJ_NUM' : str(obj_num),
                         'PNVM_SET_SIZE' : str(set_size),
-                        'PNVM_USE_PMEM' : 'false',
+                        'PNVM_USE_PMEM' : 'true',
                         }
 
                 # out_name = "benchmark/out.{}.{}.{}.{}".format(thread_num, obj_num, set_size, zipf)

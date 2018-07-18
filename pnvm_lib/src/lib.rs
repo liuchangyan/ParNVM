@@ -17,6 +17,7 @@ pub mod plog;
 pub mod txn;
 pub mod tbox;
 pub mod conf;
+pub mod piece;
 
 #[cfg(test)]
 mod tests {
@@ -171,5 +172,25 @@ mod tests {
             assert_eq!(Transaction::notrans_read(&tb), String::from("world"));
         }
 
+    }
+    
+    use super::piece::{Pid, Piece};
+    use std::{
+        rc::Rc,
+        cell::RefCell,
+    };
+
+    #[test]
+    fn test_piece_run(){
+        let x = Rc::new(RefCell::new(1));
+        let mut piece = Piece::new(Pid::new(1), Tid::new(1), || {
+            let mut x = x.borrow_mut();
+            *x += 1;
+            *x
+        });
+        
+        assert_eq!(*(x.borrow()), 1);
+        piece.run();
+        assert_eq!(*(x.borrow()), 2);
     }
 }
