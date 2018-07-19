@@ -2,6 +2,7 @@
 use txn::{Tid};
 
 
+#[derive(Eq, PartialEq,  Hash, Debug, Clone)]
 pub struct Pid(u32);
 
 impl Pid {
@@ -9,6 +10,7 @@ impl Pid {
         Pid(pid)
     }
 }
+
 
 pub struct Piece<F> 
 where F : FnMut()-> i32
@@ -35,4 +37,17 @@ where F : FnMut()->i32
     pub fn run(&mut self) -> i32 {
         (self.callback_)()
     }
+
+    pub fn id(&self) -> Pid {
+        self.pid_.clone()
+    }
 }
+
+
+pub enum PieceState {
+    Ready,
+    Running,
+    Executed,
+    Persisted,
+}
+

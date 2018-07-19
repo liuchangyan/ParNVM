@@ -17,8 +17,8 @@ pub mod plog;
 pub mod txn;
 pub mod tbox;
 pub mod conf;
-pub mod piece;
 pub mod occ;
+pub mod parnvm;
 
 #[cfg(test)]
 mod tests {
@@ -176,7 +176,7 @@ mod tests {
 
     }
     
-    use super::piece::{Pid, Piece};
+    use super::parnvm::piece::{Pid, Piece};
     use std::{
         rc::Rc,
         cell::RefCell,
@@ -194,5 +194,28 @@ mod tests {
         assert_eq!(*(x.borrow()), 1);
         piece.run();
         assert_eq!(*(x.borrow()), 2);
+    }
+
+    
+    use super::parnvm::nvm_txn::*;
+    use std::{
+        sync::{RwLock, Arc},
+    };
+    #[test]
+    fn test_registry_ok() {
+        let names  = vec![TxnName::from("TXN_1"), TxnName::from("TXN_2")];
+        let mut registry  = TxnRegistry::new(names);
+        
+        let pids = vec![Pid::new(1), Pid::new(2)];
+        let tid = Tid::new(1);
+        let txn_info = TxnInfo::new(pids);
+
+
+
+        registry.register(TxnName::from("TXN_1"), tid, 
+                          Arc::new(RwLock::new(txn_info)));
+
+        let res = registry.checkout(TxnName::from("TXN_1"), tid);
+        assert_eq!(res.is_some(), true);
     }
 }
