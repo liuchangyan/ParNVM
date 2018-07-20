@@ -22,6 +22,8 @@ use pnvm_lib::{
     txn::*,
     tcore::*,
     tbox::*,
+    occ::*,
+    parnvm::*,
 };
 
 
@@ -35,6 +37,19 @@ fn main() {
     
     let conf = read_env();
     warn!("{:?}", conf);
+    
+    run_occ(conf);
+    //run_own(conf);
+
+}
+
+fn run_own(conf : Config {
+
+
+
+}
+
+fn run_occ(conf : Config) {
 
     let mtx = Arc::new(Mutex::new(0));
     let mut objs = prepare_data(&conf);
@@ -61,7 +76,7 @@ fn main() {
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
                 BenchmarkCounter::add_time(now.elapsed());
 
-                let tx = &mut Transaction::new(Tid::new(id), conf.use_pmem);
+                let tx = &mut occ_txn::TransactionOCC::new(Tid::new(id), conf.use_pmem);
             
 
                 for read in read_set.iter() {
