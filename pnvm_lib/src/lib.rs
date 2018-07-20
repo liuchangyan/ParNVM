@@ -9,20 +9,22 @@ extern crate pnvm_sys;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-
 extern crate libc;
+extern crate crossbeam;
 
 pub mod tcore;
 pub mod plog;
 pub mod txn;
 pub mod tbox;
 pub mod conf;
+
 pub mod occ;
 pub mod parnvm;
 
 #[cfg(test)]
 mod tests {
     extern crate env_logger;
+    extern crate crossbeam;
 
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
@@ -200,6 +202,7 @@ mod tests {
     use super::parnvm::{dep::*, nvm_txn::*, piece::*};
     use std::{
         sync::{RwLock, Arc},
+        thread,
     };
     #[test]
     fn test_single_piece_run() {
@@ -234,36 +237,92 @@ mod tests {
             *v = 888;
             1
         };
-    
-        //Prepare TXN1
-        let tid1 = Tid::new(1);
+
+        let spin_long = move || {
+            for i in 0..8 {
+                //println!("slept {} seconds", i);
+                thread::sleep_ms(1000);
+            }
+            1
+        };
+
+        let spin_short = move || {
+            for i in 0..4{
+                //println!("slept {} seconds", i);
+                thread::sleep_ms(1000);
+            }
+            1
+        };
+
+        //Prepare Registry
+        let names  = vec![String::from("TXN_2"), String::from("TXN_1")];
+        let regis = TxnRegistry::new_with_names(names);
+        let regis_ptr = Arc::new(RwLock::new(regis));
+
+        TxnRegistry::set_thread_registry(regis_ptr.clone());
+
+        let pid0 = Pid::new(0);
         let pid1 = Pid::new(1);
         let pid2 = Pid::new(2);
 
-        let pieces_1 = vec![
-            Piece::new(pid1.clone(), tid1.clone(), Box::new(read_x)),
-            Piece::new(pid2.clone(), tid1.clone(), Box::new(write_y))
-        ];
+        crossbeam::scope(|scope| {
+            //Prepare TXN1
+            let tid1 = Tid::new(1);
 
-        let mut dep = Dep::new();
-        dep.add(pid1.clone(), ConflictInfo::new(String::from("TXN_WX"), pid2.clone(), ConflictType::ReadWrite));
+            let mut pieces_1 = vec![
+                Piece::new(pid0.clone(), tid1.clone(), Box::new(spin_short), "spinning_short"),
+                Piece::new(pid1.clone(), tid1.clone(), Box::new(write_y), "write_y"),
+                Piece::new(pid2.clone(), tid1.clone(), Box::new(read_x), "read_x")
+            ];
 
-        let mut tx = TransactionPar::new(pieces_1, dep, tid1, String::from("TXN_RX_WY"));
-        //Tx done
-        
-        //Prepare Registry
-        let names  = vec![String::from("TXN_WX"), String::from("TXN_RX_WY")];
-        TxnRegistry::new_thread_registry_names(names);
+            pieces_1.reverse();
 
-    
-        {
-            tx.register_txn();
-            tx.execute_txn();
-        }
+            let mut dep_1 = Dep::new();
+            dep_1.add(pid1.clone(), ConflictInfo::new(String::from("TXN_2"), pid0.clone(), ConflictType::ReadWrite));
+            dep_1.add(pid2.clone(), ConflictInfo::new(String::from("TXN_2"), pid2.clone(), ConflictType::ReadWrite));
 
+            let mut tx = TransactionPar::new(pieces_1, dep_1, tid1, String::from("TXN_1"));
+            //Tx1 done
+
+
+
+
+
+            let handler = scope.spawn(|| {
+                TxnRegistry::set_thread_registry(regis_ptr.clone());
+                //Prepare TXN2
+                let tid2 = Tid::new(2);
+                let mut pieces_2 = vec![
+                    Piece::new(pid0.clone(), tid2.clone(), Box::new(read_y), "read_y"),
+                    Piece::new(pid1.clone(), tid2.clone(), Box::new(spin_long), "spin_long"),
+                    Piece::new(pid2.clone(), tid2.clone(), Box::new(write_x), "write_x"),
+                ];
+                pieces_2.reverse();
+
+                let mut dep_2 = Dep::new();
+                dep_2.add(pid0.clone(), ConflictInfo::new(String::from("TXN_1"), pid1.clone(), ConflictType::ReadWrite));
+                dep_2.add(pid2.clone(), ConflictInfo::new(String::from("TXN_1"), pid2.clone(), ConflictType::ReadWrite));
+
+                let mut tx = TransactionPar::new(pieces_2, dep_2, tid2, String::from("TXN_2"));
+
+                {
+                    tx.register_txn();
+                    tx.execute_txn();
+                }
+
+            });
+
+
+            {
+                tx.register_txn();
+                tx.execute_txn();
+            }
+
+            handler.join();
+
+        });
         
         assert_eq!(*y.read().unwrap(), 999);
         assert_eq!(TxnRegistry::thread_count(), 0 as usize);
-        assert_eq!(*tx.status().clone(), txn::TxState::COMMITTED);
     }
 }

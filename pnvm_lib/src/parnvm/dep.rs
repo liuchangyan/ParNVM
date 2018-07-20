@@ -36,7 +36,7 @@ impl Dep {
 }
 
 
-
+#[derive(Debug)]
 pub struct ConflictInfo {
     pub txn_name_: String,
     pub piece_id_ : Pid,
@@ -56,6 +56,7 @@ impl ConflictInfo {
 
 
 
+#[derive(Debug)]
 pub enum ConflictType{
     ReadWrite,
     Write,

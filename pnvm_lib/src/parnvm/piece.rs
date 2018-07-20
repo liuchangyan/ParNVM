@@ -20,23 +20,26 @@ pub struct Piece
     callback_ : Box<FnMut()->i32>,
     pid_ : Pid,
     tid_ : Tid,
+    title_ : &'static str,
     //R/W sets?
 }
 
 impl Debug for Piece {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "Piece :  pid: {:?}, tid: {:?}", self.pid_, self.tid_)
+        write!(f, "[pid: {:?}, tid: {:?}, name: {:?}]", self.pid_, self.tid_, self.title_)
+            
     }
 }
 
 
 impl Piece
 {
-    pub fn new(pid : Pid, tid: Tid, cb : Box<FnMut()->i32>) -> Piece {
+    pub fn new(pid : Pid, tid: Tid, cb : Box<FnMut()->i32>, title: &'static str) -> Piece {
         Piece {
             callback_ : cb,
             pid_: pid,
-            tid_ : tid
+            tid_ : tid,
+            title_ : title
         }
     }
     
@@ -50,7 +53,7 @@ impl Piece
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug,Copy, Clone)]
 pub enum PieceState {
     Ready,
     Running,

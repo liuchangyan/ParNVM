@@ -12,6 +12,7 @@ use super::dep::*;
 use std::{
     collections::{ HashSet, HashMap},
     sync::{Arc, RwLock},
+    cell::{RefCell},
     thread,
 };
 
@@ -33,7 +34,7 @@ impl TransactionPar
 
     pub fn new(pieces : Vec<Piece>, cfl: Dep, id : Tid, name: String) -> TransactionPar  {
         TransactionPar{
-            all_ps_: pieces,
+            all_ps_: pieces, 
             conflicts_: cfl,
             deps_ : HashSet::new(), 
             id_ : id,
@@ -49,6 +50,7 @@ impl TransactionPar
 
         match conflicts {
             Some(conflicts) => {
+                warn!("can_run:: Checking conflicts {:?}", conflicts);
                 let regis_ptr = TxnRegistry::get_thread_registry();
                 let txn_regis_g = regis_ptr.read().unwrap();
                 let txn_regis = &*txn_regis_g;
@@ -68,7 +70,7 @@ impl TransactionPar
                                             cand_tid).as_str());
 
                         let info_g = info_ptr.read().unwrap();
-
+                        warn!("can_run::    conflict info: {:?}", *info_g);
                         match (*info_g).check_state(cfl_pid) {
                             PieceState::Ready | PieceState::Running => {
                                 if self.deps_.contains(cand_tid) {
@@ -92,6 +94,8 @@ impl TransactionPar
     //pub fn prepare_log();
     
     pub fn register_txn(&mut self) {
+        info!("register_txn:: Registering txn : {:?}", self.id());
+
         let regis_ptr = TxnRegistry::get_thread_registry();
         let mut regis = regis_ptr.write().unwrap();
 
@@ -107,7 +111,7 @@ impl TransactionPar
     pub fn execute_txn(&mut self) {
         self.status_ = TxState::ACTIVE;
         while let Some(mut piece) = self.get_next_piece() {
-            info!("execute:txn :: Got piece - {:?}", piece);
+            //info!("execute:txn :: Got piece - {:?}", piece);
             match self.can_run(&piece) {
                 None => {
                     self.execute_piece(&mut piece); 
@@ -130,20 +134,26 @@ impl TransactionPar
     pub fn execute_piece(&self, piece : &mut Piece) {
         info!("execute_piece:: Running piece - {:?}", piece);
         let regis_ptr = TxnRegistry::get_thread_registry();
-        let regis = regis_ptr.read().unwrap();
-        let pid = piece.id().clone();
-
-        let info_ptr = (*regis).get_info_by_id(self.id()).expect("execute_piece:: info should not be none");
         {
+            let regis = regis_ptr.read().unwrap();
+            let pid = piece.id().clone();
+
+            let info_ptr = (*regis).get_info_by_id(self.id()).expect("execute_piece:: info should not be none");
 
             let mut info = info_ptr.write().unwrap();
             (*info).update_state(pid.clone(), PieceState::Running);
-        }
+        } //unlock registry here
         
         piece.run();
 
-        let mut info = info_ptr.write().unwrap();
-        (*info).update_state(pid, PieceState::Executed);
+        {
+            let regis = regis_ptr.read().unwrap();
+            let pid = piece.id().clone();
+
+            let info_ptr = (*regis).get_info_by_id(self.id()).expect("execute_piece:: info should not be none");
+            let mut info = info_ptr.write().unwrap();
+            (*info).update_state(pid, PieceState::Executed);
+        }
     }
 
     pub fn id(&self) -> &Tid {
@@ -199,6 +209,7 @@ impl TransactionPar
     pub fn spin_on(&self, piece : &mut Piece, txn_info : Arc<RwLock<TxnInfo>>, pid: Pid) {
         loop {
             let info_g = txn_info.read().unwrap();
+            warn!("spin_on::Waiting for {:?}, {:?}", *info_g, pid);
             match *info_g.check_state(&pid) {
                 PieceState::Executed | PieceState::Persisted =>  {
                     break; 
@@ -217,7 +228,7 @@ impl TransactionPar
 
 type TxnRegistryPtr = Arc<RwLock<TxnRegistry>>;
 thread_local!{
-    pub static TXN_REGISTRY : TxnRegistryPtr = Arc::new(RwLock::new(TxnRegistry::new()));
+    pub static TXN_REGISTRY : RefCell<TxnRegistryPtr> = RefCell::new(Arc::new(RwLock::new(TxnRegistry::new())));
 }
 
 
@@ -230,19 +241,17 @@ pub struct TxnRegistry {
 impl TxnRegistry {
     /* Thread local methods */
     pub fn get_thread_registry() -> TxnRegistryPtr {
-        TXN_REGISTRY.with( |ref ptr| Arc::clone(ptr))
+        TXN_REGISTRY.with( |ptr| Arc::clone(&ptr.borrow()))
     }
 
-    pub fn new_thread_registry_names(names : Vec<String>){
-        TXN_REGISTRY.with( |ptr| {
-            let mut regis = ptr.write().unwrap();
-            (*regis).set_names(names);
-        })
+    pub fn set_thread_registry(p : TxnRegistryPtr) {
+        TXN_REGISTRY.with( |ref ptr| ptr.replace(p));
     }
 
     pub fn thread_count() -> usize {
         TXN_REGISTRY.with( |ptr| {
-            let mut regis = ptr.read().unwrap();
+            let  _ptr = ptr.borrow();
+            let mut regis = _ptr.read().unwrap();
             (*regis).count()
         })
     }
@@ -282,17 +291,16 @@ impl TxnRegistry {
         
         let info_set = self.registry_
             .get_mut(&txn_name)
-            .expect(format!("txn name is not found {:?}", txn_name).as_str());
+            .expect(format!("register::txn name is not found {:?}", txn_name).as_str());
         info_set.insert(tid);
     }
 
     pub fn checkout(&mut self, txn_name :String, tid: Tid) -> Option<Arc<RwLock<TxnInfo>>>{
-        let info_set = self.registry_
-            .get_mut(&txn_name)
-            .expect(format!("txn name is not found {:?}", txn_name).as_str());
+        self.registry_.entry(txn_name)
+            .and_modify(|set| {
+                set.remove(&tid);
+            });
 
-        info_set.remove(&tid);
-        
         self.instances_.remove(&tid)
     }
     
@@ -309,7 +317,7 @@ pub struct TxnName {
 }
 
 
-
+#[derive(Debug)]
 pub struct TxnInfo {
     ps_info_ : HashMap<Pid, PieceState>,
 }
