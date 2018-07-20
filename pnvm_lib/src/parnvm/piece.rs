@@ -1,6 +1,10 @@
 
 use txn::{Tid};
-
+use std::fmt::{
+    Formatter,
+    Debug,
+    Result,
+};
 
 #[derive(Eq, PartialEq,  Hash, Debug, Clone)]
 pub struct Pid(u32);
@@ -11,13 +15,18 @@ impl Pid {
     }
 }
 
-
 pub struct Piece
 {
     callback_ : Box<FnMut()->i32>,
     pid_ : Pid,
     tid_ : Tid,
     //R/W sets?
+}
+
+impl Debug for Piece {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(f, "Piece :  pid: {:?}, tid: {:?}", self.pid_, self.tid_)
+    }
 }
 
 

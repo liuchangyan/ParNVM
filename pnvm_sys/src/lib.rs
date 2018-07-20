@@ -535,7 +535,7 @@ mod tests {
     fn  test_multiple_create() {
         //let mut pmems = vec![];
         let mut handles = vec![];
-        for i in 1..60 {
+        for i in 1..80 {
 
             let handle = thread::spawn(|| {
                 let pmem1 = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE ).unwrap();

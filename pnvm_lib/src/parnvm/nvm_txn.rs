@@ -3,6 +3,7 @@ use txn::{
     self,
     Transaction,
     Tid,
+    TxState,
 };
 
 use super::piece::*;
@@ -14,13 +15,16 @@ use std::{
     thread,
 };
 
+use log;
+
 pub struct TransactionPar
 {
     conflicts_ : Dep,
     all_ps_ : Vec<Piece>,
     deps_ : HashSet<Tid>,
     id_ : Tid,
-    name_ : String 
+    name_ : String ,
+    status_: TxState
 }
 
 
@@ -34,6 +38,7 @@ impl TransactionPar
             deps_ : HashSet::new(), 
             id_ : id,
             name_ : name,
+            status_: TxState::EMBRYO
         }
     }
 
@@ -100,7 +105,9 @@ impl TransactionPar
     }
 
     pub fn execute_txn(&mut self) {
+        self.status_ = TxState::ACTIVE;
         while let Some(mut piece) = self.get_next_piece() {
+            info!("execute:txn :: Got piece - {:?}", piece);
             match self.can_run(&piece) {
                 None => {
                     self.execute_piece(&mut piece); 
@@ -121,6 +128,7 @@ impl TransactionPar
     }
 
     pub fn execute_piece(&self, piece : &mut Piece) {
+        info!("execute_piece:: Running piece - {:?}", piece);
         let regis_ptr = TxnRegistry::get_thread_registry();
         let regis = regis_ptr.read().unwrap();
         let pid = piece.id().clone();
@@ -146,6 +154,10 @@ impl TransactionPar
         self.name_.clone()
     }
 
+    pub fn status(&self) -> &TxState {
+        &self.status_
+    }
+
     pub fn get_next_piece(&mut self) -> Option<Piece> {
         self.all_ps_.pop()
     }
@@ -162,21 +174,24 @@ impl TransactionPar
         self.all_ps_.push(piece)
     }
     
-    pub fn commit(&self) {
+    pub fn commit(&mut self) {
         let regis_ptr = TxnRegistry::get_thread_registry();
         let mut regis = regis_ptr.write().unwrap();
 
         (*regis).checkout(self.name(), self.id().clone()).expect("commit:: info is checkouted");
+        self.status_ = TxState::COMMITTED;
     }
 
     pub fn wait_for_dep(&self) {
-        let id = self.id();
-        loop {
-            let regis_ptr = TxnRegistry::get_thread_registry();
-            let regis = regis_ptr.read().unwrap();
 
-            if let  None = (*regis).get_info_by_id(id) {
-                break;
+        for id in self.deps_.iter(){
+            loop {
+                let regis_ptr = TxnRegistry::get_thread_registry();
+                let regis = regis_ptr.read().unwrap();
+
+                if let  None = (*regis).get_info_by_id(id) {
+                    break;
+                }
             }
         }
     }
@@ -225,7 +240,12 @@ impl TxnRegistry {
         })
     }
 
-
+    pub fn thread_count() -> usize {
+        TXN_REGISTRY.with( |ptr| {
+            let mut regis = ptr.read().unwrap();
+            (*regis).count()
+        })
+    }
 
     pub fn new() -> TxnRegistry {
         TxnRegistry {
@@ -233,6 +253,7 @@ impl TxnRegistry {
             instances_: HashMap::new(),
         }
     }
+
 
     pub fn new_with_names(names : Vec<String>) -> TxnRegistry {
         let mut registry_ : HashMap<String, HashSet<Tid>> = HashMap::new();
@@ -250,6 +271,10 @@ impl TxnRegistry {
         for name in names.into_iter() {
             self.registry_.insert(name, HashSet::new());
         }
+    }
+    
+    pub fn count(&self) -> usize {
+        self.instances_.len()     
     }
 
     pub fn register(&mut self,  txn_name:String, tid: Tid, txn_info : Arc<RwLock<TxnInfo>>) {
@@ -311,6 +336,7 @@ impl TxnInfo {
         self.ps_info_.entry(pid).and_modify(|e| {*e = state.clone()});
     }
 }
+
 
 
 

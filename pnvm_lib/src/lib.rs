@@ -260,5 +260,10 @@ mod tests {
             tx.register_txn();
             tx.execute_txn();
         }
+
+        
+        assert_eq!(*y.read().unwrap(), 999);
+        assert_eq!(TxnRegistry::thread_count(), 0 as usize);
+        assert_eq!(*tx.status().clone(), txn::TxState::COMMITTED);
     }
 }
