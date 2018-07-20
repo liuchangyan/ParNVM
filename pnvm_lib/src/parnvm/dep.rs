@@ -43,6 +43,17 @@ pub struct ConflictInfo {
     pub conflict_type_: ConflictType,
 }
 
+impl ConflictInfo {
+    pub fn new(name : String, id: Pid, cfl_type: ConflictType)-> ConflictInfo {
+        ConflictInfo{
+            txn_name_: name,
+            piece_id_: id,
+            conflict_type_: cfl_type
+        }
+    }
+
+}
+
 
 
 pub enum ConflictType{

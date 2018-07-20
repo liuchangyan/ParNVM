@@ -12,20 +12,18 @@ impl Pid {
 }
 
 
-pub struct Piece<F> 
-where F : FnMut()-> i32
+pub struct Piece
 {
-    callback_ : F,
+    callback_ : Box<FnMut()->i32>,
     pid_ : Pid,
     tid_ : Tid,
     //R/W sets?
 }
 
 
-impl<F> Piece<F>
-where F : FnMut()->i32 
+impl Piece
 {
-    pub fn new(pid : Pid, tid: Tid, cb : F) -> Piece<F> {
+    pub fn new(pid : Pid, tid: Tid, cb : Box<FnMut()->i32>) -> Piece {
         Piece {
             callback_ : cb,
             pid_: pid,
@@ -38,12 +36,12 @@ where F : FnMut()->i32
         (self.callback_)()
     }
 
-    pub fn id(&self) -> Pid {
-        self.pid_.clone()
+    pub fn id(&self) -> &Pid {
+        &self.pid_
     }
 }
 
-
+#[derive(Copy, Clone)]
 pub enum PieceState {
     Ready,
     Running,

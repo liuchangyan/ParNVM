@@ -182,40 +182,83 @@ mod tests {
         cell::RefCell,
     };
 
-    #[test]
-    fn test_piece_run(){
-        let x = Rc::new(RefCell::new(1));
-        let mut piece = Piece::new(Pid::new(1), Tid::new(1), || {
-            let mut x = x.borrow_mut();
-            *x += 1;
-            *x
-        });
-        
-        assert_eq!(*(x.borrow()), 1);
-        piece.run();
-        assert_eq!(*(x.borrow()), 2);
-    }
+   // #[test]
+   // fn test_piece_run(){
+   //     let x = Rc::new(RefCell::new(1));
+   //     let mut piece = Piece::new(Pid::new(1), Tid::new(1), Box::new(|| {
+   //         let mut x = x.borrow_mut();
+   //         *x += 1;
+   //         *x
+   //     }));
+   //     
+   //     assert_eq!(*(x.borrow()), 1);
+   //     piece.run();
+   //     assert_eq!(*(x.borrow()), 2);
+   // }
 
     
-    use super::parnvm::nvm_txn::*;
+    use super::parnvm::{dep::*, nvm_txn::*, piece::*};
     use std::{
         sync::{RwLock, Arc},
     };
     #[test]
-    fn test_registry_ok() {
-        let names  = vec![TxnName::from("TXN_1"), TxnName::from("TXN_2")];
-        let mut registry  = TxnRegistry::new(names);
+    fn test_single_piece_run() {
+        let x = Arc::new(RwLock::new(1));
+        let y = Arc::new(RwLock::new(2));
+    
+
+        let x_1 = x.clone();
+        let read_x =move  || {
+            let v = x_1.read().unwrap();
+            println!("Read : {}", *v);
+            *v
+        };
         
-        let pids = vec![Pid::new(1), Pid::new(2)];
-        let tid = Tid::new(1);
-        let txn_info = TxnInfo::new(pids);
+        let y_1 = y.clone();
+        let read_y =move  || {
+            let v = y_1.read().unwrap();
+            println!("Read : {}", *v);
+            *v
+        };
+        
+        let y_2 = y.clone();
+        let write_y =move  || {
+            let mut v = y_2.write().unwrap();
+            *v = 999;
+            1
+        };
+    
+        let x_2 = x.clone();
+        let write_x =move  || {
+            let mut v = x_2.write().unwrap();
+            *v = 888;
+            1
+        };
+    
+        //Prepare TXN1
+        let tid1 = Tid::new(1);
+        let pid1 = Pid::new(1);
+        let pid2 = Pid::new(2);
 
+        let pieces_1 = vec![
+            Piece::new(pid1.clone(), tid1.clone(), Box::new(read_x)),
+            Piece::new(pid2.clone(), tid1.clone(), Box::new(write_y))
+        ];
 
+        let mut dep = Dep::new();
+        dep.add(pid1.clone(), ConflictInfo::new(String::from("TXN_WX"), pid2.clone(), ConflictType::ReadWrite));
 
-        registry.register(TxnName::from("TXN_1"), tid, 
-                          Arc::new(RwLock::new(txn_info)));
+        let mut tx = TransactionPar::new(pieces_1, dep, tid1, String::from("TXN_RX_WY"));
+        //Tx done
+        
+        //Prepare Registry
+        let names  = vec![String::from("TXN_WX"), String::from("TXN_RX_WY")];
+        TxnRegistry::new_thread_registry_names(names);
 
-        let res = registry.checkout(TxnName::from("TXN_1"), tid);
-        assert_eq!(res.is_some(), true);
+    
+        {
+            tx.register_txn();
+            tx.execute_txn();
+        }
     }
 }
