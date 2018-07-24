@@ -8,6 +8,7 @@
 use super::piece::Pid;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct Dep
 {
     conflicts_ : HashMap<Pid, Vec<ConflictInfo>>
@@ -36,7 +37,7 @@ impl Dep {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConflictInfo {
     pub txn_name_: String,
     pub piece_id_ : Pid,
@@ -56,7 +57,7 @@ impl ConflictInfo {
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConflictType{
     ReadWrite,
     Write,

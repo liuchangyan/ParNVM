@@ -1,21 +1,22 @@
 #![feature(duration_extras)]
 extern crate pnvm_lib;
+
 extern crate rand;
+extern crate config;
+extern crate zipf;
 
 #[macro_use]
 extern crate log;
 extern crate env_logger;
 
-extern crate config;
-extern crate zipf;
+mod util;
+
+use util::*;
 
 use std::{
     sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}},
     thread,
     time,
-};
-use rand::{
-    distributions::Distribution,
 };
 
 use pnvm_lib::{
@@ -27,7 +28,6 @@ use pnvm_lib::{
 };
 
 
-use zipf::ZipfDistribution;
 
 
 
@@ -35,7 +35,7 @@ fn main() {
     env_logger::init().unwrap();
     pnvm_lib::tcore::init();
     
-    let conf = read_env();
+    let conf = util::read_env();
     warn!("{:?}", conf);
     
     run_occ(conf);
@@ -43,21 +43,18 @@ fn main() {
 
 }
 
-fn run_own(conf : Config {
-
-
-
-}
 
 fn run_occ(conf : Config) {
 
     let mtx = Arc::new(Mutex::new(0));
-    let mut objs = prepare_data(&conf);
+    let mut objs = util::TestHelper::prepare_workload(&conf).dataset_;
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
     let start = time::Instant::now();
+    
 
     for i in 0..conf.thread_num {
+        let conf = conf.clone();
         let read_set = objs.read.pop().unwrap();
         let write_set = objs.write.pop().unwrap();
         let atomic_clone = atomic_cnt.clone();
@@ -129,89 +126,6 @@ fn run_occ(conf : Config) {
              )
 
 }
-
-
-pub struct DataSet {
-    read : Vec<Vec<TObject<u32>>>,
-    write : Vec<Vec<TObject<u32>>>,
-}
-
-fn prepare_data(conf : &Config) -> DataSet {
-    let pool : Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
-    let mut read_idx = vec![0;conf.obj_num];
-    let mut write_idx  = vec![0;conf.obj_num];
-
-
-    let mut dataset = DataSet {
-        read : Vec::with_capacity(conf.thread_num),
-        write: Vec::with_capacity(conf.thread_num),
-    };
-
-    let mut rng = rand::thread_rng();
-    let dis = ZipfDistribution::new(conf.obj_num-1, conf.zipf_coeff).unwrap();
-
-    for i in 0..conf.thread_num {
-        dataset.read.push(Vec::new());
-        dataset.write.push(Vec::new());
-
-        for _ in 0..conf.set_size {
-            
-            let rk  = dis.sample(&mut rng);
-            let wk  = dis.sample(&mut rng);
-            
-            read_idx[rk]+=1;
-            write_idx[wk]+=1;
-             
-
-            dataset.read[i].push(Arc::clone(&pool[rk]));
-            dataset.write[i].push(Arc::clone(&pool[wk]));
-        }
-    }
-    
-    read_idx.sort();
-    read_idx.reverse();
-    write_idx.sort();
-    write_idx.reverse();
-
-    let (read_top, _) = read_idx.split_at(conf.obj_num/10 as usize);
-    let (write_top, _) = write_idx.split_at(conf.obj_num/10 as usize);
-
-    debug!("Read: {:?}", read_top);
-    debug!("Write: {:?}", write_top);
-
-    dataset
-}
-
-
-#[derive(Debug, Clone, Copy)]
-struct Config {
-    thread_num: usize,
-    obj_num:usize,
-    set_size:usize,
-    round_num:usize,
-    zipf_coeff: f64,
-    use_pmem: bool,
-}
-
-fn read_env() -> Config {
-    let mut settings = config::Config::default();
-
-
-    settings.merge(config::File::with_name("Settings")).unwrap()
-        .merge(config::Environment::with_prefix("PNVM")).unwrap();
-
-
-    Config {
-        thread_num: settings.get_int("THREAD_NUM").unwrap() as usize,
-        obj_num : settings.get_int("OBJ_NUM").unwrap() as usize,
-        set_size : settings.get_int("SET_SIZE").unwrap() as usize,
-        round_num : settings.get_int("ROUND_NUM").unwrap() as usize,
-        zipf_coeff: settings.get_float("ZIPF_COEFF").unwrap() as f64,
-        use_pmem : settings.get_bool("USE_PMEM").unwrap() as bool,
-    }
-
-}
-
 
 
 

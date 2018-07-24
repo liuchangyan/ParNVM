@@ -177,6 +177,14 @@ mod tests {
         }
 
     }
+
+    #[test]
+    fn test_read_hashmap() {
+
+        super::tcore::init();
+
+
+    }
     
     use super::parnvm::piece::{Pid, Piece};
     use std::{

@@ -18,6 +18,13 @@ use std::{
 
 use log;
 
+
+pub struct TransactionParBase {
+    conflicts_ : Dep, 
+    all_ps_ : Vec<Piece>,
+    name_ : String,
+}
+
 pub struct TransactionPar
 {
     conflicts_ : Dep,

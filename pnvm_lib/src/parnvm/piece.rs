@@ -17,7 +17,7 @@ impl Pid {
 
 pub struct Piece
 {
-    callback_ : Box<FnMut()->i32>,
+    callback_ : Box<FnMut()->i32 >,
     pid_ : Pid,
     tid_ : Tid,
     title_ : &'static str,
