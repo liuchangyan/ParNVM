@@ -19,6 +19,7 @@ use std::{
 use log;
 
 
+#[derive(Clone)]
 pub struct TransactionParBase {
     conflicts_ : Dep, 
     all_ps_ : Vec<Piece>,
@@ -47,6 +48,20 @@ impl TransactionPar
             id_ : id,
             name_ : name,
             status_: TxState::EMBRYO
+        }
+    }
+
+
+    pub fn new_from_base(txn_base : &TransactionParBase, tid: Tid) -> TransactionPar {
+        let txn_base = txn_base.clone();
+        
+        TransactionPar {
+            all_ps_ : txn_base.all_ps_,
+            conflicts_: txn_base.conflicts_,
+            name_ : txn_base.name_,
+            id_: tid,
+            status_ : TxState::EMBRYO,
+            deps_: HashSet::new(),
         }
     }
 

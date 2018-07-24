@@ -17,6 +17,8 @@ impl Pid {
 }
 
 type FnPtr = Arc<Box<Fn()->i32 + Send + Sync>>;
+
+#[derive(Clone)]
 pub struct Piece
 {
     callback_ : FnPtr,
