@@ -1,5 +1,6 @@
 
 use txn::{Tid};
+use std::sync::Arc;
 use std::fmt::{
     Formatter,
     Debug,
@@ -15,9 +16,10 @@ impl Pid {
     }
 }
 
+type FnPtr = Arc<Box<Fn()->i32 + Send + Sync>>;
 pub struct Piece
 {
-    callback_ : Box<FnMut()->i32 >,
+    callback_ : FnPtr,
     pid_ : Pid,
     tid_ : Tid,
     title_ : &'static str,
@@ -34,7 +36,7 @@ impl Debug for Piece {
 
 impl Piece
 {
-    pub fn new(pid : Pid, tid: Tid, cb : Box<FnMut()->i32>, title: &'static str) -> Piece {
+    pub fn new(pid : Pid, tid: Tid, cb : FnPtr, title: &'static str) -> Piece {
         Piece {
             callback_ : cb,
             pid_: pid,

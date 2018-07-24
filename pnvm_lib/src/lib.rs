@@ -278,9 +278,9 @@ mod tests {
             let tid1 = Tid::new(1);
 
             let mut pieces_1 = vec![
-                Piece::new(pid0.clone(), tid1.clone(), Box::new(spin_short), "spinning_short"),
-                Piece::new(pid1.clone(), tid1.clone(), Box::new(write_y), "write_y"),
-                Piece::new(pid2.clone(), tid1.clone(), Box::new(read_x), "read_x")
+                Piece::new(pid0.clone(), tid1.clone(), Arc::new(Box::new(spin_short)), "spinning_short"),
+                Piece::new(pid1.clone(), tid1.clone(), Arc::new(Box::new(write_y)), "write_y"),
+                Piece::new(pid2.clone(), tid1.clone(), Arc::new(Box::new(read_x)), "read_x")
             ];
 
             pieces_1.reverse();
@@ -301,9 +301,9 @@ mod tests {
                 //Prepare TXN2
                 let tid2 = Tid::new(2);
                 let mut pieces_2 = vec![
-                    Piece::new(pid0.clone(), tid2.clone(), Box::new(read_y), "read_y"),
-                    Piece::new(pid1.clone(), tid2.clone(), Box::new(spin_long), "spin_long"),
-                    Piece::new(pid2.clone(), tid2.clone(), Box::new(write_x), "write_x"),
+                    Piece::new(pid0.clone(), tid2.clone(), Arc::new(Box::new(read_y)), "read_y"),
+                    Piece::new(pid1.clone(), tid2.clone(), Arc::new(Box::new(spin_long)), "spin_long"),
+                    Piece::new(pid2.clone(), tid2.clone(), Arc::new(Box::new(write_x)), "write_x"),
                 ];
                 pieces_2.reverse();
 
