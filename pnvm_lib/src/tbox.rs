@@ -8,7 +8,7 @@ use std::{
 use tcore::{TValue, TVersion,   ObjectId};
 use tcore;
 
-
+#[derive(Debug)]
 pub struct TBox<T> 
 where T : Clone
 {

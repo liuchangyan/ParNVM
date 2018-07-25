@@ -118,6 +118,7 @@ pub struct ObjectId(u32);
 
 
 //[TODO:]To be optimized later
+#[derive(Debug)]
 pub struct TVersion {
     pub last_writer_: Option<Tid>,
     //lock_:        Arc<Mutex<bool>>,
@@ -179,6 +180,7 @@ impl TVersion {
     }
 }
 
+#[derive(Debug)]
 pub struct TValue<T>
 where T:Clone {
     ptr_: Unique<T>,

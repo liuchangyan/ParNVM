@@ -29,7 +29,8 @@ pub struct TestHelper {
 
 impl TestHelper {
     pub fn prepare_workload_occ(config: &Config) ->  WorkloadOCC {
-        WorkloadOCC{dataset_: WorkloadOCC::prepare_data(config)}
+        //WorkloadOCC{dataset_: WorkloadOCC::prepare_data(config)}
+        WorkloadOCC{dataset_: WorkloadOCC::prepare_data_hardcoded(config)}
     }
 
     pub fn prepare_workload_nvm(config: &Config) -> WorkloadNVM {
@@ -85,11 +86,51 @@ impl WorkloadOCC {
         write_idx.sort();
         write_idx.reverse();
 
-        let (read_top, _) = read_idx.split_at(conf.obj_num/10 as usize);
-        let (write_top, _) = write_idx.split_at(conf.obj_num/10 as usize);
+        //let (read_top, _) = read_idx.split_at(conf.obj_num/10 as usize);
+        //let (write_top, _) = write_idx.split_at(conf.obj_num/10 as usize);
 
-        debug!("Read: {:?}", read_top);
-        debug!("Write: {:?}", write_top);
+        //debug!("Read: {:?}", read_top);
+        //debug!("Write: {:?}", write_top);
+
+        dataset
+    }
+
+
+    fn prepare_data_hardcoded(conf : &Config) -> DataSet {
+        let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
+        let mut dataset = DataSet {
+            read : Vec::with_capacity(conf.thread_num),
+            write: Vec::with_capacity(conf.thread_num),
+        };
+        
+        let mut next_item = conf.cfl_pc_num;
+
+        for thread_id in 0..conf.thread_num {
+            dataset.read.push(Vec::new());
+            dataset.write.push(Vec::new());
+
+            if thread_id < conf.cfl_txn_num {
+                for i in 0..conf.cfl_pc_num { /* Conflicting Txns */
+                    //Read and Write same TBox
+                    dataset.read[thread_id].push(Arc::clone(&pool[i]));
+                    dataset.write[thread_id].push(Arc::clone(&pool[i]));
+                }
+
+                for i in conf.cfl_pc_num..conf.pc_num {
+                    dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
+                    dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
+                    next_item+=1;
+                }
+            } else { /* Non conflicting txns */
+                for i in 0..conf.pc_num {
+                    dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
+                    dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
+                    next_item+=1;
+                }
+            }
+        }
+
+        trace!("data: {:#?}", dataset);
 
         dataset
     }
@@ -114,7 +155,8 @@ impl WorkloadNVM{
         TxnRegistry::set_thread_registry(regis_ptr.clone());
 
         //Prepare data
-        let data : Vec<Arc<RwLock<HashMap<u32, u32>>>> = (0..conf.obj_num).map(|_x| Arc::new(RwLock::new(HashMap::new()))).collect();
+        //let data : Vec<Arc<RwLock<HashMap<u32, u32>>>> = (0..conf.obj_num).map(|_x| Arc::new(RwLock::new(HashMap::new()))).collect();
+        let data : Vec<Arc<RwLock<u32>>> = (0..conf.obj_num).map(|x| Arc::new(RwLock::new(x as u32))).collect();
 
 
         //Prepare TXNs
@@ -134,7 +176,7 @@ impl WorkloadNVM{
         }
     }
 
-    fn make_txn_base(tx_id: usize, tx_name : String, conf: &Config, data : &Vec<Arc<RwLock<HashMap<u32, u32>>>>, next_item: usize) -> (usize, TransactionParBase)  {
+    fn make_txn_base(tx_id: usize, tx_name : String, conf: &Config, data : &Vec<Arc<RwLock<u32>>>, next_item: usize) -> (usize, TransactionParBase)  {
 
         let mut pieces = vec![];
         let mut is_conflict_txn : bool = false;
@@ -158,27 +200,37 @@ impl WorkloadNVM{
             }
 
             let callback = move || {
-                //Read 
-                {
-                    let map = data_map.read().unwrap();
-
-                    for iter in 0..50{
-                        let i = rand::random::<u32>();
-
-                        if let Some(txn) = map.get(&i) {
-                            println!("Map[{}] Set by [TXN-{}]", i, txn);
-                        }
-                    }
+//                //Read 
+//                {
+//                    let map = data_map.read().unwrap();
+//
+//                    for iter in 0..50{
+//                        let i = rand::random::<u32>();
+//
+//                        if let Some(txn) = map.get(&i) {
+//                            println!("Map[{}] Set by [TXN-{}]", i, txn);
+//                        }
+//                    }
+//                }
+//
+//                //Write
+//                {
+//                    let mut map = data_map.write().unwrap();
+//                    for iter in 0..20 {
+//                        let i = rand::random::<u32>();
+//                        map.insert(i, tx_id as u32);
+//                    }
+//                }
+                { 
+                    let val = data_map.read().unwrap();
+                    info!("Set by TXN-{}", *val);
                 }
 
-                //Write
                 {
-                    let mut map = data_map.write().unwrap();
-                    for iter in 0..20 {
-                        let i = rand::random::<u32>();
-                        map.insert(i, tx_id as u32);
-                    }
+                    let mut val = data_map.write().unwrap();
+                    *val = tx_id as u32;
                 }
+
                 1
             };
 
@@ -226,7 +278,7 @@ impl WorkloadNVM{
 
 }
 
-
+#[derive(Debug)]
 pub struct DataSet {
     pub read : Vec<Vec<TObject<u32>>>,
     pub write : Vec<Vec<TObject<u32>>>,

@@ -6,6 +6,8 @@ use txn::{
     TxState,
 };
 
+use tcore::{self};
+
 use super::piece::*;
 use super::dep::*;
 
@@ -216,6 +218,7 @@ impl TransactionPar
     }
 
     pub fn commit(&mut self) {
+        tcore::BenchmarkCounter::success();
         let regis_ptr = TxnRegistry::get_thread_registry();
         let mut regis = regis_ptr.write().unwrap();
 
@@ -246,7 +249,7 @@ impl TransactionPar
                     break; 
                 },
                 _ => {
-                    thread::yield_now();
+                    //thread::yield_now();
                 }
             }
         }

@@ -37,9 +37,11 @@ fn main() {
     
     let conf = util::read_env();
     warn!("{:?}", conf);
-    
-    //run_occ(conf);
-    run_nvm(conf);
+    match conf.test_name.as_ref() {
+        "OCC" => run_occ(conf),
+        "PNVM" => run_nvm(conf),
+        _ => panic!("unknown test name")
+    }
 }
 
 
@@ -52,6 +54,7 @@ fn run_nvm(conf : Config) {
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
 
+    let start = time::Instant::now();
     for i in 0..conf.thread_num {
         /* Per thread preparation */
         let conf = conf.clone();
@@ -64,21 +67,25 @@ fn run_nvm(conf : Config) {
         let handle = builder.spawn(move || {
             TxnRegistry::set_thread_registry(regis);
             for _ in 0..conf.round_num {
+                /* Get tid */
+                let now = time::Instant::now();
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
+                BenchmarkCounter::add_time(now.elapsed());
+
                 let mut tx = TransactionPar::new_from_base(&thread_txn_base, Tid::new(id));
 
                 tx.register_txn();
                 tx.execute_txn();
             }
+            
+            BenchmarkCounter::copy()
         }).unwrap();
 
         handles.push(handle);
     }
 
 
-    for handle in handles {
-        handle.join().unwrap();
-    }
+    report_stat(handles, start, conf);
 }
 
 
@@ -135,6 +142,13 @@ fn run_occ(conf : Config) {
         handles.push(handle);
     }
 
+
+    report_stat(handles, start, conf);
+
+
+}
+
+fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time::Instant, conf: Config) {
     let mut total_abort = 0;
     let mut total_success = 0;
     let mut spin_time = time::Duration::new(0, 0);
@@ -151,12 +165,13 @@ fn run_occ(conf : Config) {
         }
     }
    let total_time =  start.elapsed() - spin_time;
-
-    println!("{}, {}, {}, {}, {}, {}, {:?}, {}", 
+    println!("{},{},{}, {}, {}, {}, {}, {}, {:?}, {}", 
              conf.thread_num,
              conf.obj_num,
              conf.set_size,
              conf.zipf_coeff,
+             conf.cfl_pc_num,
+             conf.cfl_txn_num,
              total_success,
              total_abort,
              total_time.as_secs() as u32 *1000  + total_time.subsec_millis(),
