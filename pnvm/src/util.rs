@@ -97,6 +97,7 @@ impl WorkloadOCC {
 
 pub struct WorkloadNVM {
     pub registry_ : TxnRegistryPtr,
+    pub work_ : Vec<TransactionParBase>
 }
 
 
@@ -125,11 +126,11 @@ impl WorkloadNVM{
             let (next_item_id, txn_base) = WorkloadNVM::make_txn_base(txn_i, tx_name, conf, &data, next_item_id);
             threads_work.push(txn_base);
         }
-
-        println!("{:#?}",threads_work);
-
+        
+        
         WorkloadNVM {
-            registry_: regis_ptr        
+            registry_: regis_ptr,
+            work_ : threads_work
         }
     }
 

@@ -24,7 +24,7 @@ use pnvm_lib::{
     tcore::*,
     tbox::*,
     occ::*,
-    parnvm::*,
+    parnvm::nvm_txn::{TransactionPar,TxnRegistry},
 };
 
 
@@ -46,6 +46,39 @@ fn main() {
 
 fn run_nvm(conf : Config) {
     let workload = util::TestHelper::prepare_workload_nvm(&conf);
+    let work = workload.work_;
+    let regis = workload.registry_;
+    let mut handles = Vec::new();
+
+    let atomic_cnt = Arc::new(AtomicUsize::new(1));
+
+    for i in 0..conf.thread_num {
+        /* Per thread preparation */
+        let conf = conf.clone();
+        let thread_txn_base = work[i].clone();
+        let builder = thread::Builder::new()
+            .name(format!("TID-{}", i+1));
+        let atomic_clone = atomic_cnt.clone();
+        let regis = regis.clone();
+
+        let handle = builder.spawn(move || {
+            TxnRegistry::set_thread_registry(regis);
+            for _ in 0..conf.round_num {
+                let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
+                let mut tx = TransactionPar::new_from_base(&thread_txn_base, Tid::new(id));
+
+                tx.register_txn();
+                tx.execute_txn();
+            }
+        }).unwrap();
+
+        handles.push(handle);
+    }
+
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
 }
 
 
