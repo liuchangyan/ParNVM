@@ -38,16 +38,21 @@ fn main() {
     let conf = util::read_env();
     warn!("{:?}", conf);
     
-    run_occ(conf);
-    //run_own(conf);
+    //run_occ(conf);
+    run_nvm(conf);
+}
 
+
+
+fn run_nvm(conf : Config) {
+    let workload = util::TestHelper::prepare_workload_nvm(&conf);
 }
 
 
 fn run_occ(conf : Config) {
 
     let mtx = Arc::new(Mutex::new(0));
-    let mut objs = util::TestHelper::prepare_workload(&conf).dataset_;
+    let mut objs = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
     let start = time::Instant::now();

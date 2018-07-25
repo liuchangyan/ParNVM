@@ -265,6 +265,8 @@ mod tests {
         //Prepare Registry
         let names  = vec![String::from("TXN_2"), String::from("TXN_1")];
         let regis = TxnRegistry::new_with_names(names);
+        let name1 = String::from("TXN_1");
+        let name2 = String::from("TXN_2");
         let regis_ptr = Arc::new(RwLock::new(regis));
 
         TxnRegistry::set_thread_registry(regis_ptr.clone());
@@ -276,11 +278,12 @@ mod tests {
         crossbeam::scope(|scope| {
             //Prepare TXN1
             let tid1 = Tid::new(1);
+            let tid3 = Tid::new(3);
 
             let mut pieces_1 = vec![
-                Piece::new(pid0.clone(), tid1.clone(), Arc::new(Box::new(spin_short)), "spinning_short"),
-                Piece::new(pid1.clone(), tid1.clone(), Arc::new(Box::new(write_y)), "write_y"),
-                Piece::new(pid2.clone(), tid1.clone(), Arc::new(Box::new(read_x)), "read_x")
+                Piece::new(pid0.clone(), name1.clone(), Arc::new(Box::new(spin_short)), "spinning_short"),
+                Piece::new(pid1.clone(), name1.clone(), Arc::new(Box::new(write_y)), "write_y"),
+                Piece::new(pid2.clone(), name1.clone(), Arc::new(Box::new(read_x)), "read_x")
             ];
 
             pieces_1.reverse();
@@ -289,7 +292,9 @@ mod tests {
             dep_1.add(pid1.clone(), ConflictInfo::new(String::from("TXN_2"), pid0.clone(), ConflictType::ReadWrite));
             dep_1.add(pid2.clone(), ConflictInfo::new(String::from("TXN_2"), pid2.clone(), ConflictType::ReadWrite));
 
-            let mut tx = TransactionPar::new(pieces_1, dep_1, tid1, String::from("TXN_1"));
+            let base1 = TransactionParBase::new(dep_1, pieces_1, name1.clone());
+            let mut tx1 = TransactionPar::new_from_base(&base1, tid1.clone());
+            let mut tx2 = TransactionPar::new_from_base(&base1, tid3.clone());
             //Tx1 done
 
 
@@ -301,9 +306,9 @@ mod tests {
                 //Prepare TXN2
                 let tid2 = Tid::new(2);
                 let mut pieces_2 = vec![
-                    Piece::new(pid0.clone(), tid2.clone(), Arc::new(Box::new(read_y)), "read_y"),
-                    Piece::new(pid1.clone(), tid2.clone(), Arc::new(Box::new(spin_long)), "spin_long"),
-                    Piece::new(pid2.clone(), tid2.clone(), Arc::new(Box::new(write_x)), "write_x"),
+                    Piece::new(pid0.clone(), name2.clone(), Arc::new(Box::new(read_y)), "read_y"),
+                    Piece::new(pid1.clone(), name2.clone(), Arc::new(Box::new(spin_long)), "spin_long"),
+                    Piece::new(pid2.clone(), name2.clone(), Arc::new(Box::new(write_x)), "write_x"),
                 ];
                 pieces_2.reverse();
 
@@ -322,8 +327,11 @@ mod tests {
 
 
             {
-                tx.register_txn();
-                tx.execute_txn();
+                tx1.register_txn();
+                tx1.execute_txn();
+
+                tx2.register_txn();
+                tx2.execute_txn();
             }
 
             handler.join();
@@ -333,4 +341,5 @@ mod tests {
         assert_eq!(*y.read().unwrap(), 999);
         assert_eq!(TxnRegistry::thread_count(), 0 as usize);
     }
+
 }

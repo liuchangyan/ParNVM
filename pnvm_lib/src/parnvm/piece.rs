@@ -7,7 +7,7 @@ use std::fmt::{
     Result,
 };
 
-#[derive(Eq, PartialEq,  Hash, Debug, Clone)]
+#[derive(Eq, PartialEq,  Hash, Debug, Clone, Copy)]
 pub struct Pid(u32);
 
 impl Pid {
@@ -23,14 +23,14 @@ pub struct Piece
 {
     callback_ : FnPtr,
     pid_ : Pid,
-    tid_ : Tid,
+    tname_ : String,
     title_ : &'static str,
     //R/W sets?
 }
 
 impl Debug for Piece {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "[pid: {:?}, tid: {:?}, name: {:?}]", self.pid_, self.tid_, self.title_)
+        write!(f, "[pid: {:?}, tname: {:?}, name: {:?}]", self.pid_, self.tname_, self.title_)
             
     }
 }
@@ -38,11 +38,11 @@ impl Debug for Piece {
 
 impl Piece
 {
-    pub fn new(pid : Pid, tid: Tid, cb : FnPtr, title: &'static str) -> Piece {
+    pub fn new(pid : Pid, tname: String, cb : FnPtr, title: &'static str) -> Piece {
         Piece {
             callback_ : cb,
             pid_: pid,
-            tid_ : tid,
+            tname_ : tname,
             title_ : title
         }
     }

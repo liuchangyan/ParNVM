@@ -8,7 +8,7 @@
 use super::piece::Pid;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Dep
 {
     conflicts_ : HashMap<Pid, Vec<ConflictInfo>>
