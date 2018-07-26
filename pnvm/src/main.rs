@@ -1,4 +1,4 @@
-#![feature(duration_extras)]
+#![feature(duration_extras, global_allocator)]
 extern crate pnvm_lib;
 
 extern crate rand;
@@ -27,21 +27,23 @@ use pnvm_lib::{
     parnvm::nvm_txn::{TransactionPar,TxnRegistry},
 };
 
-
-
-
+#[global_allocator]
+static GLOBAL: GPMem  = GPMem;
 
 fn main() {
-    env_logger::init().unwrap();
-    pnvm_lib::tcore::init();
-    
-    let conf = util::read_env();
-    warn!("{:?}", conf);
-    match conf.test_name.as_ref() {
-        "OCC" => run_occ(conf),
-        "PNVM" => run_nvm(conf),
-        _ => panic!("unknown test name")
-    }
+ //   env_logger::init().unwrap();
+
+    let mut v = Vec::new();
+    v.push(1);
+//    pnvm_lib::tcore::init();
+//    
+//    let conf = util::read_env();
+//    warn!("{:?}", conf);
+//    match conf.test_name.as_ref() {
+//        "OCC" => run_occ(conf),
+//        "PNVM" => run_nvm(conf),
+//        _ => panic!("unknown test name")
+//    }
 }
 
 

@@ -14,10 +14,17 @@ use std::{
     rc::Rc,
     time,
     cell::RefCell,
+    sync::{ Once, ONCE_INIT},
 };
 use pnvm_sys::{
     self,
     Layout,
+    PMem,
+    Alloc,
+    AllocErr,
+    MemKind,
+    PMEM_DEFAULT_SIZE,
+    PMEM_FILE_DIR,
 };
 
 use plog::PLog;
@@ -337,5 +344,38 @@ pub unsafe fn next_id() -> ObjectId {
 }
 
 
+
+static mut G_PMEM_ALLOCATOR: PMem = PMem {
+    kind : 0 as *mut MemKind,
+    size : 0,
+};
+
+static INIT_PMEM : Once = ONCE_INIT;
+
+fn get_pmem_allocator() -> PMem {
+    unsafe {
+        INIT_PMEM.call_once (|| {
+            println!("called");
+            G_PMEM_ALLOCATOR = PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE);
+        });
+        G_PMEM_ALLOCATOR
+    }
+}
+
+pub struct GPMem;
+
+unsafe impl<'a> Alloc for &'a GPMem {
+    unsafe fn alloc(&mut self, layout:Layout) -> Result<*mut u8, AllocErr> {
+        println!("Alloc {:#?}", layout);
+        let mut pmem = get_pmem_allocator();
+        pmem.alloc(layout)
+    }
+
+
+    unsafe fn dealloc(&mut self, ptr : *mut u8, layout : Layout) {
+        let mut pmem = get_pmem_allocator();
+        pmem.dealloc(ptr, layout)
+    }
+}
 
 

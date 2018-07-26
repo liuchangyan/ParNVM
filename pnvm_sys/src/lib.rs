@@ -7,7 +7,8 @@ extern crate log;
 use libc::*;
 pub use alloc::allocator::{
     AllocErr,
-    Layout
+    Layout,
+    Alloc,
 };
 
 extern crate rand;
@@ -23,6 +24,7 @@ use std::{
     rc::Rc,
     thread,
 };
+
 
 const LPREFIX : &'static str = "pnvm_sys::";
 
@@ -138,7 +140,7 @@ extern "C" {
 pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE : usize = 2 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK : c_int = 0;
-const PMEM_FILE_DIR : &'static str = "/home/v-xuc/ParNVM/data";
+pub const PMEM_FILE_DIR : &'static str = "/home/v-xuc/ParNVM/data";
 const PLOG_FILE_PATH : &'static str = "/home/v-xuc/ParNVM/data/log";
 const PLOG_MIN_SIZE : usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE : usize = 2 * PLOG_MIN_SIZE;
@@ -222,17 +224,16 @@ pub struct ShutdownState {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct PMem {
-    kind : *mut MemKind,
-    size : usize,
-    dir : String
+   pub kind : *mut MemKind,
+   pub size : usize,
 }
 
 
 thread_local!{
     //This init should just be dummy
-    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE).unwrap()));
+    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE)));
 
     pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
 
@@ -243,10 +244,11 @@ thread_local!{
 
 
 
+
 //FIXME::Potentially could implement Alloc Trait from rust
 impl  PMem  {
     //Allocate max_size pmem and returns the memory allocator
-    pub fn new(dir: String, max_size : usize) -> Option<PMem> {
+    pub fn new(dir: String, max_size : usize) ->PMem {
         trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
         let _dir = String::clone(&dir);
         let dir = CString::new(dir).unwrap();
@@ -268,11 +270,10 @@ impl  PMem  {
             //return None;
         }
 
-        Some(PMem{
+        PMem{
             kind: unsafe { &mut *(kind_ptr) },
             size : max_size,
-            dir: _dir
-        })
+        }
     }
 
 
@@ -316,14 +317,6 @@ impl  PMem  {
 
 }
 
-impl Drop for PMem {
-    fn drop(&mut self) {
-        //let res = unsafe { memkind_pmem_destroy(self.kind)}; 
-        //if res != 0 {
-        //    panic!("destroy failed");
-        //}
-    }
-}
 
 
 #[derive(Debug)]
