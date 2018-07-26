@@ -1,15 +1,33 @@
 #![feature(alloc, allocator_api)]
 extern crate libc;
+
+#[cfg(not(feature="profile"))]
 extern crate alloc;
+#[cfg(feature="profile")]
+extern crate core;
+
 #[macro_use]
 extern crate log;
 
 use libc::*;
+
+#[cfg(feature="profile")]
+pub use core::alloc::{
+    AllocErr,
+    Layout,
+    Alloc,
+    GlobalAlloc,
+};
+
+#[cfg(not(feature="profile"))]
 pub use alloc::allocator::{
     AllocErr,
     Layout,
     Alloc,
 };
+
+
+
 
 extern crate rand;
 
@@ -316,7 +334,11 @@ impl  PMem  {
         let res = unsafe { memkind_malloc(self.kind, layout.size()) }; 
 
         if res.is_null() {
+            #[cfg(not(feature="profile"))]
             return Err(AllocErr::Exhausted{request :layout});
+
+            #[cfg(feature="profile")]
+            return Err(AllocErr);
         } else {
             return Ok(res);                                
         }

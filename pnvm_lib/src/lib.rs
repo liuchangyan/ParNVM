@@ -3,7 +3,13 @@
 #![feature(allocator_api)]
 #![feature(libc)]
 #![feature(ptr_internals)]
+#![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
+#![cfg_attr(feature = "profile", plugin(flamer))]
 extern crate pnvm_sys;
+
+#[cfg(feature = "profile")]
+extern crate flame;
+extern crate core;
 
 #[macro_use]
 extern crate lazy_static;

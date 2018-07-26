@@ -15,6 +15,7 @@ use std::{
     time,
     cell::RefCell,
     sync::{ Once, ONCE_INIT},
+    alloc::GlobalAlloc,
 };
 use pnvm_sys::{
     self,
@@ -364,14 +365,14 @@ fn get_pmem_allocator() -> PMem {
 
 pub struct GPMem;
 
-unsafe impl<'a> Alloc for &'a GPMem {
-    unsafe fn alloc(&mut self, layout:Layout) -> Result<*mut u8, AllocErr> {
+unsafe impl GlobalAlloc for GPMem {
+    unsafe fn alloc(&self, layout:Layout) -> *mut u8 {
         let mut pmem = get_pmem_allocator();
-        pmem.alloc(layout)
+        pmem.alloc(layout).unwrap()
     }
 
 
-    unsafe fn dealloc(&mut self, ptr : *mut u8, layout : Layout) {
+    unsafe fn dealloc(&self, ptr : *mut u8, layout : Layout) {
         let mut pmem = get_pmem_allocator();
         pmem.dealloc(ptr, layout)
     }

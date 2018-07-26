@@ -10,3 +10,5 @@ env_logger = "~0.4"
 rand = "0.5"
 libc = "0.2"
 
+[features]
+profile=[]
