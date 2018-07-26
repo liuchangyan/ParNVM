@@ -19,7 +19,7 @@ use std::{
     ptr, 
     mem::*, 
     string::String,
-    ffi::CString,
+    ffi::{CString, CStr},
     cell::RefCell,
     rc::Rc,
     thread,
@@ -32,19 +32,21 @@ const LPREFIX : &'static str = "pnvm_sys::";
  * Exposed APIS 
  * **************/
 pub fn alloc(layout : Layout) -> Result<*mut u8, AllocErr> {
-    warn!("here");
-    PMEM_ALLOCATOR.with(|pmem_cell| {
-        pmem_cell.borrow_mut().alloc(layout)
-    })
+    panic!("not used anymore");
+   PMEM_ALLOCATOR.with(|pmem_cell| {
+       pmem_cell.borrow_mut().alloc(layout)
+   })
 }
 
 pub fn dealloc(ptr : *mut u8, layout: Layout) {
+    panic!("not used anymore");
     warn!("freeing pointer {:p}", ptr);
     PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
 }
 
 
 pub fn flush(ptr : *mut u8, layout: Layout) {
+    panic!("not used anymore");
     trace!("flush {:p} , {}", ptr, layout.size());    
     unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
 }
@@ -55,13 +57,16 @@ pub fn flush(ptr : *mut u8, layout: Layout) {
 //}
 
 pub fn persist_log(iovecs : &Vec<iovec>) {
+    panic!("not used anymore");
     trace!("persist_log : {:} item", iovecs.len());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_many(iovecs, iovecs.len()));
 }
 
 pub fn walk(chunksize: usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
             -> c_int) {
+    panic!("not used anymore");
     trace!("walk : chunksize = {}", chunksize);
+
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
 
@@ -141,6 +146,7 @@ pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE : usize = 2 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK : c_int = 0;
 pub const PMEM_FILE_DIR : &'static str = "/home/v-xuc/ParNVM/data";
+pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";
 const PLOG_FILE_PATH : &'static str = "/home/v-xuc/ParNVM/data/log";
 const PLOG_MIN_SIZE : usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE : usize = 2 * PLOG_MIN_SIZE;
@@ -248,6 +254,34 @@ thread_local!{
 //FIXME::Potentially could implement Alloc Trait from rust
 impl  PMem  {
     //Allocate max_size pmem and returns the memory allocator
+    
+    pub fn new_bytes_with_nul_unchecked(dir: &[u8], max_size : usize ) -> PMem {
+        let dir_str = unsafe { CStr::from_bytes_with_nul_unchecked(dir)};
+        let dir_ptr = dir_str.as_ptr(); 
+
+        let mut kind_ptr : *mut MemKind = ptr::null_mut();
+        let kind_ptr_ptr = (&mut kind_ptr) as *mut _  as *mut *mut MemKind;
+
+        if max_size < PMEM_MIN_SIZE {
+            panic!("pmem size too small");
+            //return None;
+        }
+
+        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
+        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr)};
+        if err != PMEM_ERROR_OK {
+            panic!("pemem failed create {} @ {:?} {:} {:p}\n", err, dir, max_size, unsafe{*kind_ptr_ptr});
+            //return None;
+        }
+
+        PMem{
+            kind: unsafe { &mut *(kind_ptr) },
+            size : max_size,
+        }
+
+    }
+
+
     pub fn new(dir: String, max_size : usize) ->PMem {
         trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
         let _dir = String::clone(&dir);

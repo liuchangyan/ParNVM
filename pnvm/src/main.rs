@@ -31,19 +31,16 @@ use pnvm_lib::{
 static GLOBAL: GPMem  = GPMem;
 
 fn main() {
- //   env_logger::init().unwrap();
+    env_logger::init().unwrap();
+    pnvm_lib::tcore::init();
 
-    let mut v = Vec::new();
-    v.push(1);
-//    pnvm_lib::tcore::init();
-//    
-//    let conf = util::read_env();
-//    warn!("{:?}", conf);
-//    match conf.test_name.as_ref() {
-//        "OCC" => run_occ(conf),
-//        "PNVM" => run_nvm(conf),
-//        _ => panic!("unknown test name")
-//    }
+    let conf = util::read_env();
+    warn!("{:?}", conf);
+    match conf.test_name.as_ref() {
+        "OCC" => run_occ(conf),
+        "PNVM" => run_nvm(conf),
+        _ => panic!("unknown test name")
+    }
 }
 
 

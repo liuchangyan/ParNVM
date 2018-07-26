@@ -24,7 +24,7 @@ use pnvm_sys::{
     AllocErr,
     MemKind,
     PMEM_DEFAULT_SIZE,
-    PMEM_FILE_DIR,
+    PMEM_FILE_DIR_BYTES,
 };
 
 use plog::PLog;
@@ -344,20 +344,20 @@ pub unsafe fn next_id() -> ObjectId {
 }
 
 
-
+/*
+ * Persistent Memory Allocator 
+ */
 static mut G_PMEM_ALLOCATOR: PMem = PMem {
     kind : 0 as *mut MemKind,
     size : 0,
 };
 
-static INIT_PMEM : Once = ONCE_INIT;
 
 fn get_pmem_allocator() -> PMem {
     unsafe {
-        INIT_PMEM.call_once (|| {
-            println!("called");
-            G_PMEM_ALLOCATOR = PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE);
-        });
+        if G_PMEM_ALLOCATOR.kind as u32 == 0 { 
+            G_PMEM_ALLOCATOR = PMem::new_bytes_with_nul_unchecked(PMEM_FILE_DIR_BYTES, PMEM_DEFAULT_SIZE);
+        }
         G_PMEM_ALLOCATOR
     }
 }
@@ -366,7 +366,6 @@ pub struct GPMem;
 
 unsafe impl<'a> Alloc for &'a GPMem {
     unsafe fn alloc(&mut self, layout:Layout) -> Result<*mut u8, AllocErr> {
-        println!("Alloc {:#?}", layout);
         let mut pmem = get_pmem_allocator();
         pmem.alloc(layout)
     }
