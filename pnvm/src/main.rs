@@ -14,7 +14,7 @@ mod util;
 use util::*;
 
 use std::{
-    sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}},
+    sync::{Barrier,Arc, Mutex, atomic::{AtomicUsize, Ordering}},
     thread,
     time,
 };
@@ -51,21 +51,28 @@ fn run_nvm(conf : Config) {
     let work = workload.work_;
     let regis = workload.registry_;
     let mut handles = Vec::new();
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
+    let mut prep_time = time::Duration::new(0,0);
 
     let start = time::Instant::now();
     for i in 0..conf.thread_num {
         /* Per thread preparation */
+        let _prep_start = time::Instant::now();
         let conf = conf.clone();
+        let barrier = barrier.clone();
         let thread_txn_base = work[i].clone();
         let builder = thread::Builder::new()
             .name(format!("TID-{}", i+1));
         let atomic_clone = atomic_cnt.clone();
         let regis = regis.clone();
 
+        prep_time += _prep_start.elapsed();
+
         let handle = builder.spawn(move || {
             TxnRegistry::set_thread_registry(regis);
+            barrier.wait();
             for _ in 0..conf.round_num {
                 /* Get tid */
                 let now = time::Instant::now();
@@ -75,6 +82,8 @@ fn run_nvm(conf : Config) {
                 let mut tx = TransactionPar::new_from_base(&thread_txn_base, Tid::new(id));
 
                 tx.register_txn();
+                let mut i = 0;
+                while i<100000 { i+=1;} 
                 tx.execute_txn();
             }
             
@@ -85,7 +94,7 @@ fn run_nvm(conf : Config) {
     }
 
 
-    report_stat(handles, start, conf);
+    report_stat(handles, start, prep_time,  conf);
 }
 
 
@@ -96,18 +105,24 @@ fn run_occ(conf : Config) {
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
     let start = time::Instant::now();
-    
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
+    let mut prep_time = time::Duration::new(0,0);
 
     for i in 0..conf.thread_num {
+        let _prep_start = time::Instant::now();
         let conf = conf.clone();
         let read_set = objs.read.pop().unwrap();
         let write_set = objs.write.pop().unwrap();
         let atomic_clone = atomic_cnt.clone();
+        let barrier = barrier.clone();
         let builder = thread::Builder::new()
             .name(format!("TID-{}", i+1));
         
         let mtx = mtx.clone();
+
+        prep_time += _prep_start.elapsed();
         let handle = builder.spawn(move || {
+            barrier.wait();
             {
                 let _ = mtx.lock().unwrap();
                 pnvm_lib::tcore::init();
@@ -117,7 +132,6 @@ fn run_occ(conf : Config) {
                 let now = time::Instant::now();
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
                 BenchmarkCounter::add_time(now.elapsed());
-
                 let tx = &mut occ_txn::TransactionOCC::new(Tid::new(id), conf.use_pmem);
             
 
@@ -130,8 +144,12 @@ fn run_occ(conf : Config) {
                     tx.write(&write, (i+1) as u32);
                     debug!("[THREAD {:} TXN {:}] WRITE {:}",i+1,  id, i+1);
                 }
-                let res = tx.try_commit();
-                info!("[THREAD {:} - TXN {:}] COMMITS {:} ",i+1,  id, res);
+                let mut i = 1;
+
+                while i<100000 { i+=1;}
+
+                while tx.try_commit() != true {}
+                info!("[THREAD {:} - TXN {:}] COMMITS",i+1,  id);
                 
             }
 
@@ -143,12 +161,12 @@ fn run_occ(conf : Config) {
     }
 
 
-    report_stat(handles, start, conf);
+    report_stat(handles, start,prep_time, conf);
 
 
 }
 
-fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time::Instant, conf: Config) {
+fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time::Instant, prep_time: time::Duration, conf: Config) {
     let mut total_abort = 0;
     let mut total_success = 0;
     let mut spin_time = time::Duration::new(0, 0);
@@ -165,7 +183,7 @@ fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time:
         }
     }
    let total_time =  start.elapsed() - spin_time;
-    println!("{},{},{}, {}, {}, {}, {}, {}, {:?}, {}", 
+    println!("{},{},{}, {}, {}, {}, {}, {}, {:?}, {:?}, {:?}, {}", 
              conf.thread_num,
              conf.obj_num,
              conf.set_size,
@@ -175,6 +193,8 @@ fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time:
              total_success,
              total_abort,
              total_time.as_secs() as u32 *1000  + total_time.subsec_millis(),
+             spin_time.as_secs() as u32 *1000  + total_time.subsec_millis(),
+             prep_time.as_secs() as u32 *1000 + prep_time.subsec_millis(),
              conf.use_pmem
              )
 

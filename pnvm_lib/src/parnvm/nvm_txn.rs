@@ -88,15 +88,17 @@ impl TransactionPar
                 let regis_ptr = TxnRegistry::get_thread_registry();
                 let txn_regis_g = regis_ptr.read().unwrap();
                 let txn_regis = &*txn_regis_g;
-
+                    
+                //Each conflict txn
                 for conflict in conflicts.iter() {
                     let cfl_name = &conflict.txn_name_;
                     let cfl_pid = &conflict.piece_id_;
-
+                    
                     let cand_tids = txn_regis.registry_
                         .get(cfl_name)
                         .expect(format!("can_run:: txn name not correct : {:}", cfl_name).as_str());
-
+                    
+                    //Multiple running instances
                     for cand_tid in cand_tids.iter() {
                         let info_ptr = txn_regis.instances_
                             .get(cand_tid)
@@ -249,7 +251,7 @@ impl TransactionPar
                     break; 
                 },
                 _ => {
-                    //thread::yield_now();
+                    thread::yield_now();
                 }
             }
         }

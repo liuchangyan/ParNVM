@@ -225,7 +225,6 @@ impl WorkloadNVM{
                     let val = data_map.read().unwrap();
                     info!("Set by TXN-{}", *val);
                 }
-
                 {
                     let mut val = data_map.write().unwrap();
                     *val = tx_id as u32;
