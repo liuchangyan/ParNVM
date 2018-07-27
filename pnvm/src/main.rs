@@ -100,8 +100,10 @@ fn run_nvm(conf : Config) {
     report_stat(handles, start, prep_time,  conf);
 
     #[cfg(feature="profile")]
-    let mut f = File::create("profile/nvm.profile").unwrap();
-    flame::dump_text_to_writer(f);
+    {
+        let mut f = File::create("profile/nvm.profile").unwrap();
+        flame::dump_text_to_writer(f);
+    }
 }
 
 

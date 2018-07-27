@@ -1,9 +1,9 @@
 #![feature(alloc, allocator_api)]
 extern crate libc;
 
-#[cfg(not(feature="profile"))]
+#[cfg(not(any(feature="profile", feature="unstable")))]
 extern crate alloc;
-#[cfg(feature="profile")]
+#[cfg(any(feature="profile", feature="unstable"))]
 extern crate core;
 
 #[macro_use]
@@ -11,7 +11,7 @@ extern crate log;
 
 use libc::*;
 
-#[cfg(feature="profile")]
+#[cfg(any(feature="profile", feature="unstable"))]
 pub use core::alloc::{
     AllocErr,
     Layout,
@@ -19,7 +19,7 @@ pub use core::alloc::{
     GlobalAlloc,
 };
 
-#[cfg(not(feature="profile"))]
+#[cfg(not(any(feature="profile", feature="unstable")))]
 pub use alloc::allocator::{
     AllocErr,
     Layout,
@@ -334,10 +334,10 @@ impl  PMem  {
         let res = unsafe { memkind_malloc(self.kind, layout.size()) }; 
 
         if res.is_null() {
-            #[cfg(not(feature="profile"))]
+            #[cfg(not(any(feature="profile", feature="unstable")))]
             return Err(AllocErr::Exhausted{request :layout});
 
-            #[cfg(feature="profile")]
+            #[cfg(any(feature="profile", feature="unstable"))]
             return Err(AllocErr);
         } else {
             return Ok(res);                                

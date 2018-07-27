@@ -3,8 +3,8 @@
 #![feature(allocator_api)]
 #![feature(libc)]
 #![feature(ptr_internals)]
-//#![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
-//#![cfg_attr(feature = "profile", plugin(flamer))]
+#![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
+#![cfg_attr(feature = "profile", plugin(flamer))]
 extern crate pnvm_sys;
 
 #[cfg(feature = "profile")]

@@ -15,8 +15,13 @@ use std::{
     time,
     cell::RefCell,
     sync::{ Once, ONCE_INIT},
-    alloc::GlobalAlloc,
 };
+
+
+#[cfg(feature = "unstable")]
+use std::alloc::{self, GlobalAlloc};
+
+
 use pnvm_sys::{
     self,
     Layout,
@@ -131,7 +136,7 @@ pub struct TVersion {
     pub last_writer_: Option<Tid>,
     //lock_:        Arc<Mutex<bool>>,
     pub lock_owner_:  Option<Tid>
-    //lock_owner_:  Option<Tid>,
+        //lock_owner_:  Option<Tid>,
 }
 
 
@@ -155,7 +160,7 @@ impl TVersion {
             }
         }
     }
-    
+
 
     //Caution: whoever has access to self can unlock
     pub fn unlock(&mut self) {
@@ -198,19 +203,19 @@ impl<T> TValue<T>
 where T:Clone
 {
     pub fn new(val :T) -> TValue<T> {
-        let ptr = pnvm_sys::alloc(Layout::new::<T>());
+        let ptr = unsafe {alloc::alloc(Layout::new::<T>())};
 
-        match ptr {
-            Ok(ptr) => {
-                let ptr = unsafe {
-                    mem::transmute::<*mut u8, *mut T>(ptr)
-                };
-                unsafe {ptr.write(val)};
-                TValue{ 
-                    ptr_ : Unique::new(ptr).expect("Tvalue::new failed"),
-                }
-            },
-            Err(_) => panic!("Tvalue::new failed")
+
+        if ptr.is_null() {
+            panic!("Tvalue::new failed")
+        } else {
+            let ptr = unsafe {
+                mem::transmute::<*mut u8, *mut T>(ptr)
+            };
+            unsafe {ptr.write(val)};
+            return TValue{ 
+                ptr_ : Unique::new(ptr).expect("Tvalue::new failed"),
+            };
         }
     }
     pub fn store(&mut self, data: T) {
@@ -225,10 +230,10 @@ where T:Clone
         self.ptr_.as_ptr()
     }
 
-      pub fn get_addr(&self) -> Unique<T> {
+    pub fn get_addr(&self) -> Unique<T> {
         self.ptr_
     }
-   
+
 
     //FIXME::This is super dangerous...
     //But it might be a feasible option. Wrapping the underlying data with 
@@ -242,15 +247,15 @@ where T:Clone
         unsafe {Rc::from_raw(self.ptr_.as_ref())}        
     }
 }
-
 impl<T> Drop for TValue<T>
 where T:Clone 
 {
     fn drop(&mut self) 
     {
-         pnvm_sys::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>())
+        unsafe{ alloc::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>())}
     }
 }
+
 
 //#[derive(PartialEq, Eq, Hash)]
 pub struct TTag<T> 
@@ -290,12 +295,12 @@ where T:Clone
         (*self.tobj_ref_).install(val, id);
     }
 
-   // pub fn consume_value(&mut self) -> T {
-   //     match self.write_val_ {
-   //         Some(t) => Rc::try_unwrap(t).ok().unwrap(),
-   //         None => panic!("Write Tag Should Have Write Value")
-   //     }
-   // }
+    // pub fn consume_value(&mut self) -> T {
+    //     match self.write_val_ {
+    //         Some(t) => Rc::try_unwrap(t).ok().unwrap(),
+    //         None => panic!("Write Tag Should Have Write Value")
+    //     }
+    // }
 
     pub fn has_write(&self) -> bool {
         match self.write_val_ {
@@ -348,12 +353,14 @@ pub unsafe fn next_id() -> ObjectId {
 /*
  * Persistent Memory Allocator 
  */
+#[cfg(feature = "unstable")]
 static mut G_PMEM_ALLOCATOR: PMem = PMem {
     kind : 0 as *mut MemKind,
     size : 0,
 };
 
 
+#[cfg(feature = "unstable")]
 fn get_pmem_allocator() -> PMem {
     unsafe {
         if G_PMEM_ALLOCATOR.kind as u32 == 0 { 
@@ -363,8 +370,10 @@ fn get_pmem_allocator() -> PMem {
     }
 }
 
+#[cfg(feature = "unstable")]
 pub struct GPMem;
 
+#[cfg(feature = "unstable")]
 unsafe impl GlobalAlloc for GPMem {
     unsafe fn alloc(&self, layout:Layout) -> *mut u8 {
         let mut pmem = get_pmem_allocator();
@@ -377,5 +386,3 @@ unsafe impl GlobalAlloc for GPMem {
         pmem.dealloc(ptr, layout)
     }
 }
-
-

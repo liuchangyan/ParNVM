@@ -20,6 +20,7 @@ use std::{
 
 use log;
 
+#[cfg(feature = "profile")]
 use flame;
 
 

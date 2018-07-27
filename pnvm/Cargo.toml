@@ -16,3 +16,4 @@ flame = { version = "0.2.2", optional = true }
 
 [features]
 profile = ["pnvm_lib/profile", "flame"]
+unstable = ["pnvm_lib/unstable"]

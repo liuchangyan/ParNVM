@@ -11,9 +11,10 @@ lazy_static = "1.0"
 libc = "0.2"
 crossbeam = "0.3.0"
 
-flame = "0.2.2"
-flamer = "^0.2.3"
+flame = {version = "0.2.2", optional = true}
+flamer = {version = "^0.2.3", optional = true}
 
 
 [features]
 profile = ["pnvm_sys/profile"]
+unstable = ["pnvm_sys/unstable"]
