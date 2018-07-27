@@ -80,7 +80,8 @@ impl TransactionPar
             deps_: HashSet::new(),
         }
     }
-
+    
+    #[cfg_attr(feature = "profile", flame)]
     pub fn can_run(&mut self, piece : &Piece) -> Option<(Arc<RwLock<TxnInfo>>, Pid)> {
         let pid = piece.id();
         let conflicts = self.conflicts_.get_conflict_info(pid);
@@ -178,7 +179,7 @@ impl TransactionPar
     }
     //TODO:
     //pub fn prepare_log();
-
+    #[cfg_attr(feature = "profile", flame)]
     pub fn register_txn(&mut self) {
         info!("register_txn:: Registering txn : {:?}", self.id());
 
@@ -193,46 +194,23 @@ impl TransactionPar
 
         (*regis).register(self.name().clone(), self.id().clone(), Arc::new(RwLock::new(txn_info)));
     }
-
+    
+    #[cfg_attr(feature = "profile", flame)]
     pub fn execute_txn(&mut self) {
-        #[cfg(feature = "profile")]
-        flame::start("execute_txn");
         self.status_ = TxState::ACTIVE;
         while let Some(mut piece) = self.get_next_piece() {
             //info!("execute:txn :: Got piece - {:?}", piece); 
-            #[cfg(feature = "profile")]
-            flame::start("can_run");
             let res = self.can_run(&piece);
-            #[cfg(feature = "profile")]
-            flame::end("can_run");
 
             match res{
                 None => {
-                    #[cfg(feature = "profile")]
-                    flame::start("execute_piece");
-
                     self.execute_piece(&mut piece); 
-
-                    #[cfg(feature = "profile")]
-                    flame::end("execute_piece");
                 }, 
                 Some((info, cfl_pid)) => {
                     if self.has_next_piece() {
-                        #[cfg(feature = "profile")]
-                        flame::start("add_piece");
-
                         self.add_piece(piece);
-
-                        #[cfg(feature = "profile")]
-                        flame::end("add_piece");
                     } else {
-                        #[cfg(feature = "profile")]
-                        flame::start("spin_on");
-
                         self.spin_on(&mut piece, info, cfl_pid);
-
-                        #[cfg(feature = "profile")]
-                        flame::end("spin_on");
                     }
                 }
             }
@@ -240,12 +218,9 @@ impl TransactionPar
 
         self.wait_for_dep();
         self.commit();
-
-        #[cfg(feature = "profile")]
-        flame::end("execute_txn");
-
     }
-
+    
+    #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&self, piece : &mut Piece) {
         warn!("execute_piece::[{:?}] Running piece - {:?}", self.id(), piece);
         let regis_ptr = TxnRegistry::get_thread_registry();
@@ -259,7 +234,13 @@ impl TransactionPar
             (*info).update_state(pid.clone(), PieceState::Running);
         } //unlock registry here
 
+        #[cfg(feature = "profile")]
+        flame::start("piece.run");
+
         piece.run();
+
+        #[cfg(feature = "profile")]
+        flame::end("piece.run");
 
         {
             let regis = regis_ptr.read().unwrap();
@@ -295,10 +276,12 @@ impl TransactionPar
         self.all_ps_.is_empty()
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn add_piece(&mut self, piece : Piece) {
         self.all_ps_.push(piece)
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn commit(&mut self) {
         tcore::BenchmarkCounter::success();
         let regis_ptr = TxnRegistry::get_thread_registry();
@@ -307,7 +290,8 @@ impl TransactionPar
         (*regis).checkout(self.name(), self.id().clone()).expect("commit:: info is checkouted");
         self.status_ = TxState::COMMITTED;
     }
-
+    
+    #[cfg_attr(feature = "profile", flame)]
     pub fn wait_for_dep(&self) {
 
         for id in self.deps_.iter(){
@@ -322,6 +306,7 @@ impl TransactionPar
         }
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn spin_on(&self, piece : &mut Piece, txn_info : Arc<RwLock<TxnInfo>>, pid: Pid) {
         loop {
             let info_g = txn_info.read().unwrap();

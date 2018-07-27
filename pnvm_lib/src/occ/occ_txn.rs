@@ -16,6 +16,9 @@ use txn::{
 use tcore::{self, ObjectId, TObject, TTag};
 use plog;
 
+#[cfg(feature = "profile")]
+use flame;
+
 pub struct TransactionOCC<T>
 where
     T: Clone,

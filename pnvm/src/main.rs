@@ -109,6 +109,7 @@ fn run_nvm(conf : Config) {
 
 fn run_occ(conf : Config) {
 
+
     let mtx = Arc::new(Mutex::new(0));
     let mut objs = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
@@ -142,7 +143,12 @@ fn run_occ(conf : Config) {
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
                 BenchmarkCounter::add_time(now.elapsed());
                 let tx = &mut occ_txn::TransactionOCC::new(Tid::new(id), conf.use_pmem);
-            
+                let tid = Tid::new(id);
+                #[cfg(feature = "profile")]
+                {
+                    flame::start(format!("start_txn - {:?}", tid));
+                }
+
 
                 for read in read_set.iter() {
                     let val = tx.read(&read);
@@ -157,12 +163,26 @@ fn run_occ(conf : Config) {
 
                 while i<100000 { i+=1;}
 
+                #[cfg(feature = "profile")]
+                {
+                    flame::start(format!("try_commit {:?}", tid));
+                }
+
                 while tx.try_commit() != true {}
+
+                #[cfg(feature = "profile")]
+                {
+                    flame::end(format!("try_commit {:?}", tid));
+                }
+
                 info!("[THREAD {:} - TXN {:}] COMMITS",i+1,  id);
                 
+                #[cfg(feature = "profile")]
+                {
+                    flame::end(format!("start_txn - {:?}", tid));
+                }
             }
 
-            //#[cfg(benchmark)]
             BenchmarkCounter::copy()
         }).unwrap();
 
@@ -172,6 +192,11 @@ fn run_occ(conf : Config) {
 
     report_stat(handles, start,prep_time, conf);
 
+    #[cfg(feature="profile")]
+    {
+        let mut f = File::create("profile/occ.profile").unwrap();
+        flame::dump_text_to_writer(f);
+    }
 
 }
 
