@@ -20,6 +20,9 @@ use std::{
 
 use log;
 
+use flame;
+
+
 
 #[derive(Clone, Debug)]
 pub struct TransactionParBase {
@@ -77,13 +80,20 @@ impl TransactionPar
         }
     }
 
-
     pub fn can_run(&mut self, piece : &Piece) -> Option<(Arc<RwLock<TxnInfo>>, Pid)> {
         let pid = piece.id();
         let conflicts = self.conflicts_.get_conflict_info(pid);
 
+
         match conflicts {
             Some(conflicts) => {
+                
+                
+                #[cfg(feature = "profile")]
+                {
+                    flame::start("has conflict info");
+                }
+
                 info!("can_run:: Checking conflicts {:?}", conflicts);
                 let regis_ptr = TxnRegistry::get_thread_registry();
                 let txn_regis_g = regis_ptr.read().unwrap();
@@ -91,8 +101,14 @@ impl TransactionPar
                     
                 //Each conflict txn
                 for conflict in conflicts.iter() {
+
                     let cfl_name = &conflict.txn_name_;
                     let cfl_pid = &conflict.piece_id_;
+
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::start(format!("conflict with [{}:{:?}]", cfl_name, cfl_pid));
+                    }
                     
                     let cand_tids = txn_regis.registry_
                         .get(cfl_name)
@@ -100,6 +116,11 @@ impl TransactionPar
                     
                     //Multiple running instances
                     for cand_tid in cand_tids.iter() {
+                        #[cfg(feature = "profile")]
+                        {
+                            flame::start(format!("with instance [{:?}]", cand_tid));
+                        }
+
                         let info_ptr = txn_regis.instances_
                             .get(cand_tid)
                             .expect(format!("can_run::registry inconsistent data, id{:?}",
@@ -110,6 +131,14 @@ impl TransactionPar
                         match (*info_g).check_state(cfl_pid) {
                             PieceState::Ready | PieceState::Running => {
                                 if self.deps_.contains(cand_tid) {
+
+                                    #[cfg(feature = "profile")]
+                                    {
+                                        flame::end(format!("with instance [{:?}]", cand_tid));
+                                        flame::end(format!("conflict with [{}:{:?}]", cfl_name, cfl_pid));
+                                        flame::end("has conflict info");
+                                    }
+
                                     return Some((info_ptr.clone(), cfl_pid.clone()));
                                 }
                             },
@@ -118,13 +147,33 @@ impl TransactionPar
                                 self.deps_.insert(cand_tid.clone());
                             }
                         }
+
+                        #[cfg(feature = "profile")]
+                        {
+                            flame::end(format!("with instance [{:?}]", cand_tid));
+                        }
+
+
                     }
+
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end(format!("conflict with [{}:{:?}]", cfl_name, cfl_pid));
+                    }
+
+                }
+
+
+                #[cfg(feature = "profile")]
+                {
+                    flame::end("has conflict info");
                 }
 
                 None
             },
             None => None 
         }
+
     }
     //TODO:
     //pub fn prepare_log();
@@ -145,18 +194,44 @@ impl TransactionPar
     }
 
     pub fn execute_txn(&mut self) {
+        #[cfg(feature = "profile")]
+        flame::start("execute_txn");
         self.status_ = TxState::ACTIVE;
         while let Some(mut piece) = self.get_next_piece() {
             //info!("execute:txn :: Got piece - {:?}", piece); 
-            match self.can_run(&piece) {
+            #[cfg(feature = "profile")]
+            flame::start("can_run");
+            let res = self.can_run(&piece);
+            #[cfg(feature = "profile")]
+            flame::end("can_run");
+
+            match res{
                 None => {
+                    #[cfg(feature = "profile")]
+                    flame::start("execute_piece");
+
                     self.execute_piece(&mut piece); 
+
+                    #[cfg(feature = "profile")]
+                    flame::end("execute_piece");
                 }, 
                 Some((info, cfl_pid)) => {
                     if self.has_next_piece() {
+                        #[cfg(feature = "profile")]
+                        flame::start("add_piece");
+
                         self.add_piece(piece);
+
+                        #[cfg(feature = "profile")]
+                        flame::end("add_piece");
                     } else {
+                        #[cfg(feature = "profile")]
+                        flame::start("spin_on");
+
                         self.spin_on(&mut piece, info, cfl_pid);
+
+                        #[cfg(feature = "profile")]
+                        flame::end("spin_on");
                     }
                 }
             }
@@ -164,10 +239,14 @@ impl TransactionPar
 
         self.wait_for_dep();
         self.commit();
+
+        #[cfg(feature = "profile")]
+        flame::end("execute_txn");
+
     }
 
     pub fn execute_piece(&self, piece : &mut Piece) {
-        warn!("execute_piece:: Running piece - {:?}", piece);
+        warn!("execute_piece::[{:?}] Running piece - {:?}", self.id(), piece);
         let regis_ptr = TxnRegistry::get_thread_registry();
         {
             let regis = regis_ptr.read().unwrap();

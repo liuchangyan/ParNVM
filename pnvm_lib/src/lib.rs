@@ -3,8 +3,8 @@
 #![feature(allocator_api)]
 #![feature(libc)]
 #![feature(ptr_internals)]
-#![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
-#![cfg_attr(feature = "profile", plugin(flamer))]
+//#![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
+//#![cfg_attr(feature = "profile", plugin(flamer))]
 extern crate pnvm_sys;
 
 #[cfg(feature = "profile")]
@@ -31,6 +31,7 @@ pub mod parnvm;
 mod tests {
     extern crate env_logger;
     extern crate crossbeam;
+    extern crate flame;
 
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
@@ -217,7 +218,9 @@ mod tests {
     use std::{
         sync::{RwLock, Arc},
         thread,
+        fs::File,
     };
+    
     #[test]
     fn test_single_piece_run() {
         let x = Arc::new(RwLock::new(1));
@@ -343,7 +346,8 @@ mod tests {
             handler.join();
 
         });
-        
+        // Dump the report to disk
+        flame::dump_stdout();
         assert_eq!(*y.read().unwrap(), 999);
         assert_eq!(TxnRegistry::thread_count(), 0 as usize);
     }

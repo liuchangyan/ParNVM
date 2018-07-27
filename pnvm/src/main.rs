@@ -1,6 +1,9 @@
 #![feature(duration_extras, global_allocator)]
 extern crate pnvm_lib;
 
+#[cfg(feature="profile")]
+extern crate flame;
+
 extern crate rand;
 extern crate config;
 extern crate zipf;
@@ -17,6 +20,7 @@ use std::{
     sync::{Barrier,Arc, Mutex, atomic::{AtomicUsize, Ordering}},
     thread,
     time,
+    fs::File,
 };
 
 use pnvm_lib::{
@@ -63,7 +67,7 @@ fn run_nvm(conf : Config) {
         let barrier = barrier.clone();
         let thread_txn_base = work[i].clone();
         let builder = thread::Builder::new()
-            .name(format!("TID-{}", i+1));
+            .name(format!("TXN-{}", i+1));
         let atomic_clone = atomic_cnt.clone();
         let regis = regis.clone();
 
@@ -94,6 +98,10 @@ fn run_nvm(conf : Config) {
 
 
     report_stat(handles, start, prep_time,  conf);
+
+    #[cfg(feature="profile")]
+    let mut f = File::create("profile/nvm.profile").unwrap();
+    flame::dump_text_to_writer(f);
 }
 
 

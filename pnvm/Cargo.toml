@@ -11,5 +11,8 @@ rand = "0.5"
 config = "0.9"
 zipf = "4.0.0"
 
+flame = { version = "0.2.2", optional = true }
+
+
 [features]
-profile = []
+profile = ["pnvm_lib/profile", "flame"]
