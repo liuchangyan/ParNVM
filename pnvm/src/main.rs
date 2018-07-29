@@ -60,6 +60,10 @@ fn run_nvm(conf : Config) {
     let mut prep_time = time::Duration::new(0,0);
 
     let start = time::Instant::now();
+
+    #[cfg(feature="profile")]
+    flame::start("benchmark");
+
     for i in 0..conf.thread_num {
         /* Per thread preparation */
         let _prep_start = time::Instant::now();
@@ -101,6 +105,8 @@ fn run_nvm(conf : Config) {
 
     #[cfg(feature="profile")]
     {
+
+        flame::end("benchmark");
         let mut f = File::create("profile/nvm.profile").unwrap();
         flame::dump_text_to_writer(f);
     }
@@ -117,6 +123,10 @@ fn run_occ(conf : Config) {
     let start = time::Instant::now();
     let barrier = Arc::new(Barrier::new(conf.thread_num));
     let mut prep_time = time::Duration::new(0,0);
+
+
+    #[cfg(feature="profile")]
+    flame::start("benchmark_start");
 
     for i in 0..conf.thread_num {
         let _prep_start = time::Instant::now();
@@ -191,9 +201,11 @@ fn run_occ(conf : Config) {
 
 
     report_stat(handles, start,prep_time, conf);
+    
 
     #[cfg(feature="profile")]
     {
+        flame::end("benchmark_start");
         let mut f = File::create("profile/occ.profile").unwrap();
         flame::dump_text_to_writer(f);
     }
