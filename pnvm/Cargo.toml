@@ -12,7 +12,7 @@ config = "0.9"
 zipf = "4.0.0"
 
 flame = { version = "0.2.2", optional = true }
-
+parking_lot = {version = "0.6", features = ["nightly"]}
 
 [features]
 profile = ["pnvm_lib/profile", "flame"]

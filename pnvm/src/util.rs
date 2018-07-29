@@ -5,9 +5,11 @@ extern crate config;
 extern crate zipf;
 
 use std::{
-    sync::{Arc, RwLock},
-    collections::HashMap,
+    sync::{Arc},
+    collections::{HashMap,VecDeque}
 };
+
+use parking_lot::RwLock;
 
 use rand::{
     distributions::Distribution,
@@ -169,7 +171,7 @@ impl WorkloadNVM{
             threads_work.push(txn_base);
         }
         
-        
+        debug!("{:#?}", threads_work);    
         WorkloadNVM {
             registry_: regis_ptr,
             work_ : threads_work
@@ -178,7 +180,7 @@ impl WorkloadNVM{
 
     fn make_txn_base(tx_id: usize, tx_name : String, conf: &Config, data : &Vec<Arc<RwLock<u32>>>, next_item: usize) -> (usize, TransactionParBase)  {
 
-        let mut pieces = vec![];
+        let mut pieces = VecDeque::new();
         let mut is_conflict_txn : bool = false;
         let mut next_item = next_item;
         let mut dep = Dep::new();
@@ -202,7 +204,7 @@ impl WorkloadNVM{
             let callback = move || {
 //                //Read 
 //                {
-//                    let map = data_map.read().unwrap();
+//                    let map = data_map.read();
 //
 //                    for iter in 0..50{
 //                        let i = rand::random::<u32>();
@@ -215,18 +217,18 @@ impl WorkloadNVM{
 //
 //                //Write
 //                {
-//                    let mut map = data_map.write().unwrap();
+//                    let mut map = data_map.write();
 //                    for iter in 0..20 {
 //                        let i = rand::random::<u32>();
 //                        map.insert(i, tx_id as u32);
 //                    }
 //                }
                 { 
-                    let val = data_map.read().unwrap();
-                    info!("Set by TXN-{}", *val);
+                    let val = data_map.read();
+                    trace!("Set by TXN-{}", *val);
                 }
                 {
-                    let mut val = data_map.write().unwrap();
+                    let mut val = data_map.write();
                     *val = tx_id as u32;
                 }
 
@@ -238,9 +240,8 @@ impl WorkloadNVM{
                                    Arc::new(Box::new(callback)),
                                    "cb");
 
-            pieces.push(piece);
+            pieces.push_back(piece);
         }
-        pieces.reverse();
 
         (next_item, TransactionParBase::new(dep, pieces, tx_name.clone()))
     }

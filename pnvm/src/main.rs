@@ -12,6 +12,8 @@ extern crate zipf;
 extern crate log;
 extern crate env_logger;
 
+extern crate parking_lot;
+
 mod util;
 
 use util::*;
@@ -228,7 +230,8 @@ fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time:
             Err(_) => warn!("thread panics")
         }
     }
-   let total_time =  start.elapsed() - spin_time;
+   //let total_time =  start.elapsed() - spin_time;
+   let total_time  = start.elapsed();
     println!("{},{},{}, {}, {}, {}, {}, {}, {:?}, {:?}, {:?}, {}", 
              conf.thread_num,
              conf.obj_num,
