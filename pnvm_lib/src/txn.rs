@@ -58,7 +58,7 @@ impl Into<u32> for Tid {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TxState {
     COMMITTED,
     EMBRYO,

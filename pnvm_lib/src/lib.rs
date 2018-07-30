@@ -19,6 +19,7 @@ extern crate libc;
 extern crate crossbeam;
 
 extern crate parking_lot;
+extern crate evmap;
 
 pub mod tcore;
 pub mod plog;

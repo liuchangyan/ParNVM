@@ -161,7 +161,7 @@ extern "C" {
 }
 
 pub const PMEM_MIN_SIZE : usize = 1024 * 1024 * 16;
-pub const PMEM_DEFAULT_SIZE : usize = 20 * PMEM_MIN_SIZE;
+pub const PMEM_DEFAULT_SIZE : usize = 48 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK : c_int = 0;
 pub const PMEM_FILE_DIR : &'static str = "/home/v-xuc/ParNVM/data";
 pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";

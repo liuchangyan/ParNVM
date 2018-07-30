@@ -21,6 +21,7 @@ use std::{
 use parking_lot::RwLock;
 
 use log;
+use evmap::{self, ReadHandle, WriteHandle, ShallowCopy};
 
 #[cfg(feature = "profile")]
 use flame;
@@ -348,8 +349,77 @@ thread_local!{
 
 
 
+pub struct NameRegistry {
+    inner_read : Vec<ReadHandle<Tid, TxState>>,
+    inner_write : Vec<WriteHandle<Tid, TxState>> /* FIXME: SRSW for now*/
+}
+
+//Both handlers are Send
+unsafe impl Sync for NameRegistry {}
+
+//FIXME: to move to a seperate mod
+const NAME_REGISTRY_SIZE : usize = 64;
+
+impl ShallowCopy for TxState {
+    unsafe fn shallow_copy(&mut self) -> Self {
+        *self
+    }
+}
+
+impl NameRegistry {
+    pub fn new() -> NameRegistry {
+        let mut reads = Vec::with_capacity(NAME_REGISTRY_SIZE);
+        let mut writes = Vec::with_capacity(NAME_REGISTRY_SIZE);
+
+        for i in 0..NAME_REGISTRY_SIZE {
+            let (r, w) = evmap::new();
+            reads.push(r);
+            writes.push(w);
+        }
+
+        NameRegistry {
+            inner_read : reads,
+            inner_write: writes
+        }
+    }
+    
+    /* Converts Txn Name to index into the inner data */
+    #[inline]
+    fn index(txn_name : String) -> usize {
+        //FIXME: Hardcoded format now: TXN_xxx
+        let (_, id_str) = txn_name.split_at(4);
+        id_str.parse::<usize>().expect("index invalid")
+    }
+
+    
+    //Register a new transaction instance
+    pub fn register(&mut self, txn_name : String, tid : Tid) {
+
+    }
+
+    
+    //Checkout an existing transaction instance
+    pub fn checkout(&mut self, txn_name : String, tid : Tid ) {
+
+    }
+
+
+    //Get a read handle of the tids
+    pub fn lookup(&self, txn_name: String) -> ReadHandle<Tid, TxState> {
+       self.inner_read[Self::index(txn_name)].clone()
+    }
+    
+    //Update the state
+    pub fn update(&mut self, txn_name: String, tid : Tid, new_state: TxState) {
+
+    }
+
+
+}
+
 pub struct TxnRegistry {
     pub registry_ : HashMap<String, HashSet<Tid>>,
+    pub registry_x : NameRegistry,
     pub instances_ : HashMap<Tid, Arc<RwLock<TxnInfo>>>
 }
 
@@ -375,6 +445,7 @@ impl TxnRegistry {
         TxnRegistry {
             registry_: HashMap::new(),
             instances_: HashMap::new(),
+            registry_x : NameRegistry::new(),
         }
     }
 
@@ -388,6 +459,7 @@ impl TxnRegistry {
         TxnRegistry {
             registry_ : registry_,
             instances_ :HashMap::new(),
+            registry_x : NameRegistry::new(),
         }
     }
 
