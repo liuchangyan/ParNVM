@@ -58,6 +58,12 @@ impl Into<u32> for Tid {
 }
 
 
+impl Default for Tid {
+    fn default() -> Tid {
+        Tid(0)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TxState {
     COMMITTED,

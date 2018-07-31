@@ -34,7 +34,6 @@ pub mod parnvm;
 mod tests {
     extern crate env_logger;
     extern crate crossbeam;
-    extern crate flame;
 
     use super::tbox::TBox;
     use super::txn::{Transaction, Tid};
@@ -42,165 +41,165 @@ mod tests {
     use super::txn;
     use super::tcore::{TObject};
 
-    #[test]
-    fn test_single_read() {
-        let _ = env_logger::init();
-        super::tcore::init();
-        let tb : TObject<u32> = TBox::new(1);
-        {
-            let tx = &mut TransactionOCC::new(Tid::new(1), true);
-            let val = tx.read(&tb);
-            tx.try_commit();
-        }
-    }
+   // #[test]
+   // fn test_single_read() {
+   //     let _ = env_logger::init();
+   //     super::tcore::init();
+   //     let tb : TObject<u32> = TBox::new(1);
+   //     {
+   //         let tx = &mut TransactionOCC::new(Tid::new(1), true);
+   //         let val = tx.read(&tb);
+   //         tx.try_commit();
+   //     }
+   // }
 
-    #[test]
-    fn test_single_write() {
-        let _ = env_logger::init();
-        super::tcore::init();
-        let tb : TObject<u32> = TBox::new(1); 
-        {
-            let tx = &mut TransactionOCC::new(Tid::new(1), true);
-            tx.write(&tb, 2);
-            assert_eq!(tx.try_commit(), true);
-            assert_eq!(TransactionOCC::notrans_read(&tb), 2);
-        }
-    }
+   // #[test]
+   // fn test_single_write() {
+   //     let _ = env_logger::init();
+   //     super::tcore::init();
+   //     let tb : TObject<u32> = TBox::new(1); 
+   //     {
+   //         let tx = &mut TransactionOCC::new(Tid::new(1), true);
+   //         tx.write(&tb, 2);
+   //         assert_eq!(tx.try_commit(), true);
+   //         assert_eq!(TransactionOCC::notrans_read(&tb), 2);
+   //     }
+   // }
 
-    #[test]
-    fn test_concurrent_read(){
-        super::tcore::init();
-        let tb1 : TObject<u32> = TBox::new(1);
-        let tb2 : TObject<u32> = TBox::new(2);
+   // #[test]
+   // fn test_concurrent_read(){
+   //     super::tcore::init();
+   //     let tb1 : TObject<u32> = TBox::new(1);
+   //     let tb2 : TObject<u32> = TBox::new(2);
 
-        {
-            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
-            let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
+   //     {
+   //         let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+   //         let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
 
-            assert_eq!(tx1.read(&tb1), 1);
-            assert_eq!(tx2.read(&tb1), 1);
+   //         assert_eq!(tx1.read(&tb1), 1);
+   //         assert_eq!(tx2.read(&tb1), 1);
 
-            assert_eq!(tx1.read(&tb1), 1);
-            assert_eq!(tx2.read(&tb2), 2);
-            
-            assert_eq!(tx1.try_commit(), true);
-            assert_eq!(tx2.try_commit(), true);
-        }
+   //         assert_eq!(tx1.read(&tb1), 1);
+   //         assert_eq!(tx2.read(&tb2), 2);
+   //         
+   //         assert_eq!(tx1.try_commit(), true);
+   //         assert_eq!(tx2.try_commit(), true);
+   //     }
 
-    }
-
-
-    #[test]
-    fn test_dirty_read_should_abort(){
-        super::tcore::init();
-        let tb1 : TObject<u32> = TBox::new(1);
-
-        {
-            
-            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
-            let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
-
-            assert_eq!(tx1.read(&tb1), 1);
-            tx2.write(&tb1, 2);
-            
-            assert_eq!(tx2.try_commit(), true);
-            assert_eq!(tx1.try_commit(), false);
-            
-        }
-    }
-    
-    #[test]
-    fn test_writes_in_order() {
-        super::tcore::init();
-
-        let tb1 : TObject<u32> = TBox::new(1);
-
-        {
-            
-            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
-            let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
-
-            tx1.write(&tb1, 10);
-            tx2.write(&tb1, 9999);
-            
-            assert_eq!(tx2.try_commit(), true);
-            assert_eq!(TransactionOCC::notrans_read(&tb1), 9999);
-            assert_eq!(tx1.try_commit(), true);
-            assert_eq!(TransactionOCC::notrans_read(&tb1), 10);
-        }
-        
-    }
-
-    #[test]
-    fn test_read_own_write() {
-        super::tcore::init();
-        let tb1 : TObject<u32> = TBox::new(1);
-
-        {
-            
-            let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
-            assert_eq!(tx1.read(&tb1), 1); 
-            tx1.write(&tb1, 10);
-            assert_eq!(tx1.read(&tb1), 10); 
-            assert_eq!(TransactionOCC::notrans_read(&tb1), 1);
-
-            assert_eq!(tx1.try_commit(), true);
-            assert_eq!(TransactionOCC::notrans_read(&tb1), 10);
-        }
-    }
-
-    #[test]
-    fn test_conflict_write_aborts() {
-        
-        super::tcore::init();
-        let tb : TObject<u32> = TBox::new(1); 
-        {
-            let tx = &mut TransactionOCC::new(Tid::new(1), true);
-            tx.write(&tb, 2);
-            assert_eq!(tx.read(&tb), 2); 
-
-            TransactionOCC::notrans_lock(&tb, Tid::new(99));
-
-            assert_eq!(tx.try_commit(), false);
-            assert_eq!(TransactionOCC::notrans_read(&tb), 1);
-        }
-        
-    }
-
-    #[test]
-    fn test_read_string() {
-    
-        super::tcore::init();
-        let tb : TObject<String> = TBox::new(String::from("hillo"));
-
-        {
-
-            let tx = &mut TransactionOCC::new(Tid::new(1), true);
-            assert_eq!(tx.read(&tb), String::from("hillo"));
-
-            tx.write(&tb, String::from("world"));
-            assert_eq!(tx.read(&tb), String::from("world"));
-
-            assert_eq!(TransactionOCC::notrans_read(&tb), String::from("hillo"));
-            assert_eq!(tx.try_commit(), true);
-            assert_eq!(TransactionOCC::notrans_read(&tb), String::from("world"));
-        }
-
-    }
-
-    #[test]
-    fn test_read_hashmap() {
-
-        super::tcore::init();
+   // }
 
 
-    }
-    
-    use super::parnvm::piece::{Pid, Piece};
-    use std::{
-        rc::Rc,
-        cell::RefCell,
-    };
+   // #[test]
+   // fn test_dirty_read_should_abort(){
+   //     super::tcore::init();
+   //     let tb1 : TObject<u32> = TBox::new(1);
+
+   //     {
+   //         
+   //         let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+   //         let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
+
+   //         assert_eq!(tx1.read(&tb1), 1);
+   //         tx2.write(&tb1, 2);
+   //         
+   //         assert_eq!(tx2.try_commit(), true);
+   //         assert_eq!(tx1.try_commit(), false);
+   //         
+   //     }
+   // }
+   // 
+   // #[test]
+   // fn test_writes_in_order() {
+   //     super::tcore::init();
+
+   //     let tb1 : TObject<u32> = TBox::new(1);
+
+   //     {
+   //         
+   //         let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+   //         let tx2 = &mut TransactionOCC::new(Tid::new(2), true);
+
+   //         tx1.write(&tb1, 10);
+   //         tx2.write(&tb1, 9999);
+   //         
+   //         assert_eq!(tx2.try_commit(), true);
+   //         assert_eq!(TransactionOCC::notrans_read(&tb1), 9999);
+   //         assert_eq!(tx1.try_commit(), true);
+   //         assert_eq!(TransactionOCC::notrans_read(&tb1), 10);
+   //     }
+   //     
+   // }
+
+   // #[test]
+   // fn test_read_own_write() {
+   //     super::tcore::init();
+   //     let tb1 : TObject<u32> = TBox::new(1);
+
+   //     {
+   //         
+   //         let tx1 = &mut TransactionOCC::new(Tid::new(1), true);
+   //         assert_eq!(tx1.read(&tb1), 1); 
+   //         tx1.write(&tb1, 10);
+   //         assert_eq!(tx1.read(&tb1), 10); 
+   //         assert_eq!(TransactionOCC::notrans_read(&tb1), 1);
+
+   //         assert_eq!(tx1.try_commit(), true);
+   //         assert_eq!(TransactionOCC::notrans_read(&tb1), 10);
+   //     }
+   // }
+
+   // #[test]
+   // fn test_conflict_write_aborts() {
+   //     
+   //     super::tcore::init();
+   //     let tb : TObject<u32> = TBox::new(1); 
+   //     {
+   //         let tx = &mut TransactionOCC::new(Tid::new(1), true);
+   //         tx.write(&tb, 2);
+   //         assert_eq!(tx.read(&tb), 2); 
+
+   //         TransactionOCC::notrans_lock(&tb, Tid::new(99));
+
+   //         assert_eq!(tx.try_commit(), false);
+   //         assert_eq!(TransactionOCC::notrans_read(&tb), 1);
+   //     }
+   //     
+   // }
+
+   // #[test]
+   // fn test_read_string() {
+   // 
+   //     super::tcore::init();
+   //     let tb : TObject<String> = TBox::new(String::from("hillo"));
+
+   //     {
+
+   //         let tx = &mut TransactionOCC::new(Tid::new(1), true);
+   //         assert_eq!(tx.read(&tb), String::from("hillo"));
+
+   //         tx.write(&tb, String::from("world"));
+   //         assert_eq!(tx.read(&tb), String::from("world"));
+
+   //         assert_eq!(TransactionOCC::notrans_read(&tb), String::from("hillo"));
+   //         assert_eq!(tx.try_commit(), true);
+   //         assert_eq!(TransactionOCC::notrans_read(&tb), String::from("world"));
+   //     }
+
+   // }
+
+   // #[test]
+   // fn test_read_hashmap() {
+
+   //     super::tcore::init();
+
+
+   // }
+   // 
+   // use super::parnvm::piece::{Pid, Piece};
+   // use std::{
+   //     rc::Rc,
+   //     cell::RefCell,
+   // };
 
    // #[test]
    // fn test_piece_run(){
@@ -276,10 +275,10 @@ mod tests {
 
         //Prepare Registry
         let names  = vec![String::from("TXN_2"), String::from("TXN_1")];
-        let regis = TxnRegistry::new_with_names(names);
+        let regis = TxnRegistry::new();
         let name1 = String::from("TXN_1");
         let name2 = String::from("TXN_2");
-        let regis_ptr = Arc::new(RwLock::new(regis));
+        let regis_ptr = Arc::new(regis);
 
         TxnRegistry::set_thread_registry(regis_ptr.clone());
 
@@ -350,9 +349,7 @@ mod tests {
 
         });
         // Dump the report to disk
-        flame::dump_stdout();
         assert_eq!(*y.read().unwrap(), 999);
-        assert_eq!(TxnRegistry::thread_count(), 0 as usize);
     }
 
 }

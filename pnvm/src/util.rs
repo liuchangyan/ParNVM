@@ -6,7 +6,7 @@ extern crate zipf;
 
 use std::{
     sync::{Arc},
-    collections::{HashMap,VecDeque}
+    collections::{HashMap}
 };
 
 use parking_lot::RwLock;
@@ -152,17 +152,17 @@ impl WorkloadNVM{
 
         //Prepare registry 
         let txn_names : Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let regis = TxnRegistry::new_with_names(txn_names);
-        let regis_ptr = Arc::new(RwLock::new(regis));
+        let regis = TxnRegistry::new();
+        let regis_ptr = Arc::new(regis);
         TxnRegistry::set_thread_registry(regis_ptr.clone());
 
         //Prepare data
-        //let data : Vec<Arc<RwLock<HashMap<u32, u32>>>> = (0..conf.obj_num).map(|_x| Arc::new(RwLock::new(HashMap::new()))).collect();
         let data : Vec<Arc<RwLock<u32>>> = (0..conf.obj_num).map(|x| Arc::new(RwLock::new(x as u32))).collect();
 
 
         //Prepare TXNs
-        //For now, thread_num == txn_num
+        //   For now, thread_num == txn_num
+        //
         let next_item_id = conf.cfl_txn_num; 
         for thread_i in 0..conf.thread_num {
             let txn_i = thread_i;
@@ -180,7 +180,7 @@ impl WorkloadNVM{
 
     fn make_txn_base(tx_id: usize, tx_name : String, conf: &Config, data : &Vec<Arc<RwLock<u32>>>, next_item: usize) -> (usize, TransactionParBase)  {
 
-        let mut pieces = VecDeque::new();
+        let mut pieces = Vec::new();
         let mut is_conflict_txn : bool = false;
         let mut next_item = next_item;
         let mut dep = Dep::new();
@@ -239,9 +239,11 @@ impl WorkloadNVM{
                                    tx_name.clone(),  
                                    Arc::new(Box::new(callback)),
                                    "cb");
-
-            pieces.push_back(piece);
+            
+            pieces.push(piece);
         }
+
+        pieces.reverse();
 
         (next_item, TransactionParBase::new(dep, pieces, tx_name.clone()))
     }
