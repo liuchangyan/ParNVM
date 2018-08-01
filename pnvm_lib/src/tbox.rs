@@ -5,6 +5,10 @@ use std::{
     sync::{RwLock, Arc},
     ptr::Unique,
 };
+
+//nightly
+use core::alloc::Layout;
+
 use tcore::{TValue, TVersion,   ObjectId};
 use tcore;
 
@@ -68,6 +72,10 @@ where T: Clone
     pub fn get_addr(&self) -> Unique<T> {
         let tvalue = self.tvalue_.read().unwrap();
         tvalue.get_addr()
+    }
+
+    pub fn get_layout(&self) -> Layout {
+        Layout::new::<T>()
     }
 
      /* No Trans Access method */

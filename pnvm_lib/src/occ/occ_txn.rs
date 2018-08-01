@@ -160,21 +160,51 @@ where
 
         //Persist the write set logs 
         
+        #[cfg(feature = "profile")]
+        {
+            flame::start("persist_log");
+        }
+
         #[cfg(feature = "pmem")]
         self.persist_log();
+
+        #[cfg(feature = "profile")]
+        {
+            flame::end("persist_log");
+        }
         
 
         //Install write sets into the underlying data
         self.install_data();
+
+
+        #[cfg(feature = "profile")]
+        {
+            flame::start("persist_data");
+        }
         
         //Persist the data
         #[cfg(feature = "pmem")]
         self.persist_data();
 
+        #[cfg(feature = "profile")]
+        {
+            flame::end("persist_data");
+        }
+
+        #[cfg(feature = "profile")]
+        {
+            flame::start("persist_tx");
+        }
 
         //Persist commit the transaction 
         #[cfg(feature = "pmem")]
         self.persist_commit();
+
+        #[cfg(feature = "profile")]
+        {
+            flame::end("persist_tx");
+        }
         
         //Clean up local data structures.
         txn::mark_commit(self.commit_id());

@@ -201,7 +201,6 @@ where T:Clone
     pub fn new(val :T) -> TValue<T> {
         let ptr = unsafe {alloc::alloc(Layout::new::<T>())};
 
-
         if ptr.is_null() {
             panic!("Tvalue::new failed")
         } else {
@@ -326,8 +325,8 @@ where T:Clone
     }
 
     #[cfg(feature = "pmem")]
-    pub fn make_log(&self, id : Tid) -> PLog<T> {
-        PLog::new(&Arc::clone(&self.tobj_ref_), id )
+    pub fn make_log(&self, id : Tid) -> PLog {
+        PLog::new(self.tobj_ref_.get_ptr() as *mut u8, self.tobj_ref_.get_layout(), id)
     }
 }
 

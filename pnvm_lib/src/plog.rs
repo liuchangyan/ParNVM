@@ -2,19 +2,21 @@ use tcore::TObject;
 use txn::Tid;
 use std::{
     ptr::Unique,
-    mem::size_of,
-
+    mem::{self,size_of}
 };
 use libc;
 use pnvm_sys;
 
 
+//This is the nightly api. Waiting for alloc::allocator::Layout to be stable
+use core::alloc::Layout;
+
+
 #[repr(C)]
-pub struct PLog<T> 
-where T: Clone
+pub struct PLog
 {
     header: PLogHeader,
-    data : PLogData<T>,
+    data : PLogData,
 }
 
 #[repr(C)]
@@ -26,36 +28,49 @@ pub struct PLogHeader {
 
 
 #[repr(C)]
-pub struct PLogData<T>
-where T : Clone
+pub struct PLogData
 {
-    addr : Unique<T>,
+    addr : *mut u8,
     size : usize
 }
 
 const LOG_KIND_DATA : u16 = 0;
 const LOG_KIND_TXN : u16 = 1;
 
-impl<T> PLog<T> 
-where T : Clone
+impl PLog
 {
-    
-    pub fn new(obj : &TObject<T>, id : Tid) -> PLog<T> {
-        let addr = (obj).get_addr();
-        
+
+    pub fn new(ptr : *mut u8, layout: Layout,  id : Tid) -> PLog {
+
         PLog {
             header: PLogHeader {
-                log_kind :LOG_KIND_DATA,
-                len : size_of::<T>(),
-                txn_id: id.into()
+                log_kind: LOG_KIND_DATA,
+                len: layout.size(),
+                txn_id : id.into()
             },
             data : PLogData {
-                addr : addr, 
-                size : size_of::<T>()
+                addr: ptr,
+                size : layout.size()
             }
         }
     }
-
+    
+    //pub fn new(obj : &TObject<T>, id : Tid) -> PLog<T> {
+    //    let addr = (obj).get_addr();
+    //    
+    //    PLog {
+    //        header: PLogHeader {
+    //            log_kind :LOG_KIND_DATA,
+    //            len : size_of::<T>(),
+    //            txn_id: id.into()
+    //        },
+    //        data : PLogData {
+    //            addr : addr, 
+    //            size : size_of::<T>()
+    //        }
+    //    }
+    //}
+    
 
 }
 
@@ -68,18 +83,17 @@ impl Into<libc::iovec> for PLogHeader {
     }
 }
 
-impl<T> Into<libc::iovec> for PLogData<T>
-where T : Clone
+impl Into<libc::iovec> for PLogData
 {
     fn into(self) -> libc::iovec {
         libc::iovec {
-            iov_base : self.addr.as_ptr() as *mut libc::c_void,
+            iov_base : self.addr as *mut libc::c_void,
             iov_len : self.size 
         }
     }
 }
 
-pub fn into_iovec<T :Clone>(log :PLog<T>) -> (libc::iovec, libc::iovec) {
+pub fn into_iovec(log :PLog) -> (libc::iovec, libc::iovec) {
     let mut log = log;
     let iovp_header = libc::iovec {
         iov_base : &mut log.header as *mut _ as *mut libc::c_void,
@@ -87,14 +101,14 @@ pub fn into_iovec<T :Clone>(log :PLog<T>) -> (libc::iovec, libc::iovec) {
     };
 
     let iovp_data = libc::iovec {
-        iov_base : log.data.addr.as_ptr() as *mut libc::c_void,
+        iov_base : log.data.addr as *mut libc::c_void,
         iov_len : log.data.size 
     };
 
     (iovp_header, iovp_data)
 }
 
-pub fn persist_log<T: Clone>(logs :Vec<PLog<T>>){
+pub fn persist_log(logs :Vec<PLog>){
     let mut iovecs = Vec::with_capacity(logs.len());
     
     
@@ -119,7 +133,7 @@ pub fn persist_txn(id : u32) {
         },
 
         data : PLogData {
-            addr : Unique::from(&id),
+            addr : unsafe{mem::transmute::<&u32, *mut u8>(&id)},
             size : size_of::<u32>()
         }
     };
@@ -133,6 +147,8 @@ pub fn persist_txn(id : u32) {
     //pnvm_sys::walk(0, visit_log);
 }
 
+
+//FOR u32 only
 extern "C" fn visit_log(buf: *const libc::c_void, len: libc::size_t, _: *mut libc::c_void) -> libc::c_int
 {
         println!("------Starting Walk[{:p}, {}]-------", buf, len);
