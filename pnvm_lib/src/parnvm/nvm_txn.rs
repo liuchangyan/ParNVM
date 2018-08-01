@@ -414,6 +414,7 @@ impl TxnRegistry {
     }
     
     //Update the state
+    #[cfg_attr(feature = "profile", flame)]
     pub fn update(&self, txn_name: &String, pid : &Pid, new_state: PieceState) {
         let id = txn_index(&txn_name);
         let old = self.lookup(txn_name);

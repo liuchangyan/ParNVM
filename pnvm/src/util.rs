@@ -117,7 +117,8 @@ impl WorkloadOCC {
                     dataset.read[thread_id].push(Arc::clone(&pool[i]));
                     dataset.write[thread_id].push(Arc::clone(&pool[i]));
                 }
-
+                
+                /* Non-conflicting pieces */
                 for i in conf.cfl_pc_num..conf.pc_num {
                     dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
                     dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
@@ -200,6 +201,7 @@ impl WorkloadNVM{
                 data_map = data[next_item].clone();
                 next_item += 1;
             }
+            let spin_time = conf.spin_time;
 
             let callback = move || {
 //                //Read 
@@ -231,6 +233,9 @@ impl WorkloadNVM{
                     let mut val = data_map.write();
                     *val = tx_id as u32;
                 }
+
+                let mut i = 0;
+                while i < spin_time { i+=1;}
 
                 1
             };
@@ -301,6 +306,7 @@ pub struct Config {
     pub cfl_pc_num: usize,
     pub cfl_txn_num: usize,
     pub pc_num: usize,
+    pub spin_time: usize,
 }
 
 pub fn read_env() -> Config {
@@ -323,6 +329,7 @@ pub fn read_env() -> Config {
         cfl_txn_num : settings.get_int("CFL_TXN_NUM").unwrap() as usize,
         cfl_pc_num : settings.get_int("CFL_PC_NUM").unwrap() as usize,
         pc_num : settings.get_int("PC_NUM").unwrap() as usize,
+        spin_time : settings.get_int("SPIN_TIME").unwrap() as usize,
     }
 
 }

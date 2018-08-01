@@ -88,12 +88,24 @@ fn run_nvm(conf : Config) {
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
                 BenchmarkCounter::add_time(now.elapsed());
 
-                let mut tx = TransactionPar::new_from_base(&thread_txn_base, Tid::new(id));
+                let tid = Tid::new(id);
+
+                #[cfg(feature = "profile")]
+                {
+                    flame::start(format!("start_txn - {:?}", tid));
+                }
+
+                let mut tx = TransactionPar::new_from_base(&thread_txn_base, tid);
 
                 tx.register_txn();
-                let mut i = 0;
-                while i<100000 { i+=1;} 
+                
+
                 tx.execute_txn();
+
+                #[cfg(feature = "profile")]
+                {
+                    flame::end(format!("start_txn - {:?}", tid));
+                }
             }
             
             BenchmarkCounter::copy()
@@ -161,31 +173,45 @@ fn run_occ(conf : Config) {
                     flame::start(format!("start_txn - {:?}", tid));
                 }
 
+                while {
+                    for read in read_set.iter() {
+                        let val = tx.read(&read);
+                        debug!("[THREAD {:} TXN {:}] READ {:}", i+1, id,  val);
+                    }
 
-                for read in read_set.iter() {
-                    let val = tx.read(&read);
-                    debug!("[THREAD {:} TXN {:}] READ {:}", i+1, id,  val);
-                }
+                    for write in write_set.iter() {
+                        tx.write(&write, (i+1) as u32);
+                        debug!("[THREAD {:} TXN {:}] WRITE {:}",i+1,  id, i+1);
+                    }
+                    
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::start("spinning");
+                    }
 
-                for write in write_set.iter() {
-                    tx.write(&write, (i+1) as u32);
-                    debug!("[THREAD {:} TXN {:}] WRITE {:}",i+1,  id, i+1);
-                }
-                let mut i = 1;
+                    let mut i = 0;
+                    while i< (conf.spin_time * conf.pc_num) { i+=1;} 
 
-                while i<100000 { i+=1;}
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end("spinning");
+                    }
 
-                #[cfg(feature = "profile")]
-                {
-                    flame::start(format!("try_commit {:?}", tid));
-                }
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::start(format!("try_commit {:?}", tid));
+                    }
 
-                while tx.try_commit() != true {}
+                    let res = tx.try_commit(); 
 
-                #[cfg(feature = "profile")]
-                {
-                    flame::end(format!("try_commit {:?}", tid));
-                }
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end(format!("try_commit {:?}", tid));
+                    }
+
+                    !res
+
+                }{}
 
                 info!("[THREAD {:} - TXN {:}] COMMITS",i+1,  id);
                 
