@@ -1,20 +1,13 @@
-
 use std::{
     collections::HashMap,
-    sync::{ RwLock, Arc},
     rc::Rc,
+    sync::{Arc, RwLock},
 };
 
-use txn::{
-    self,
-    Transaction,
-    Tid,
-    TxState,
-    AbortReason,
-};
+use txn::{self, AbortReason, Tid, Transaction, TxState};
 
-use tcore::{self, ObjectId, TObject, TTag};
 use plog;
+use tcore::{self, ObjectId, TObject, TTag};
 
 #[cfg(feature = "profile")]
 use flame;
@@ -23,17 +16,16 @@ pub struct TransactionOCC<T>
 where
     T: Clone,
 {
-    tid_: Tid,
+    tid_:   Tid,
     state_: TxState,
-    deps_: HashMap<ObjectId, TTag<T>>,
+    deps_:  HashMap<ObjectId, TTag<T>>,
 }
 
-
 impl<T> Transaction<T> for TransactionOCC<T>
-where T:Clone
+where
+    T: Clone,
 {
-
-     fn try_commit(&mut self) -> bool {
+    fn try_commit(&mut self) -> bool {
         debug!("Tx[{:?}] is commiting", self.tid_);
         self.state_ = TxState::COMMITTED;
 
@@ -52,8 +44,8 @@ where T:Clone
 
         true
     }
-    
-     fn read(&mut self, tobj: &TObject<T>) -> T {
+
+    fn read(&mut self, tobj: &TObject<T>) -> T {
         let tobj = Arc::clone(tobj);
 
         let id = tobj.get_id();
@@ -66,28 +58,27 @@ where T:Clone
         }
     }
 
-     fn write(&mut self, tobj: &TObject<T>, val: T) {
+    fn write(&mut self, tobj: &TObject<T>, val: T) {
         let tobj = Arc::clone(tobj);
 
         let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(&tobj));
         if !tag.has_read() {
-            //persist log 
+            //persist log
             //let log = PLog(tobj);
-             
+
         }
         tag.write(val);
     }
     /*Non TransactionOCC Functions*/
-     fn notrans_read(tobj: &TObject<T>) -> T {
+    fn notrans_read(tobj: &TObject<T>) -> T {
         //let tobj = Arc::clone(tobj);
         tobj.raw_read()
     }
 
-     fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool {
+    fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool {
         let tobj = Arc::clone(tobj);
         tobj.lock(tid)
     }
-
 }
 
 impl<T> TransactionOCC<T>
@@ -115,7 +106,6 @@ where
         self.clean_up();
         false
     }
-
 
     pub fn lock(&mut self) -> bool {
         let mut locks: Vec<&TTag<T>> = Vec::new();
@@ -154,12 +144,11 @@ where
     }
 
     fn commit(&mut self) -> bool {
-
         //#[cfg(benchmark)]
         tcore::BenchmarkCounter::success();
 
-        //Persist the write set logs 
-        
+        //Persist the write set logs
+
         #[cfg(feature = "profile")]
         {
             flame::start("persist_log");
@@ -172,17 +161,15 @@ where
         {
             flame::end("persist_log");
         }
-        
 
         //Install write sets into the underlying data
         self.install_data();
-
 
         #[cfg(feature = "profile")]
         {
             flame::start("persist_data");
         }
-        
+
         //Persist the data
         #[cfg(feature = "pmem")]
         self.persist_data();
@@ -197,7 +184,7 @@ where
             flame::start("persist_tx");
         }
 
-        //Persist commit the transaction 
+        //Persist commit the transaction
         #[cfg(feature = "pmem")]
         self.persist_commit();
 
@@ -205,7 +192,7 @@ where
         {
             flame::end("persist_tx");
         }
-        
+
         //Clean up local data structures.
         txn::mark_commit(self.commit_id());
         self.clean_up();
@@ -214,7 +201,7 @@ where
 
     #[cfg(feature = "pmem")]
     fn persist_commit(&self) {
-        //FIXME:: Can it be async? 
+        //FIXME:: Can it be async?
         plog::persist_txn(self.commit_id().into());
     }
 
@@ -229,26 +216,22 @@ where
         }
 
         plog::persist_log(logs);
-
     }
 
     #[cfg(feature = "pmem")]
     fn persist_data(&self) {
         for tag in self.deps_.values() {
-            tag.persist_data(self.commit_id());  
+            tag.persist_data(self.commit_id());
         }
-
     }
 
     fn install_data(&mut self) {
         let id = self.commit_id();
         for tag in self.deps_.values_mut() {
-                tag.commit_data(id); 
-                //FIXME: delegating to tag for commiting? 
+            tag.commit_data(id);
+            //FIXME: delegating to tag for commiting?
         }
-
     }
-
 
     fn clean_up(&mut self) {
         for tag in self.deps_.values() {
@@ -261,6 +244,4 @@ where
     pub fn retrieve_tag(&mut self, id: ObjectId, tobj_ref: TObject<T>) -> &mut TTag<T> {
         self.deps_.entry(id).or_insert(TTag::new(id, tobj_ref))
     }
-
 }
-

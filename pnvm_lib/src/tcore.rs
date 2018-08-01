@@ -1,80 +1,68 @@
 #[allow(unused_imports)]
-use std::sync::{ Arc, RwLock,Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use tbox::TBox;
-use txn::{Tid};
+use txn::Tid;
 
 #[allow(unused_imports)]
 use std::{
     self,
-    fmt,
-    ptr::Unique,
-    mem,
-    rc::Rc,
-    time,
     cell::RefCell,
-    sync::{ Once, ONCE_INIT},
+    fmt, mem,
+    ptr::Unique,
+    rc::Rc,
+    sync::{Once, ONCE_INIT},
+    time,
 };
-
 
 use std::alloc::{self, GlobalAlloc};
 
 #[cfg(not(feature = "pmem"))]
 use core::alloc::Layout;
 
-
 #[cfg(feature = "pmem")]
 use pnvm_sys::{
-    self,
-    Layout,
-    PMem,
-    Alloc,
-    AllocErr,
-    MemKind,
-    PMEM_DEFAULT_SIZE,
-    PMEM_FILE_DIR_BYTES,
+    self, Alloc, AllocErr, Layout, MemKind, PMem, PMEM_DEFAULT_SIZE, PMEM_FILE_DIR_BYTES,
 };
 
 #[cfg(feature = "pmem")]
 use plog::PLog;
-
 
 //#[cfg(benchmark)]
 thread_local!{
     pub static COUNTER: RefCell<BenchmarkCounter> = RefCell::new(BenchmarkCounter::new());
 }
 
-
 //#[cfg(benchmark)]
 #[derive(Copy, Clone, Debug)]
 pub struct BenchmarkCounter {
     pub success_cnt: u32,
-    pub abort_cnt : u32, 
-    pub duration: time::Duration
+    pub abort_cnt:   u32,
+    pub duration:    time::Duration,
 }
 
 //#[cfg(benchmark)]
 impl BenchmarkCounter {
     pub fn new() -> BenchmarkCounter {
-        BenchmarkCounter{
-            success_cnt : 0,
-            abort_cnt: 0,
-            duration : time::Duration::default(),
+        BenchmarkCounter {
+            success_cnt: 0,
+            abort_cnt:   0,
+            duration:    time::Duration::default(),
         }
     }
 
     #[inline]
     pub fn success() {
         COUNTER.with(|c| {
-            (*c.borrow_mut()).success_cnt+=1;
+            (*c.borrow_mut()).success_cnt += 1;
         });
     }
 
     #[inline]
     pub fn abort() {
         COUNTER.with(|c| {
-            (*c.borrow_mut()).abort_cnt+=1;
+            (*c.borrow_mut()).abort_cnt += 1;
         });
     }
 
@@ -85,28 +73,23 @@ impl BenchmarkCounter {
 
     #[inline]
     pub fn copy() -> BenchmarkCounter {
-        COUNTER.with(|c| {
-            *c.borrow()
-        })
+        COUNTER.with(|c| *c.borrow())
     }
 
     #[inline]
-    pub fn add_time(dur : time::Duration) {
-        COUNTER.with( |c| (*c.borrow_mut()).duration += dur)
+    pub fn add_time(dur: time::Duration) {
+        COUNTER.with(|c| (*c.borrow_mut()).duration += dur)
     }
 }
 
-
-
 pub type TObject<T> = Arc<TBox<T>>;
-//Base trait for all the data structure 
-//Using trait object cannot be derefed 
+//Base trait for all the data structure
+//Using trait object cannot be derefed
 //when wrapped with Arc
 //pub type TObject<T> = Arc<_TObject<T>>;
 
-
-//pub trait _TObject<T> 
-//where T: Clone 
+//pub trait _TObject<T>
+//where T: Clone
 //    {
 //    fn lock(&mut self, Tid) -> bool;
 //    fn check(&self, &Option<Tid>) -> bool;
@@ -121,35 +104,31 @@ pub type TObject<T> = Arc<TBox<T>>;
 //    fn raw_write(&mut self, T) ;
 //}
 
-
-#[derive(PartialEq,Copy, Clone, Debug, Eq, Hash)]
+#[derive(PartialEq, Copy, Clone, Debug, Eq, Hash)]
 pub struct ObjectId(u32);
-
 
 //[TODO:]To be optimized later
 #[derive(Debug)]
 pub struct TVersion {
     pub last_writer_: Option<Tid>,
     //lock_:        Arc<Mutex<bool>>,
-    pub lock_owner_:  Option<Tid>
-        //lock_owner_:  Option<Tid>,
+    pub lock_owner_: Option<Tid>, //lock_owner_:  Option<Tid>
 }
 
-
 //TTag is attached with each logical segment (identified by key)
-//for a TObject. 
+//for a TObject.
 //TTag is a local object to the thread.
 
 impl TVersion {
     pub fn lock(&mut self, tid: Tid) -> bool {
         match self.lock_owner_ {
             Some(ref cur_owner) => {
-                if *cur_owner != tid  {
+                if *cur_owner != tid {
                     false
                 } else {
                     true
                 }
-            },
+            }
             None => {
                 self.lock_owner_ = Some(tid);
                 true
@@ -157,31 +136,34 @@ impl TVersion {
         }
     }
 
-
     //Caution: whoever has access to self can unlock
     pub fn unlock(&mut self) {
         self.lock_owner_ = None;
     }
 
     pub fn check_version(&self, tid: &Option<Tid>) -> bool {
-        trace!("--- [Checking Version] {:?} <-> {:?}", tid, self.last_writer_);
+        trace!(
+            "--- [Checking Version] {:?} <-> {:?}",
+            tid,
+            self.last_writer_
+        );
         //let lock_owner = self.lock_owner_.lock().unwrap();
         match (tid, self.last_writer_, self.lock_owner_) {
             (Some(ref cur_tid), Some(ref tid), None) => {
                 if *cur_tid == *tid {
                     true
                 } else {
-                    false 
+                    false
                 }
-            },
-            (None, None, None)  => true,
-            (_ , _, _) => false
+            }
+            (None, None, None) => true,
+            (_, _, _) => false,
         }
     }
 
     //What if the last writer is own? -> Extension
     pub fn get_version(&self) -> Option<Tid> {
-        self.last_writer_ 
+        self.last_writer_
     }
 
     pub fn set_version(&mut self, tid: Tid) {
@@ -191,34 +173,35 @@ impl TVersion {
 
 #[derive(Debug)]
 pub struct TValue<T>
-where T:Clone {
+where
+    T: Clone,
+{
     ptr_: Unique<T>,
 }
 
-impl<T> TValue<T> 
-where T:Clone
+impl<T> TValue<T>
+where
+    T: Clone,
 {
-    pub fn new(val :T) -> TValue<T> {
-        let ptr = unsafe {alloc::alloc(Layout::new::<T>())};
+    pub fn new(val: T) -> TValue<T> {
+        let ptr = unsafe { alloc::alloc(Layout::new::<T>()) };
 
         if ptr.is_null() {
             panic!("Tvalue::new failed")
         } else {
-            let ptr = unsafe {
-                mem::transmute::<*mut u8, *mut T>(ptr)
-            };
-            unsafe {ptr.write(val)};
-            return TValue{ 
-                ptr_ : Unique::new(ptr).expect("Tvalue::new failed"),
+            let ptr = unsafe { mem::transmute::<*mut u8, *mut T>(ptr) };
+            unsafe { ptr.write(val) };
+            return TValue {
+                ptr_: Unique::new(ptr).expect("Tvalue::new failed"),
             };
         }
     }
     pub fn store(&mut self, data: T) {
-        unsafe {self.ptr_.as_ptr().write(data) };
+        unsafe { self.ptr_.as_ptr().write(data) };
     }
 
     pub fn load(&self) -> &T {
-        unsafe {self.ptr_.as_ref()}
+        unsafe { self.ptr_.as_ref() }
     }
 
     pub fn get_ptr(&self) -> *mut T {
@@ -229,59 +212,59 @@ where T:Clone
         self.ptr_
     }
 
-
     //FIXME::This is super dangerous...
-    //But it might be a feasible option. Wrapping the underlying data with 
+    //But it might be a feasible option. Wrapping the underlying data with
     //Rc<RefCell<T>> could be a way to pass the data as a ref all
-    //the way up to the user. A main intended advantage is to avoid 
-    //copying the underlying data. 
+    //the way up to the user. A main intended advantage is to avoid
+    //copying the underlying data.
     //However, there seems to be no direct methods that place
-    //data from a pointer to a refcell. 
+    //data from a pointer to a refcell.
     //
     pub fn get_ref(&self) -> Rc<T> {
-        unsafe {Rc::from_raw(self.ptr_.as_ref())}        
+        unsafe { Rc::from_raw(self.ptr_.as_ref()) }
     }
 }
 impl<T> Drop for TValue<T>
-where T:Clone 
+where
+    T: Clone,
 {
-    fn drop(&mut self) 
-    {
-        unsafe{ alloc::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>())}
+    fn drop(&mut self) {
+        unsafe { alloc::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>()) }
     }
 }
 
-
 //#[derive(PartialEq, Eq, Hash)]
-pub struct TTag<T> 
-where T:Clone
+pub struct TTag<T>
+where
+    T: Clone,
 {
-    pub tobj_ref_:  TObject<T>,
-    pub oid_:   ObjectId,
-    write_val_: Option<T>,
-    pub vers_ : Option<Tid>
+    pub tobj_ref_: TObject<T>,
+    pub oid_:      ObjectId,
+    write_val_:    Option<T>,
+    pub vers_:     Option<Tid>,
 }
 
 impl<T> TTag<T>
-where T:Clone
+where
+    T: Clone,
 {
     pub fn new(oid: ObjectId, tobj_ref: TObject<T>) -> Self {
-        TTag{
-            oid_: oid,
-            tobj_ref_ : tobj_ref,
+        TTag {
+            oid_:       oid,
+            tobj_ref_:  tobj_ref,
             write_val_: None,
-            vers_ : None
+            vers_:      None,
         }
     }
 
     pub fn write_value(&self) -> T {
         match self.write_val_ {
             Some(ref t) => T::clone(t),
-            None => panic!("Write Tag Should Have Write Value")
+            None => panic!("Write Tag Should Have Write Value"),
         }
     }
 
-    pub fn commit_data(&mut self, id : Tid) {
+    pub fn commit_data(&mut self, id: Tid) {
         if !self.has_write() {
             return;
         }
@@ -300,7 +283,7 @@ where T:Clone
     pub fn has_write(&self) -> bool {
         match self.write_val_ {
             Some(_) => true,
-            None => false
+            None => false,
         }
     }
 
@@ -312,7 +295,7 @@ where T:Clone
         self.vers_ = vers;
     }
 
-    pub fn write(&mut self, val : T) {
+    pub fn write(&mut self, val: T) {
         self.write_val_ = Some(val)
     }
 
@@ -325,19 +308,27 @@ where T:Clone
     }
 
     #[cfg(feature = "pmem")]
-    pub fn make_log(&self, id : Tid) -> PLog {
-        PLog::new(self.tobj_ref_.get_ptr() as *mut u8, self.tobj_ref_.get_layout(), id)
+    pub fn make_log(&self, id: Tid) -> PLog {
+        PLog::new(
+            self.tobj_ref_.get_ptr() as *mut u8,
+            self.tobj_ref_.get_layout(),
+            id,
+        )
     }
 }
 
-impl<T> fmt::Debug for TTag<T> 
-where T : Clone
+impl<T> fmt::Debug for TTag<T>
+where
+    T: Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TTag {{  Oid: {:?} ,  Vers : {:?}}}", self.oid_,  self.vers_)
+        write!(
+            f,
+            "TTag {{  Oid: {:?} ,  Vers : {:?}}}",
+            self.oid_, self.vers_
+        )
     }
 }
-
 
 static mut OBJECTID: u32 = 1;
 pub unsafe fn next_id() -> ObjectId {
@@ -346,22 +337,21 @@ pub unsafe fn next_id() -> ObjectId {
     ObjectId(ret)
 }
 
-
 /*
- * Persistent Memory Allocator 
+ * Persistent Memory Allocator
  */
 #[cfg(feature = "pmem")]
 static mut G_PMEM_ALLOCATOR: PMem = PMem {
-    kind : 0 as *mut MemKind,
-    size : 0,
+    kind: 0 as *mut MemKind,
+    size: 0,
 };
-
 
 #[cfg(feature = "pmem")]
 fn get_pmem_allocator() -> PMem {
     unsafe {
-        if G_PMEM_ALLOCATOR.kind as u32 == 0 { 
-            G_PMEM_ALLOCATOR = PMem::new_bytes_with_nul_unchecked(PMEM_FILE_DIR_BYTES, PMEM_DEFAULT_SIZE);
+        if G_PMEM_ALLOCATOR.kind as u32 == 0 {
+            G_PMEM_ALLOCATOR =
+                PMem::new_bytes_with_nul_unchecked(PMEM_FILE_DIR_BYTES, PMEM_DEFAULT_SIZE);
         }
         G_PMEM_ALLOCATOR
     }
@@ -372,13 +362,12 @@ pub struct GPMem;
 
 #[cfg(feature = "pmem")]
 unsafe impl GlobalAlloc for GPMem {
-    unsafe fn alloc(&self, layout:Layout) -> *mut u8 {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut pmem = get_pmem_allocator();
         pmem.alloc(layout).unwrap()
     }
 
-
-    unsafe fn dealloc(&self, ptr : *mut u8, layout : Layout) {
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut pmem = get_pmem_allocator();
         pmem.dealloc(ptr, layout)
     }

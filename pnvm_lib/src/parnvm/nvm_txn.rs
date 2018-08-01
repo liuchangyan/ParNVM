@@ -1,104 +1,88 @@
+use txn::{self, Tid, Transaction, TxState};
 
-use txn::{
-    self,
-    Transaction,
-    Tid,
-    TxState,
-};
+use tcore;
 
-use tcore::{self};
-
-use super::piece::*;
 use super::dep::*;
+use super::piece::*;
 
 use std::{
-    collections::{ HashSet, HashMap},
-    sync::{Arc},
-    cell::{RefCell},
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    sync::Arc,
     thread,
 };
 
-use parking_lot::RwLock;
 use crossbeam::sync::ArcCell;
+use parking_lot::RwLock;
 
+use evmap::{self, ReadHandle, ShallowCopy, WriteHandle};
 use log;
-use evmap::{self, ReadHandle, WriteHandle, ShallowCopy};
 
 #[cfg(feature = "profile")]
 use flame;
 
-
-
 #[derive(Clone, Debug)]
 pub struct TransactionParBase {
-    conflicts_ : Dep, 
-    all_ps_ : Vec<Piece>,
-    name_ : String,
+    conflicts_: Dep,
+    all_ps_:    Vec<Piece>,
+    name_:      String,
 }
 
 impl TransactionParBase {
-    pub fn new(conflicts : Dep, all_ps: Vec<Piece>, name: String) -> TransactionParBase {
-        TransactionParBase{
+    pub fn new(conflicts: Dep, all_ps: Vec<Piece>, name: String) -> TransactionParBase {
+        TransactionParBase {
             conflicts_: conflicts,
-            all_ps_: all_ps,
-            name_ : name
+            all_ps_:    all_ps,
+            name_:      name,
         }
     }
 }
 
-pub struct TransactionPar
-{
-    conflicts_ : Dep,
-    all_ps_ : Vec<Piece>,
-    deps_ : HashSet<(String, Tid)>,
-    id_ : Tid,
-    name_ : String ,
-    status_: TxState,
-    wait_ : Option<Piece>,
+pub struct TransactionPar {
+    conflicts_: Dep,
+    all_ps_:    Vec<Piece>,
+    deps_:      HashSet<(String, Tid)>,
+    id_:        Tid,
+    name_:      String,
+    status_:    TxState,
+    wait_:      Option<Piece>,
 }
 
-
-impl TransactionPar
-{
-
-    pub fn new(pieces : Vec<Piece>, cfl: Dep, id : Tid, name: String) -> TransactionPar  {
-        TransactionPar{
-            all_ps_: pieces, 
+impl TransactionPar {
+    pub fn new(pieces: Vec<Piece>, cfl: Dep, id: Tid, name: String) -> TransactionPar {
+        TransactionPar {
+            all_ps_:    pieces,
             conflicts_: cfl,
-            deps_ : HashSet::new(), 
-            id_ : id,
-            name_ : name,
-            status_: TxState::EMBRYO,
-            wait_ : None
+            deps_:      HashSet::new(),
+            id_:        id,
+            name_:      name,
+            status_:    TxState::EMBRYO,
+            wait_:      None,
         }
     }
 
-
-    pub fn new_from_base(txn_base : &TransactionParBase, tid: Tid) -> TransactionPar {
+    pub fn new_from_base(txn_base: &TransactionParBase, tid: Tid) -> TransactionPar {
         let txn_base = txn_base.clone();
 
         TransactionPar {
-            all_ps_ : txn_base.all_ps_,
+            all_ps_:    txn_base.all_ps_,
             conflicts_: txn_base.conflicts_,
-            name_ : txn_base.name_,
-            id_: tid,
-            status_ : TxState::EMBRYO,
-            deps_: HashSet::new(),
-            wait_ : None
+            name_:      txn_base.name_,
+            id_:        tid,
+            status_:    TxState::EMBRYO,
+            deps_:      HashSet::new(),
+            wait_:      None,
         }
     }
-    
+
     #[cfg_attr(feature = "profile", flame)]
-    pub fn can_run(&mut self, piece : &Piece) -> Option<(String,Tid, Pid)> {
+    pub fn can_run(&mut self, piece: &Piece) -> Option<(String, Tid, Pid)> {
         let pid = piece.id();
         let conflicts = self.conflicts_.get_conflict_info(pid);
         let me = self.id().clone();
 
-
         match conflicts {
             Some(conflicts) => {
-                
-                
                 #[cfg(feature = "profile")]
                 {
                     flame::start("has conflict info");
@@ -107,30 +91,34 @@ impl TransactionPar
                 info!("can_run::{:?} Checking conflicts {:?}", me, pid);
                 let regis_ptr = TxnRegistry::get_thread_registry();
                 let txn_regis = &*regis_ptr;
-                    
+
                 //Each conflict txn
                 for conflict in conflicts.iter() {
-
                     let cfl_name = &conflict.txn_name_;
                     let cfl_pid = &conflict.piece_id_;
-                    
-                        
-                    let info= txn_regis.lookup(cfl_name);
+
+                    let info = txn_regis.lookup(cfl_name);
                     let cfl_tid = info.id();
 
                     #[cfg(feature = "profile")]
                     {
-                        flame::start(format!("conflict with [{}:{:?}:{:?}]", cfl_name,cfl_tid, cfl_pid));
+                        flame::start(format!(
+                            "conflict with [{}:{:?}:{:?}]",
+                            cfl_name, cfl_tid, cfl_pid
+                        ));
                     }
 
                     //the instance has checkout out => next conflict
                     if info.is_empty() {
                         #[cfg(feature = "profile")]
                         {
-                            flame::end(format!("conflict with [{}:{:?}:{:?}]", cfl_name,cfl_tid, cfl_pid));
+                            flame::end(format!(
+                                "conflict with [{}:{:?}:{:?}]",
+                                cfl_name, cfl_tid, cfl_pid
+                            ));
                         }
 
-                        continue; 
+                        continue;
                     }
 
                     match info.check_state(cfl_pid) {
@@ -138,23 +126,28 @@ impl TransactionPar
                             if self.deps_.contains(&(cfl_name.clone(), cfl_tid.clone())) {
                                 #[cfg(feature = "profile")]
                                 {
-                                    flame::end(format!("conflict with [{}:{:?}:{:?}]", cfl_name,cfl_tid, cfl_pid));
+                                    flame::end(format!(
+                                        "conflict with [{}:{:?}:{:?}]",
+                                        cfl_name, cfl_tid, cfl_pid
+                                    ));
                                     flame::end("has conflict info");
                                 }
                                 return Some((cfl_name.clone(), cfl_tid.clone(), cfl_pid.clone()));
                             }
-                        },
+                        }
                         PieceState::Running => {
                             #[cfg(feature = "profile")]
                             {
-                                flame::end(format!("conflict with [{}:{:?}:{:?}]", cfl_name,cfl_tid, cfl_pid));
+                                flame::end(format!(
+                                    "conflict with [{}:{:?}:{:?}]",
+                                    cfl_name, cfl_tid, cfl_pid
+                                ));
                                 flame::end("has conflict info");
                             }
 
-                            self.deps_.insert((cfl_name.clone(),cfl_tid.clone()));
+                            self.deps_.insert((cfl_name.clone(), cfl_tid.clone()));
                             return Some((cfl_name.clone(), cfl_tid.clone(), cfl_pid.clone()));
-
-                        },
+                        }
                         PieceState::Executed | PieceState::Persisted => {
                             self.deps_.insert((cfl_name.clone(), cfl_tid.clone()));
                         }
@@ -162,11 +155,12 @@ impl TransactionPar
 
                     #[cfg(feature = "profile")]
                     {
-                        flame::end(format!("conflict with [{}:{:?}:{:?}]", cfl_name,cfl_tid, cfl_pid));
+                        flame::end(format!(
+                            "conflict with [{}:{:?}:{:?}]",
+                            cfl_name, cfl_tid, cfl_pid
+                        ));
                     }
-
                 }
-
 
                 #[cfg(feature = "profile")]
                 {
@@ -174,10 +168,9 @@ impl TransactionPar
                 }
 
                 None
-            },
-            None => None 
+            }
+            None => None,
         }
-
     }
     //TODO:
     //pub fn prepare_log();
@@ -188,18 +181,18 @@ impl TransactionPar
         let regis = TxnRegistry::get_thread_registry();
         (*regis).register(self.name(), me.clone(), self.all_ps_.len());
     }
-    
+
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_txn(&mut self) {
         self.status_ = TxState::ACTIVE;
-        while let Some(mut piece) = self.get_next_piece() { 
-            //info!("execute:txn :: Got piece - {:?}", piece); 
+        while let Some(mut piece) = self.get_next_piece() {
+            //info!("execute:txn :: Got piece - {:?}", piece);
             let res = self.can_run(&piece);
 
-            match res{
+            match res {
                 None => {
-                    self.execute_piece(&mut piece); 
-                }, 
+                    self.execute_piece(&mut piece);
+                }
                 Some((cfl_name, cfl_tid, cfl_pid)) => {
                     self.spin_on(&mut piece, cfl_name, cfl_tid, cfl_pid); /* FIXME: too many clones */
                     self.add_wait(piece);
@@ -210,10 +203,14 @@ impl TransactionPar
         self.wait_for_dep();
         self.commit();
     }
-    
+
     #[cfg_attr(feature = "profile", flame)]
-    pub fn execute_piece(&self, piece : &mut Piece) {
-        warn!("execute_piece::[{:?}] Running piece - {:?}", self.id(), piece);
+    pub fn execute_piece(&self, piece: &mut Piece) {
+        warn!(
+            "execute_piece::[{:?}] Running piece - {:?}",
+            self.id(),
+            piece
+        );
         let regis = TxnRegistry::get_thread_registry();
         let pid = piece.id().clone();
         {
@@ -246,10 +243,10 @@ impl TransactionPar
     }
 
     pub fn get_next_piece(&mut self) -> Option<Piece> {
-        self.wait_.take().or_else(||self.all_ps_.pop())
+        self.wait_.take().or_else(|| self.all_ps_.pop())
     }
 
-    pub fn add_dep(&mut self,name: String, tid : Tid) {
+    pub fn add_dep(&mut self, name: String, tid: Tid) {
         self.deps_.insert((name, tid));
     }
 
@@ -257,12 +254,12 @@ impl TransactionPar
         !self.all_ps_.is_empty()
     }
 
-    pub fn add_wait(&mut self, p : Piece) {
+    pub fn add_wait(&mut self, p: Piece) {
         self.wait_ = Some(p)
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn add_piece(&mut self, piece : Piece) {
+    pub fn add_piece(&mut self, piece: Piece) {
         self.all_ps_.push(piece)
     }
 
@@ -274,15 +271,15 @@ impl TransactionPar
         (*regis).checkout(self.name());
         self.status_ = TxState::COMMITTED;
     }
-    
+
     #[cfg_attr(feature = "profile", flame)]
     pub fn wait_for_dep(&self) {
         let me = self.id();
-        for (name, id) in self.deps_.iter(){
+        for (name, id) in self.deps_.iter() {
             loop {
-                debug!("wait_for::{:?} Waiting for {:?}",me, id);
+                debug!("wait_for::{:?} Waiting for {:?}", me, id);
                 let regis = TxnRegistry::get_thread_registry();
-                
+
                 let info = regis.lookup(name);
                 if info.is_empty() {
                     break;
@@ -296,7 +293,7 @@ impl TransactionPar
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn spin_on(&self, piece : &mut Piece, txn_name: String, tid: Tid , pid: Pid) {
+    pub fn spin_on(&self, piece: &mut Piece, txn_name: String, tid: Tid, pid: Pid) {
         let me = self.id();
         let txn_regis = TxnRegistry::get_thread_registry();
         loop {
@@ -314,32 +311,26 @@ impl TransactionPar
             }
 
             match info.check_state(&pid) {
-                PieceState::Executed | PieceState::Persisted =>  {
-                    break; 
-                },
-                _ => {
+                PieceState::Executed | PieceState::Persisted => {
+                    break;
                 }
+                _ => {}
             }
         }
     }
-
 }
-
 
 pub type TxnRegistryPtr = Arc<TxnRegistry>;
 thread_local!{
     pub static TXN_REGISTRY : RefCell<TxnRegistryPtr> = RefCell::new(Arc::new(TxnRegistry::new()));
 }
 
-
-
 //FIXME: to move to a seperate mod
-const REGISTRY_SIZE : usize = 64;
+const REGISTRY_SIZE: usize = 64;
 
 pub struct TxnRegistry {
-    registry_: Vec<ArcCell<TxnInfo>>
+    registry_: Vec<ArcCell<TxnInfo>>,
 }
-
 
 //Both handlers are Send
 //unsafe impl Sync for TxnRegistry {}
@@ -350,34 +341,29 @@ impl ShallowCopy for TxState {
     }
 }
 
-
 /* Converts Txn Name to index into the inner data */
 #[inline]
-fn txn_index(txn_name : &String) -> usize {
+fn txn_index(txn_name: &String) -> usize {
     //FIXME: Hardcoded format now: TXN_xxx
     let (_, id_str) = txn_name.split_at(4);
     id_str.parse::<usize>().expect("index invalid")
 }
 
 #[inline]
-fn txn_name(tid : &Tid) -> String {
-    let tid :u32 =  (*tid).into();
+fn txn_name(tid: &Tid) -> String {
+    let tid: u32 = (*tid).into();
     format!("TXN_{}", tid).clone()
 }
-
-
-
 
 impl TxnRegistry {
     /* Thread local methods */
     pub fn get_thread_registry() -> TxnRegistryPtr {
-        TXN_REGISTRY.with( |ptr| Arc::clone(&ptr.borrow()))
+        TXN_REGISTRY.with(|ptr| Arc::clone(&ptr.borrow()))
     }
 
-    pub fn set_thread_registry(p : TxnRegistryPtr) {
-        TXN_REGISTRY.with( |ref ptr| ptr.replace(p));
+    pub fn set_thread_registry(p: TxnRegistryPtr) {
+        TXN_REGISTRY.with(|ref ptr| ptr.replace(p));
     }
-
 
     pub fn new() -> Self {
         let mut registry_ = Vec::with_capacity(REGISTRY_SIZE);
@@ -386,39 +372,34 @@ impl TxnRegistry {
             registry_.push(ArcCell::new(Arc::new(TxnInfo::empty())));
         }
 
-        TxnRegistry {
-            registry_
-        }
+        TxnRegistry { registry_ }
     }
 
-    
     //Register a new transaction instance
-    pub fn register(&self, txn_name : &String, tid: Tid, piece_cnt: usize) {
-        let id = txn_index(txn_name);  
+    pub fn register(&self, txn_name: &String, tid: Tid, piece_cnt: usize) {
+        let id = txn_index(txn_name);
         let new_info = TxnInfo::new(tid, piece_cnt);
-        
+
         self.registry_[id].set(Arc::new(new_info));
     }
 
-    
     //Checkout an existing transaction instance
-    pub fn checkout(&self, txn_name : &String) {
+    pub fn checkout(&self, txn_name: &String) {
         let id = txn_index(txn_name);
         self.registry_[id].set(Arc::new(TxnInfo::empty()));
     }
 
-
     //Get a read handle of the tids
     pub fn lookup(&self, txn_name: &String) -> Arc<TxnInfo> {
-       self.registry_[txn_index(txn_name)].get()
+        self.registry_[txn_index(txn_name)].get()
     }
-    
+
     //Update the state
     #[cfg_attr(feature = "profile", flame)]
-    pub fn update(&self, txn_name: &String, pid : &Pid, new_state: PieceState) {
+    pub fn update(&self, txn_name: &String, pid: &Pid, new_state: PieceState) {
         let id = txn_index(&txn_name);
         let old = self.lookup(txn_name);
-        
+
         //ISSUE: if the clone here is too costly, might consider using evmap
         if old.is_empty() {
             panic!("state should not be empty");
@@ -428,7 +409,6 @@ impl TxnRegistry {
         new.update_state(pid, new_state);
         self.registry_[id].set(Arc::new(new));
     }
-
 }
 
 //    pub fn thread_count() -> usize {
@@ -476,7 +456,6 @@ impl TxnRegistry {
 //        self.instances_.set_info(txn_name, tid, pid,new_state);
 //    }
 
-
 //pub struct InstanceRegistry {
 //    inner_read: Vec<ReadHandle<Tid, ArcCell<TxnInfo>>>,
 //    inner_write: Vec<WriteHandle<Tid, ArcCell<TxnInfo>>>, //FIXME: do not have multiple writers
@@ -498,8 +477,8 @@ impl TxnRegistry {
 //            inner_write: writes
 //        }
 //    }
-//    
-//    //Called when an instance is added 
+//
+//    //Called when an instance is added
 //    pub fn init_instance(&self,txn_name: String,  tid : Tid, txn_info : TxnInfo) {
 //        let id = index(&txn_name);
 //        let w = &mut self.inner_write[id];
@@ -508,24 +487,24 @@ impl TxnRegistry {
 //        //FIXME: can i not refresh here? => Then i will be visible from the NameRegstr
 //        w.refresh();
 //    }
-//    
+//
 //    pub fn remove_instance(&self, txn_name: String, tid: Tid) {
 //        let id = index(&txn_name);
 //        let w = &mut self.inner_write[id];
 //        w.empty(&tid);
 //        //No refresh here since it doesn't really matter
 //    }
-//    
+//
 //    //Get an Arc of TxnInfo
 //    pub fn get_info(&self, txn_name: &String, tid : &Tid) -> Option<Arc<TxnInfo>> {
 //        let id = index(txn_name);
 //        let r = &self.inner_read[id];
 //        r.get_and(&tid, |info| {
-//            info.get() 
+//            info.get()
 //        })
 //    }
 //
-//    
+//
 //    //Take a pointer to the TxnInfo
 //    pub fn set_info(&self, txn_name: String, tid: Tid, pid: Pid,state: PieceState) {
 //        let id = index(&txn_name);
@@ -540,50 +519,51 @@ impl TxnRegistry {
 //
 //}
 
-
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct TxnName {
-    name : String    
+    name: String,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct TxnInfo {
-    tid_ : Tid,
-    ps_info_ : HashMap<Pid, PieceState>,
-    empty_ : bool,
+    tid_:     Tid,
+    ps_info_: HashMap<Pid, PieceState>,
+    empty_:   bool,
 }
 
-
 impl TxnInfo {
-    pub fn new(tid : Tid, size: usize) -> TxnInfo {
+    pub fn new(tid: Tid, size: usize) -> TxnInfo {
         let mut ps_info_ = HashMap::new();
 
         for pid in 0..size {
             ps_info_.insert(Pid::new(pid as u32), PieceState::Ready);
         }
 
-        TxnInfo{
-            tid_ : tid,
+        TxnInfo {
+            tid_: tid,
             ps_info_,
-            empty_ : false,
+            empty_: false,
         }
     }
 
     pub fn empty() -> TxnInfo {
         TxnInfo {
-            tid_ : Tid::default(),
-            ps_info_ : HashMap::new(),
-            empty_: true,
+            tid_:     Tid::default(),
+            ps_info_: HashMap::new(),
+            empty_:   true,
         }
     }
 
-    pub fn check_state(&self, pid : &Pid) -> &PieceState {
-        self.ps_info_.get(pid).expect(format!("check_state:: piece missing, pid={:?}", pid).as_str())
+    pub fn check_state(&self, pid: &Pid) -> &PieceState {
+        self.ps_info_
+            .get(pid)
+            .expect(format!("check_state:: piece missing, pid={:?}", pid).as_str())
     }
 
-    pub fn update_state(&mut self, pid : &Pid, state : PieceState) {
-        self.ps_info_.entry(pid.clone()).and_modify(|e| {*e = state.clone()});
+    pub fn update_state(&mut self, pid: &Pid, state: PieceState) {
+        self.ps_info_
+            .entry(pid.clone())
+            .and_modify(|e| *e = state.clone());
     }
 
     pub fn id(&self) -> &Tid {
@@ -595,8 +575,3 @@ impl TxnInfo {
         self.empty_
     }
 }
-
-
-
-
-
