@@ -301,7 +301,6 @@ pub struct Config {
     pub   set_size:usize,
     pub   round_num:usize,
     pub   zipf_coeff: f64,
-    pub   use_pmem: bool,
     pub   test_name : String,
     pub cfl_pc_num: usize,
     pub cfl_txn_num: usize,
@@ -323,7 +322,6 @@ pub fn read_env() -> Config {
         set_size : settings.get_int("SET_SIZE").unwrap() as usize,
         round_num : settings.get_int("ROUND_NUM").unwrap() as usize,
         zipf_coeff: settings.get_float("ZIPF_COEFF").unwrap() as f64,
-        use_pmem : settings.get_bool("USE_PMEM").unwrap() as bool,
         test_name : settings.get_str("TEST_NAME").unwrap() ,
 
         cfl_txn_num : settings.get_int("CFL_TXN_NUM").unwrap() as usize,

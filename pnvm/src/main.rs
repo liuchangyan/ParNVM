@@ -33,12 +33,12 @@ use pnvm_lib::{
     parnvm::nvm_txn::{TransactionPar,TxnRegistry},
 };
 
+#[cfg(feature = "pmem")]
 #[global_allocator]
 static GLOBAL: GPMem  = GPMem;
 
 fn main() {
     env_logger::init().unwrap();
-    pnvm_lib::tcore::init();
 
     let conf = util::read_env();
     warn!("{:?}", conf);
@@ -157,16 +157,12 @@ fn run_occ(conf : Config) {
         prep_time += _prep_start.elapsed();
         let handle = builder.spawn(move || {
             barrier.wait();
-            {
-                let _ = mtx.lock().unwrap();
-                pnvm_lib::tcore::init();
-            }
 
             for _ in 0..conf.round_num {
                 let now = time::Instant::now();
                 let id= atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
                 BenchmarkCounter::add_time(now.elapsed());
-                let tx = &mut occ_txn::TransactionOCC::new(Tid::new(id), conf.use_pmem);
+                let tx = &mut occ_txn::TransactionOCC::new(Tid::new(id));
                 let tid = Tid::new(id);
                 #[cfg(feature = "profile")]
                 {
@@ -258,7 +254,7 @@ fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time:
     }
    //let total_time =  start.elapsed() - spin_time;
    let total_time  = start.elapsed();
-    println!("{},{},{}, {}, {}, {}, {}, {}, {:?}, {:?}, {:?}, {}", 
+    println!("{},{},{}, {}, {}, {}, {}, {}, {:?}, {:?}, {:?}", 
              conf.thread_num,
              conf.obj_num,
              conf.set_size,
@@ -270,7 +266,6 @@ fn report_stat(handles : Vec<thread::JoinHandle<BenchmarkCounter>>, start: time:
              total_time.as_secs() as u32 *1000  + total_time.subsec_millis(),
              spin_time.as_secs() as u32 *1000  + total_time.subsec_millis(),
              prep_time.as_secs() as u32 *1000 + prep_time.subsec_millis(),
-             conf.use_pmem
              )
 
 }

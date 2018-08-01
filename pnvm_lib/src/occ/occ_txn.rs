@@ -26,7 +26,6 @@ where
     tid_: Tid,
     state_: TxState,
     deps_: HashMap<ObjectId, TTag<T>>,
-    persistent_ : bool
 }
 
 
@@ -95,13 +94,12 @@ impl<T> TransactionOCC<T>
 where
     T: Clone,
 {
-    pub fn new(tid_: Tid, use_pmem: bool) -> TransactionOCC<T> {
+    pub fn new(tid_: Tid) -> TransactionOCC<T> {
         txn::mark_start(tid_);
         TransactionOCC {
             tid_,
             state_: TxState::EMBRYO,
             deps_: HashMap::new(),
-            persistent_ : use_pmem
         }
     }
 
@@ -161,24 +159,22 @@ where
         tcore::BenchmarkCounter::success();
 
         //Persist the write set logs 
-        if self.persistent_ {
-             self.persist_log();
-        }
+        
+        #[cfg(feature = "pmem")]
+        self.persist_log();
         
 
         //Install write sets into the underlying data
         self.install_data();
         
         //Persist the data
-        if self.persistent_{
-            self.persist_data();
-        }
+        #[cfg(feature = "pmem")]
+        self.persist_data();
 
 
         //Persist commit the transaction 
-        if self.persistent_{  
-            self.persist_commit();
-        }
+        #[cfg(feature = "pmem")]
+        self.persist_commit();
         
         //Clean up local data structures.
         txn::mark_commit(self.commit_id());
@@ -186,11 +182,13 @@ where
         true
     }
 
+    #[cfg(feature = "pmem")]
     fn persist_commit(&self) {
         //FIXME:: Can it be async? 
         plog::persist_txn(self.commit_id().into());
     }
 
+    #[cfg(feature = "pmem")]
     fn persist_log(&self) {
         let mut logs = vec![];
         let id = self.commit_id();
@@ -204,6 +202,7 @@ where
 
     }
 
+    #[cfg(feature = "pmem")]
     fn persist_data(&self) {
         for tag in self.deps_.values() {
             tag.persist_data(self.commit_id());  

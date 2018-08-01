@@ -17,3 +17,4 @@ parking_lot = {version = "0.6", features = ["nightly"]}
 [features]
 profile = ["pnvm_lib/profile", "flame"]
 unstable = ["pnvm_lib/unstable"]
+pmem = ["pnvm_lib/pmem"]

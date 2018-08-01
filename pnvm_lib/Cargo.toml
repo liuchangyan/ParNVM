@@ -20,3 +20,4 @@ flamer = {version = "^0.2.3", optional = true}
 [features]
 profile = ["pnvm_sys/profile", "flamer", "flame"]
 unstable = ["pnvm_sys/unstable"]
+pmem = []

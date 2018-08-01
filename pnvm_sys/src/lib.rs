@@ -64,7 +64,6 @@ pub fn dealloc(ptr : *mut u8, layout: Layout) {
 
 
 pub fn flush(ptr : *mut u8, layout: Layout) {
-    panic!("not used anymore");
     trace!("flush {:p} , {}", ptr, layout.size());    
     unsafe { pmem_flush(ptr as *const c_void, layout.size()) };   
 }
@@ -75,16 +74,12 @@ pub fn flush(ptr : *mut u8, layout: Layout) {
 //}
 
 pub fn persist_log(iovecs : &Vec<iovec>) {
-    panic!("not used anymore");
-    trace!("persist_log : {:} item", iovecs.len());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_many(iovecs, iovecs.len()));
 }
 
 pub fn walk(chunksize: usize, callback : extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void)
             -> c_int) {
-    panic!("not used anymore");
     trace!("walk : chunksize = {}", chunksize);
-
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
 

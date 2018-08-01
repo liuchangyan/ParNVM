@@ -18,10 +18,13 @@ use std::{
 };
 
 
-#[cfg(feature = "unstable")]
 use std::alloc::{self, GlobalAlloc};
 
+#[cfg(not(feature = "pmem"))]
+use core::alloc::Layout;
 
+
+#[cfg(feature = "pmem")]
 use pnvm_sys::{
     self,
     Layout,
@@ -33,15 +36,8 @@ use pnvm_sys::{
     PMEM_FILE_DIR_BYTES,
 };
 
+#[cfg(feature = "pmem")]
 use plog::PLog;
-
-
-/* Module Level Exposed Function Calls */
-
-pub fn init() {
-    //init the pmem
-    pnvm_sys::init(); 
-}
 
 
 //#[cfg(benchmark)]
@@ -321,6 +317,7 @@ where T:Clone
         self.write_val_ = Some(val)
     }
 
+    #[cfg(feature = "pmem")]
     pub fn persist_data(&self, _: Tid) {
         if !self.has_write() {
             return;
@@ -328,6 +325,7 @@ where T:Clone
         pnvm_sys::flush((*self.tobj_ref_).get_ptr() as *mut u8, Layout::new::<T>());
     }
 
+    #[cfg(feature = "pmem")]
     pub fn make_log(&self, id : Tid) -> PLog<T> {
         PLog::new(&Arc::clone(&self.tobj_ref_), id )
     }
@@ -353,14 +351,14 @@ pub unsafe fn next_id() -> ObjectId {
 /*
  * Persistent Memory Allocator 
  */
-#[cfg(feature = "unstable")]
+#[cfg(feature = "pmem")]
 static mut G_PMEM_ALLOCATOR: PMem = PMem {
     kind : 0 as *mut MemKind,
     size : 0,
 };
 
 
-#[cfg(feature = "unstable")]
+#[cfg(feature = "pmem")]
 fn get_pmem_allocator() -> PMem {
     unsafe {
         if G_PMEM_ALLOCATOR.kind as u32 == 0 { 
@@ -370,10 +368,10 @@ fn get_pmem_allocator() -> PMem {
     }
 }
 
-#[cfg(feature = "unstable")]
+#[cfg(feature = "pmem")]
 pub struct GPMem;
 
-#[cfg(feature = "unstable")]
+#[cfg(feature = "pmem")]
 unsafe impl GlobalAlloc for GPMem {
     unsafe fn alloc(&self, layout:Layout) -> *mut u8 {
         let mut pmem = get_pmem_allocator();
