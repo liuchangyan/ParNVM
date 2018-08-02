@@ -11,6 +11,7 @@ lazy_static = "1.0"
 libc = "0.2"
 crossbeam = "0.3.0"
 parking_lot = {version = "0.6", features = ["nightly"]}
+chashmap = "2.2.0"
 evmap = "4.0.0"
 
 flame = {version = "0.2.2", optional = true}

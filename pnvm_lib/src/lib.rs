@@ -18,6 +18,8 @@ extern crate log;
 extern crate crossbeam;
 extern crate libc;
 
+extern crate chashmap;
+
 extern crate evmap;
 extern crate parking_lot;
 

@@ -63,8 +63,15 @@ pub enum TxState {
     ABORTED,
 }
 
+impl Default for TxState {
+    fn default() -> Self {
+        TxState::EMBRYO
+    }
+}
+
 pub enum AbortReason {
     Error,
     User,
     FailedLocking,
 }
+

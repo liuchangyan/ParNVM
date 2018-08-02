@@ -1,3 +1,4 @@
+use plog::PLog;
 use std::fmt::{Debug, Formatter, Result};
 use std::sync::Arc;
 use txn::Tid;
@@ -22,9 +23,9 @@ type FnPtr = Arc<Box<Fn() -> i32 + Send + Sync>>;
 pub struct Piece {
     callback_: FnPtr,
     pid_:      Pid,
-    data_:     Vec<DataRecord>,
     tname_:    String,
     title_:    &'static str,
+    rank_:       usize,
     //R/W sets?
 }
 
@@ -44,14 +45,14 @@ impl Piece {
         tname: String,
         cb: FnPtr,
         title: &'static str,
-        data: Vec<DataRecord>,
+        rank: usize
     ) -> Piece {
         Piece {
             callback_: cb,
             pid_:      pid,
             tname_:    tname,
             title_:    title,
-            data_:     data,
+            rank_ :     rank,
         }
     }
 
@@ -62,6 +63,10 @@ impl Piece {
     pub fn id(&self) -> &Pid {
         &self.pid_
     }
+
+    pub fn rank(&self) -> usize {
+        self.rank_
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -70,6 +75,7 @@ pub enum PieceState {
     Running,
     Executed,
     Persisted,
+    //Checking,
 }
 
 #[derive(Clone)]
@@ -86,4 +92,11 @@ impl DataRecord {
             layout: Layout::for_value(t),
         }
     }
+
+    //FIXME: can it be self here?
+    pub fn as_log(&self, id: Tid) -> PLog {
+        PLog::new(self.ptr, self.layout.clone(), id)
+    }
 }
+
+unsafe impl Send for DataRecord {}

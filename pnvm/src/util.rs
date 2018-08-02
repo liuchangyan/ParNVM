@@ -144,8 +144,8 @@ impl WorkloadNVM {
         TxnRegistry::set_thread_registry(regis_ptr.clone());
 
         //Prepare data
-        let data: Vec<Arc<RwLock<u32>>> = (0..conf.obj_num)
-            .map(|x| Arc::new(RwLock::new(x as u32)))
+        let data: Vec<Arc<RwLock<Box<u32>>>> = (0..conf.obj_num)
+            .map(|x| Arc::new(RwLock::new(Box::new(x as u32))))
             .collect();
 
         //Prepare TXNs
@@ -171,7 +171,7 @@ impl WorkloadNVM {
         tx_id: usize,
         tx_name: String,
         conf: &Config,
-        data: &Vec<Arc<RwLock<u32>>>,
+        data: &Vec<Arc<RwLock<Box<u32>>>>,
         next_item: usize,
     ) -> (usize, TransactionParBase) {
         let mut pieces = Vec::new();
@@ -196,37 +196,20 @@ impl WorkloadNVM {
             }
             let spin_time = conf.spin_time;
 
+            let records = vec![DataRecord::new(&*data_map.read())];
+
             let callback = move || {
-                //                //Read
-                //                {
-                //                    let map = data_map.read();
-                //
-                //                    for iter in 0..50{
-                //                        let i = rand::random::<u32>();
-                //
-                //                        if let Some(txn) = map.get(&i) {
-                //                            println!("Map[{}] Set by [TXN-{}]", i, txn);
-                //                        }
-                //                    }
-                //                }
-                //
-                //                //Write
-                //                {
-                //                    let mut map = data_map.write();
-                //                    for iter in 0..20 {
-                //                        let i = rand::random::<u32>();
-                //                        map.insert(i, tx_id as u32);
-                //                    }
-                //                }
                 {
                     let val = data_map.read();
                     trace!("Set by TXN-{}", *val);
                 }
+
                 {
                     let mut val = data_map.write();
-                    *val = tx_id as u32;
+                    **val = tx_id as u32;
                 }
 
+                //Spinning to make txn longer...
                 let mut i = 0;
                 while i < spin_time {
                     i += 1;
@@ -240,6 +223,7 @@ impl WorkloadNVM {
                 tx_name.clone(),
                 Arc::new(Box::new(callback)),
                 "cb",
+                records,
             );
 
             pieces.push(piece);

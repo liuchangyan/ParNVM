@@ -1,0 +1,59 @@
+
+? Anti-dependency how
+
+execute_txn (tx_x)
+    piece <- get_next_piece
+    
+    lock(piece)
+       | - check all current deps(tx_y) :
+       |     - if tx_y still uncommitted && has not ran the rank < tx_x.cur
+       |         => false ? busy wait? 
+       |     - else tx_y still uncommitted && has ran rank >= tx_x.cur  || if tx committed
+       |         => go on
+
+       | <<-- old depdencies satisfied, check new deps now -->>
+       | - Write lock all data(variable granularity)
+       |     - if any write-locked || read-pinned
+       |         => add to deps 
+       |         => releases all write locks
+       |         => busy wait and do logging?
+       |     - else 
+       |         => move on
+       | - Read pin all 
+       |     - if any write-locked by other
+       |         => add writer to deps
+       |         => releases all read pins  && write locks
+       |         => busy wait
+       |     - else 
+       |         => move on
+
+       | <<-- read/write all "locked" -->>
+       | - next 
+
+    do_log(for each write lock value)
+
+    run_piece  
+
+
+Some data structures:
+**************************
+deps: 
+    Vec<Arc<TxnInfo>>
+
+
+    Txneknfo:(Send + Sync) 
+        committed: atomic bool 
+        cur_rank : atomic int
+    
+        ===== OR more naive==== 
+        RwLock everything
+
+
+data: 
+    Vec<Arc<PMap>> 
+        or Vec<Arc<PValue>> ? 
+
+    pin data: 
+        read_lock(  
+
+
