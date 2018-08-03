@@ -215,174 +215,68 @@ mod tests {
     //     assert_eq!(*(x.borrow()), 2);
     // }
 
-    use super::parnvm::{dep::*, nvm_txn::*, piece::*};
+    use super::parnvm::{dep::*, nvm_txn::*, piece::*, map::*};
     use std::{
         fs::File,
-        sync::{Arc, RwLock},
+        sync::{Arc, RwLock, Barrier},
         thread,
     };
 
     #[test]
     fn test_single_piece_run() {
-        let x = Arc::new(RwLock::new(1));
-        let y = Arc::new(RwLock::new(2));
+        
+        let data_map = Arc::new(PMap::new());
+        let barrier = Arc::new(Barrier::new(1));
+        
+        let piece = Piece::new(
+            Pid::new(1),
+            "TXN_1".to_string(),
+            Arc::new(Box::new(move|tx : &mut TransactionPar| {
+                let val = PValue::new(1 as u32, tx);
+                data_map.insert(1,val);
 
-        let x_1 = x.clone();
-        let read_x = move || {
-            let v = x_1.read().unwrap();
-            println!("Read : {}", *v);
-            *v
-        };
+                let g = data_map.get(&1).unwrap();
+                println!("Read {}", (*g.read(tx)));
 
-        let y_1 = y.clone();
-        let read_y = move || {
-            let v = y_1.read().unwrap();
-            println!("Read : {}", *v);
-            *v
-        };
+                let id :u32 = tx.id().into(); 
+                {
+                    let mut write_g = g.write(tx);
+                    let mut i = 0;
+                    while i< 1000000 { i+=1;}
+                    *write_g = id * 100;
+                }
 
-        let y_2 = y.clone();
-        let write_y = move || {
-            let mut v = y_2.write().unwrap();
-            *v = 999;
-            1
-        };
+                println!("Read {}", (*g.read(tx)));
+                1
+            })),
+            "insert-read",
+            1);
+        
+        let txn_base = TransactionParBase::new(vec![piece], "TXN_1".to_string()); 
 
-        let x_2 = x.clone();
-        let write_x = move || {
-            let mut v = x_2.write().unwrap();
-            *v = 888;
-            1
-        };
-
-        let spin_long = move || {
-            for i in 0..8 {
-                //println!("slept {} seconds", i);
-                thread::sleep_ms(1000);
-            }
-            1
-        };
-
-        let spin_short = move || {
-            for i in 0..4 {
-                //println!("slept {} seconds", i);
-                thread::sleep_ms(1000);
-            }
-            1
-        };
-
-        //Prepare Registry
-        let names = vec![String::from("TXN_2"), String::from("TXN_1")];
-        let regis = TxnRegistry::new();
-        let name1 = String::from("TXN_1");
-        let name2 = String::from("TXN_2");
-        let regis_ptr = Arc::new(regis);
-
-        TxnRegistry::set_thread_registry(regis_ptr.clone());
-
-        let pid0 = Pid::new(0);
-        let pid1 = Pid::new(1);
-        let pid2 = Pid::new(2);
-
+        let tx = TransactionPar::new_from_base(&txn_base, Tid::new(1));
+        
+        
         crossbeam::scope(|scope| {
             //Prepare TXN1
-            let tid1 = Tid::new(1);
-            let tid3 = Tid::new(3);
+            let txn_base = txn_base.clone();
+            let c = barrier.clone();
 
-            let mut pieces_1 = vec![
-                Piece::new(
-                    pid0.clone(),
-                    name1.clone(),
-                    Arc::new(Box::new(spin_short)),
-                    "spinning_short",
-                ),
-                Piece::new(
-                    pid1.clone(),
-                    name1.clone(),
-                    Arc::new(Box::new(write_y)),
-                    "write_y",
-                ),
-                Piece::new(
-                    pid2.clone(),
-                    name1.clone(),
-                    Arc::new(Box::new(read_x)),
-                    "read_x",
-                ),
-            ];
-
-            pieces_1.reverse();
-
-            let mut dep_1 = Dep::new();
-            dep_1.add(
-                pid1.clone(),
-                ConflictInfo::new(String::from("TXN_2"), pid0.clone(), ConflictType::ReadWrite),
-            );
-            dep_1.add(
-                pid2.clone(),
-                ConflictInfo::new(String::from("TXN_2"), pid2.clone(), ConflictType::ReadWrite),
-            );
-
-            let base1 = TransactionParBase::new(dep_1, pieces_1, name1.clone());
-            let mut tx1 = TransactionPar::new_from_base(&base1, tid1.clone());
-            let mut tx2 = TransactionPar::new_from_base(&base1, tid3.clone());
-            //Tx1 done
-
-            let handler = scope.spawn(|| {
-                TxnRegistry::set_thread_registry(regis_ptr.clone());
-                //Prepare TXN2
-                let tid2 = Tid::new(2);
-                let mut pieces_2 = vec![
-                    Piece::new(
-                        pid0.clone(),
-                        name2.clone(),
-                        Arc::new(Box::new(read_y)),
-                        "read_y",
-                    ),
-                    Piece::new(
-                        pid1.clone(),
-                        name2.clone(),
-                        Arc::new(Box::new(spin_long)),
-                        "spin_long",
-                    ),
-                    Piece::new(
-                        pid2.clone(),
-                        name2.clone(),
-                        Arc::new(Box::new(write_x)),
-                        "write_x",
-                    ),
-                ];
-                pieces_2.reverse();
-
-                let mut dep_2 = Dep::new();
-                dep_2.add(
-                    pid0.clone(),
-                    ConflictInfo::new(String::from("TXN_1"), pid1.clone(), ConflictType::ReadWrite),
-                );
-                dep_2.add(
-                    pid2.clone(),
-                    ConflictInfo::new(String::from("TXN_1"), pid2.clone(), ConflictType::ReadWrite),
-                );
-
-                let mut tx = TransactionPar::new(pieces_2, dep_2, tid2, String::from("TXN_2"));
-
-                {
-                    tx.register_txn();
-                    tx.execute_txn();
-                }
+            let handler = scope.spawn(move|| {
+                c.wait();
+                let tx = TransactionPar::new_from_base(&txn_base, Tid::new(2));
+                TransactionPar::register(tx);
+                TransactionPar::execute();
             });
-
-            {
-                tx1.register_txn();
-                tx1.execute_txn();
-
-                tx2.register_txn();
-                tx2.execute_txn();
-            }
+            
+            barrier.wait();
+            TransactionPar::register(tx);
+            TransactionPar::execute();
 
             handler.join();
         });
+
         // Dump the report to disk
-        assert_eq!(*y.read().unwrap(), 999);
     }
 
 }

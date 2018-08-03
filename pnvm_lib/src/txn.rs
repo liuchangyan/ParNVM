@@ -49,6 +49,11 @@ impl Into<u32> for Tid {
     }
 }
 
+impl<'a> Into<u32> for &'a Tid {
+    fn into(self) -> u32 {
+        self.0
+    }
+}
 impl Default for Tid {
     fn default() -> Tid {
         Tid(0)

@@ -5,6 +5,8 @@ use txn::Tid;
 
 use std::mem;
 
+use super::nvm_txn::TransactionPar;
+
 //FIXME: core
 use core::alloc::Layout;
 
@@ -17,7 +19,7 @@ impl Pid {
     }
 }
 
-type FnPtr = Arc<Box<Fn() -> i32 + Send + Sync>>;
+type FnPtr = Arc<Box<Fn(&mut TransactionPar) -> i32 + Send + Sync>>;
 
 #[derive(Clone)]
 pub struct Piece {
@@ -56,8 +58,8 @@ impl Piece {
         }
     }
 
-    pub fn run(&mut self) -> i32 {
-        (self.callback_)()
+    pub fn run(&mut self, tx : &mut TransactionPar) -> i32 {
+        (self.callback_)(tx)
     }
 
     pub fn id(&self) -> &Pid {

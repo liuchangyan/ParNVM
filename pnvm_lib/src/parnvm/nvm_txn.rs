@@ -96,6 +96,14 @@ impl TransactionPar {
         CUR_TXN.with(|txn| *txn.borrow_mut() = tx)
     }
 
+    pub fn register(tx : TransactionPar) {
+        Self::set_thread_txn(tx)
+    }
+
+    pub fn execute() {
+        CUR_TXN.with(|txn| txn.borrow_mut().execute_txn());
+    }
+
 
     //    can_run(piece)
     //    - check all current deps(tx_y) :
@@ -137,9 +145,8 @@ impl TransactionPar {
     }
     
     pub fn cur_rank(&self) -> usize {
-        1
+        self.txn_info_.rank()
     }
-
 
 
     #[cfg_attr(feature = "profile", flame)]
@@ -156,14 +163,14 @@ impl TransactionPar {
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn execute_piece(&self, mut piece: Piece) {
+    pub fn execute_piece(&mut self, mut piece: Piece) {
         warn!(
             "execute_piece::[{:?}] Running piece - {:?}",
             self.id(),
             &piece
         );
 
-        piece.run();
+        piece.run(self);
         self.update_rank(piece.rank());
     }
 
@@ -192,6 +199,7 @@ impl TransactionPar {
     }
 
     pub fn add_dep(&mut self, txn_info: Arc<TxnInfo>) {
+        println!("add_dep::\t{:?}", txn_info);
         self.deps_.push(txn_info);
     }
 
@@ -278,5 +286,9 @@ impl TxnInfo {
 
     pub fn id(&self) -> &Tid {
         &self.tid_
+    }
+
+    pub fn rank(&self) -> usize {
+        self.rank_.load(Ordering::SeqCst)
     }
 }
