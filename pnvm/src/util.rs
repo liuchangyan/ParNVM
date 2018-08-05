@@ -4,6 +4,10 @@ extern crate rand;
 extern crate zipf;
 
 use std::{collections::HashMap, sync::Arc};
+use std::{
+    fmt::Debug,
+    hash::Hash,
+};
 
 use parking_lot::RwLock;
 
@@ -138,14 +142,10 @@ impl WorkloadNVM {
 
         //Prepare registry
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
+        let maps = (0..conf.thread_num).map(|i| Arc::new(PMap::new())).collect();
 
         //Prepare data
-        let maps: Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num)
-            .map(|x| Arc::new(PMap::new_with_keys((0..conf.obj_num as u32).collect())))
-            .collect();
-
-
-        let keys = Self::generate_data(conf);
+        let keys = Self::generate_data(conf, &maps);
 
         //Prepare TXNs
         //   For now, thread_num == txn_num
@@ -165,7 +165,7 @@ impl WorkloadNVM {
         }
     }
 
-    fn generate_data(conf : &Config) -> Vec<ThreadData<u32>> {
+    fn generate_data(conf : &Config,  maps: &Vec<Arc<PMap<u32,u32>>>) -> Vec<ThreadData<u32>> {
         
         let mut dataset : Vec<ThreadData<u32>> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
 
@@ -178,7 +178,11 @@ impl WorkloadNVM {
             for _ in 0..conf.set_size {
 
                 let rk = dis.sample(&mut rng) as u32;
-                let wk = dis.sample(&mut rng) as u32;
+                let mut wk = dis.sample(&mut rng) as u32;
+
+                while data.has_read(wk) {
+                    wk = dis.sample(&mut rng) as u32; 
+                }
 
                 data.add_read(rk);
                 data.add_write(wk);
@@ -186,6 +190,9 @@ impl WorkloadNVM {
 
             data.read_keys.sort();
             data.write_keys.sort();
+
+            data.fill_map(maps[i].clone());
+
         }
         dataset
     }
@@ -202,7 +209,7 @@ impl WorkloadNVM {
 
         //Create closures
         for piece_id in 0..conf.pc_num {
-            let mut data_map = maps[piece_id].clone();
+            let mut data_map = maps[tx_id].clone();
             let read_keys = data.read_keys.clone();
             let write_keys = data.write_keys.clone();
 
@@ -215,11 +222,13 @@ impl WorkloadNVM {
                 let mut w_g : Vec<PMutexGuard<u32>> = vec![];
                 let mut r_g : Vec<PMutexGuard<u32>>= vec![];
 
+                debug!("[{:?}]------Locking....", tx.id());
 
                 for i in 0..set_size {
                     w_v.push(data_map.get(&write_keys[i]).unwrap());
                     r_v.push(data_map.get(&read_keys[i]).unwrap());
                 }
+                debug!("[{:?}]------Locked....", tx.id());
                 
                 //Get the write locks 
                 for x in w_v.iter() {
@@ -236,13 +245,14 @@ impl WorkloadNVM {
                 //Do reads
                 for i in 0..set_size {
                     let x = *(r_g[i]).as_ref().unwrap();
-                    debug!("Read {:?}", x);
+                    debug!("[{:?}] Read {:?}", tx.id(), x);
                 }
                 
                 //Do writes
                 for i in 0..set_size {
                     let w = &mut w_g[i];
                     *w.as_mut().unwrap() = tx_id as u32;
+                    debug!("[{:?}] Write {:?}", tx.id(), tx_id);
                 }
 
                 //TODO
@@ -302,13 +312,13 @@ pub struct DataSet {
 
 
 pub struct DataSetPar<M> 
-where M: Clone,
+where M: Clone+PartialEq+ Debug + Hash
 {
     pub data : Vec<ThreadData<M>>
 }
 
 pub struct ThreadData<M> 
-where M: Clone,
+where M: Clone+PartialEq+ Debug + Hash
 {
     pub read_keys: Vec<M>,
     pub write_keys:  Vec<M>,
@@ -316,7 +326,7 @@ where M: Clone,
 
 
 impl<M> ThreadData<M>
-where M: Clone,
+where M: Clone+PartialEq+ Debug+ Hash
 {
     pub fn add_read(&mut self, m: M) {
         self.read_keys.push(m);
@@ -326,10 +336,30 @@ where M: Clone,
         self.write_keys.push(m);
     }
 
-    pub fn new()-> ThreadData<M>  {
+    pub fn has_read(&self, m : M) -> bool {
+        for x in self.read_keys.iter() {
+            if *x == m {
+               return true;
+            }
+        }
+        false
+    }
+   
+    //FIXME: r/w non overlapping
+    pub fn fill_map(&self, map: Arc<PMap<M, M>>) {
+        for v in self.read_keys.iter() {
+            map.insert(v.clone(), PValue::new_default(v.clone()));
+        }
+
+        for v in self.write_keys.iter() {
+            map.insert(v.clone(), PValue::new_default(v.clone()));
+        }
+    }
+
+    pub fn new()-> ThreadData<M> {
         ThreadData {
             read_keys: vec![],
-            write_keys: vec![]
+            write_keys: vec![] 
         }
     }
 }

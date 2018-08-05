@@ -91,8 +91,16 @@ where V : Debug
         }
     }
 
+    pub fn new_default(t : V) -> PValue<V> {
+        PValue {
+            data_: Mutex::new(Some(t)),
+            last_writer_ : ArcCell::new(Arc::new(TxnInfo::default())),
+            is_write_locked: AtomicBool::default(),
+        }
+    }
+
     pub fn read(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-        println!("read\t{:?}", self);
+        debug!("read\t{:?}", self);
         match self.data_.try_lock() {
             Ok(g) => {
                 self.is_write_locked.store(false, Ordering::SeqCst);
@@ -116,7 +124,7 @@ where V : Debug
     }
 
     pub fn write(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-        println!("write\t{:?}", self);
+        debug!("write\t{:?}", self);
         match self.data_.try_lock() {
             Ok(g) => {
                 self.is_write_locked.store(true, Ordering::SeqCst);
