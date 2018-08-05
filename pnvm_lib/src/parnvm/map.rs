@@ -39,6 +39,17 @@ where K : PartialEq+Hash,
         }
     }
 
+    pub fn new_with_keys(keys: Vec<K>) -> PMap<K, V> 
+    {
+        let pmap = PMap::new();
+        for key in keys.into_iter() {
+           let pval = PValue::default(); 
+           pmap.insert_new(key, pval);
+        }
+
+        pmap
+    }
+
     pub fn get(&self, k: &K) 
         -> Option<ReadGuard<K,PValue<V>>> 
               {
@@ -62,7 +73,7 @@ where K : PartialEq+Hash,
 pub struct PValue<V> 
 where V : Debug
 {
-    data_ : Mutex<V>,
+    data_ : Mutex<Option<V>>,
     last_writer_ : ArcCell<TxnInfo>, //ASSUMP: Must exist a creator>
     is_write_locked: AtomicBool,
 }
@@ -74,7 +85,7 @@ where V : Debug
     pub fn new(t : V, tx: &mut TransactionPar) -> PValue<V> {
         let ctor = tx.txn_info();
         PValue {
-            data_ : Mutex::new(t),
+            data_ : Mutex::new(Some(t)),
             last_writer_ : ArcCell::new(ctor.clone()),
             is_write_locked: AtomicBool::new(false),
         }
@@ -133,38 +144,50 @@ where V : Debug
     }
 }
 
-
-pub struct PMutexGuard<'mutex, V> 
-where V: Debug + 'mutex
-{
-    g_ : MutexGuard<'mutex,V>,
-    val_ : &'mutex PValue<V>,
-}
-
-
-impl<'mutex, V> Drop for PMutexGuard<'mutex, V> 
+impl<V> Default for PValue<V> 
 where V: Debug 
 {
-    fn drop(&mut self) {
-        self.val_.unlock();
+    fn default() -> Self {
+        PValue  {
+            data_ : Mutex::new(None),
+            last_writer_: ArcCell::new(Arc::new(TxnInfo::default())),
+            is_write_locked: AtomicBool::default(),
+        }
     }
 }
 
 
-impl<'mutex, V> Deref for PMutexGuard<'mutex, V>
+pub struct PMutexGuard<'mutex, 'v, V> 
+where V: Debug + 'mutex + 'v
+{
+    g_ : MutexGuard<'mutex,Option<V>>,
+    val_ : &'v PValue<V>
+}
+
+
+impl<'mutex, 'v,  V> Drop for PMutexGuard<'mutex,'v, V> 
 where V: Debug 
 {
-    type Target = V;
+    fn drop(&mut self) {
+        self.val_.unlock()
+    }
+}
 
-    fn deref(&self) -> &V {
+
+impl<'mutex, 'v, V> Deref for PMutexGuard<'mutex,'v,  V>
+where V: Debug 
+{
+    type Target = Option<V>;
+
+    fn deref(&self) -> &Option<V> {
         &*(self.g_)
     }
 }
 
-impl<'mutex, V> DerefMut for PMutexGuard<'mutex, V> 
+impl<'mutex,'v,  V> DerefMut for PMutexGuard<'mutex,'v,  V> 
 where V: Debug 
 {
-    fn deref_mut(&mut self) -> &mut V {
+    fn deref_mut(&mut self) -> &mut Option<V> {
         &mut *(self.g_)
     }
 }

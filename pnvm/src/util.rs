@@ -12,7 +12,7 @@ use zipf::ZipfDistribution;
 
 use pnvm_lib::{
     occ::*,
-    parnvm::{dep::*, nvm_txn::*, piece::*},
+    parnvm::{map::*, dep::*, nvm_txn::*, piece::*},
     tbox::*,
     tcore::*,
     txn::*,
@@ -129,7 +129,6 @@ impl WorkloadOCC {
 }
 
 pub struct WorkloadNVM {
-    pub registry_: TxnRegistryPtr,
     pub work_: Vec<TransactionParBase>,
 }
 
@@ -139,14 +138,14 @@ impl WorkloadNVM {
 
         //Prepare registry
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let regis = TxnRegistry::new();
-        let regis_ptr = Arc::new(regis);
-        TxnRegistry::set_thread_registry(regis_ptr.clone());
 
         //Prepare data
-        let data: Vec<Arc<RwLock<Box<u32>>>> = (0..conf.obj_num)
-            .map(|x| Arc::new(RwLock::new(Box::new(x as u32))))
+        let maps: Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num)
+            .map(|x| Arc::new(PMap::new_with_keys((0..conf.obj_num as u32).collect())))
             .collect();
+
+
+        let keys = Self::generate_data(conf);
 
         //Prepare TXNs
         //   For now, thread_num == txn_num
@@ -155,66 +154,98 @@ impl WorkloadNVM {
         for thread_i in 0..conf.thread_num {
             let txn_i = thread_i;
             let tx_name = WorkloadNVM::make_txn_name(thread_i);
-            let (next_item_id, txn_base) =
-                WorkloadNVM::make_txn_base(txn_i, tx_name, conf, &data, next_item_id);
+            let txn_base =
+                WorkloadNVM::make_txn_base(txn_i, tx_name, conf, &maps, &keys[thread_i]);
             threads_work.push(txn_base);
         }
 
         debug!("{:#?}", threads_work);
         WorkloadNVM {
-            registry_: regis_ptr,
             work_: threads_work,
         }
+    }
+
+    fn generate_data(conf : &Config) -> Vec<ThreadData<u32>> {
+        
+        let mut dataset : Vec<ThreadData<u32>> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
+
+        let mut rng = rand::thread_rng();
+        let dis = ZipfDistribution::new(conf.obj_num - 1, conf.zipf_coeff).unwrap();
+
+        for i in 0..conf.thread_num {
+            let data = &mut dataset[i];
+
+            for _ in 0..conf.set_size {
+
+                let rk = dis.sample(&mut rng) as u32;
+                let wk = dis.sample(&mut rng) as u32;
+
+                data.add_read(rk);
+                data.add_write(wk);
+            }
+
+            data.read_keys.sort();
+            data.write_keys.sort();
+        }
+        dataset
     }
 
     fn make_txn_base(
         tx_id: usize,
         tx_name: String,
         conf: &Config,
-        data: &Vec<Arc<RwLock<Box<u32>>>>,
-        next_item: usize,
-    ) -> (usize, TransactionParBase) {
-        let mut pieces = Vec::new();
-        let mut is_conflict_txn: bool = false;
-        let mut next_item = next_item;
-        let mut dep = Dep::new();
+        maps: &Vec<Arc<PMap<u32, u32>>>,
+        data: &ThreadData<u32>,
+    ) -> TransactionParBase {
 
-        if tx_id < conf.cfl_txn_num {
-            is_conflict_txn = true;
-        }
+        let mut pieces = Vec::new();
 
         //Create closures
-
         for piece_id in 0..conf.pc_num {
-            let mut data_map;
-            if piece_id <= conf.cfl_pc_num && is_conflict_txn {
-                data_map = data[piece_id].clone();
-                WorkloadNVM::add_dep(conf, piece_id, tx_id, &mut dep);
-            } else {
-                data_map = data[next_item].clone();
-                next_item += 1;
-            }
+            let mut data_map = maps[piece_id].clone();
+            let read_keys = data.read_keys.clone();
+            let write_keys = data.write_keys.clone();
+
             let spin_time = conf.spin_time;
+            let set_size = conf.set_size;
 
-            let records = vec![DataRecord::new(&*data_map.read())];
+            let callback = move |tx: &mut TransactionPar| {
+                let mut w_v = vec![];
+                let mut r_v = vec![];
+                let mut w_g : Vec<PMutexGuard<u32>> = vec![];
+                let mut r_g : Vec<PMutexGuard<u32>>= vec![];
 
-            let callback = move || {
-                {
-                    let val = data_map.read();
-                    trace!("Set by TXN-{}", *val);
+
+                for i in 0..set_size {
+                    w_v.push(data_map.get(&write_keys[i]).unwrap());
+                    r_v.push(data_map.get(&read_keys[i]).unwrap());
+                }
+                
+                //Get the write locks 
+                for x in w_v.iter() {
+                    w_g.push(x.write(tx));
                 }
 
-                {
-                    let mut val = data_map.write();
-                    **val = tx_id as u32;
+                //Get the read locks
+                for x in r_v.iter() {
+                    r_g.push(x.read(tx));
                 }
 
-                //Spinning to make txn longer...
-                let mut i = 0;
-                while i < spin_time {
-                    i += 1;
+                //TODO: Do persist here
+                
+                //Do reads
+                for i in 0..set_size {
+                    let x = *(r_g[i]).as_ref().unwrap();
+                    debug!("Read {:?}", x);
+                }
+                
+                //Do writes
+                for i in 0..set_size {
+                    let w = &mut w_g[i];
+                    *w.as_mut().unwrap() = tx_id as u32;
                 }
 
+                //TODO
                 1
             };
 
@@ -223,7 +254,7 @@ impl WorkloadNVM {
                 tx_name.clone(),
                 Arc::new(Box::new(callback)),
                 "cb",
-                records,
+                piece_id,
             );
 
             pieces.push(piece);
@@ -231,25 +262,22 @@ impl WorkloadNVM {
 
         pieces.reverse();
 
-        (
-            next_item,
-            TransactionParBase::new(dep, pieces, tx_name.clone()),
-        )
+        TransactionParBase::new( pieces, tx_name.clone())
     }
 
-    fn add_dep(conf: &Config, pid: usize, tx_id: usize, dep: &mut Dep) {
-        let cfl_txn_num = conf.cfl_txn_num;
-        let pid = Pid::new(pid as u32);
-        for i in 0..cfl_txn_num {
-            //No conflict with self yet
-            if i != tx_id {
-                dep.add(
-                    pid,
-                    ConflictInfo::new(WorkloadNVM::make_txn_name(i), pid, ConflictType::Write),
-                );
-            }
-        }
-    }
+//    fn add_dep(conf: &Config, pid: usize, tx_id: usize, dep: &mut Dep) {
+//        let cfl_txn_num = conf.cfl_txn_num;
+//        let pid = Pid::new(pid as u32);
+//        for i in 0..cfl_txn_num {
+//            //No conflict with self yet
+//            if i != tx_id {
+//                dep.add(
+//                    pid,
+//                    ConflictInfo::new(WorkloadNVM::make_txn_name(i), pid, ConflictType::Write),
+//                );
+//            }
+//        }
+//    }
 
     fn make_txn_names(thread_num: usize) -> Vec<String> {
         let mut names = Vec::with_capacity(thread_num);
@@ -271,6 +299,42 @@ pub struct DataSet {
     pub read: Vec<Vec<TObject<u32>>>,
     pub write: Vec<Vec<TObject<u32>>>,
 }
+
+
+pub struct DataSetPar<M> 
+where M: Clone,
+{
+    pub data : Vec<ThreadData<M>>
+}
+
+pub struct ThreadData<M> 
+where M: Clone,
+{
+    pub read_keys: Vec<M>,
+    pub write_keys:  Vec<M>,
+}
+
+
+impl<M> ThreadData<M>
+where M: Clone,
+{
+    pub fn add_read(&mut self, m: M) {
+        self.read_keys.push(m);
+    }
+
+    pub fn add_write(&mut self, m: M) {
+        self.write_keys.push(m);
+    }
+
+    pub fn new()-> ThreadData<M>  {
+        ThreadData {
+            read_keys: vec![],
+            write_keys: vec![]
+        }
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub struct Config {

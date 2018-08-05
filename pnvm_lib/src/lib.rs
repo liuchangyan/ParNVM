@@ -236,17 +236,17 @@ mod tests {
                 data_map.insert(1,val);
 
                 let g = data_map.get(&1).unwrap();
-                println!("Read {}", (*g.read(tx)));
+                println!("Read {}", (*g.read(tx).as_ref().unwrap()));
 
                 let id :u32 = tx.id().into(); 
                 {
                     let mut write_g = g.write(tx);
                     let mut i = 0;
                     while i< 1000000 { i+=1;}
-                    *write_g = id * 100;
+                    *write_g.as_mut().unwrap() = id * 100;
                 }
 
-                println!("Read {}", (*g.read(tx)));
+                println!("Read {}", (*g.read(tx).as_ref().unwrap()));
                 1
             })),
             "insert-read",

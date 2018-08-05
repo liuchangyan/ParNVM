@@ -29,7 +29,7 @@ use std::{
 
 use pnvm_lib::{
     occ::*,
-    parnvm::nvm_txn::{TransactionPar, TxnRegistry},
+    parnvm::nvm_txn::{TransactionPar},
     tbox::*,
     tcore::*,
     txn::*,
@@ -54,7 +54,6 @@ fn main() {
 fn run_nvm(conf: Config) {
     let workload = util::TestHelper::prepare_workload_nvm(&conf);
     let work = workload.work_;
-    let regis = workload.registry_;
     let mut handles = Vec::new();
     let barrier = Arc::new(Barrier::new(conf.thread_num));
 
@@ -74,13 +73,11 @@ fn run_nvm(conf: Config) {
         let thread_txn_base = work[i].clone();
         let builder = thread::Builder::new().name(format!("TXN-{}", i + 1));
         let atomic_clone = atomic_cnt.clone();
-        let regis = regis.clone();
 
         prep_time += _prep_start.elapsed();
 
         let handle = builder
             .spawn(move || {
-                TxnRegistry::set_thread_registry(regis);
                 barrier.wait();
                 for _ in 0..conf.round_num {
                     /* Get tid */
@@ -97,9 +94,8 @@ fn run_nvm(conf: Config) {
 
                     let mut tx = TransactionPar::new_from_base(&thread_txn_base, tid);
 
-                    tx.register_txn();
-
-                    tx.execute_txn();
+                    TransactionPar::register(tx);
+                    TransactionPar::execute();
 
                     #[cfg(feature = "profile")]
                     {
