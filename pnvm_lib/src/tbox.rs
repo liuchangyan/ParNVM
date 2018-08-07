@@ -108,4 +108,21 @@ where
             }),
         })
     }
+
+
+    pub fn new_default(val: T) -> TBox<T> {
+        let id ;
+        unsafe {
+            id = tcore::next_id();
+        }
+
+        TBox {
+            tvalue_ : RwLock::new(TValue::new(val)),
+            id_ : id,
+            vers_: RwLock::new(TVersion {
+                last_writer_ : None,
+                lock_owner_: None,
+            }),
+        }
+    }
 }

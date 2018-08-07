@@ -122,7 +122,10 @@ fn run_nvm(conf: Config) {
 
 fn run_occ(conf: Config) {
     let mtx = Arc::new(Mutex::new(0));
-    let mut objs = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
+    let mut dataset = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
+    let keys = dataset.keys;
+    let maps = dataset.maps;
+
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
     let start = time::Instant::now();
@@ -135,12 +138,11 @@ fn run_occ(conf: Config) {
     for i in 0..conf.thread_num {
         let _prep_start = time::Instant::now();
         let conf = conf.clone();
-        let read_set = objs.read.pop().unwrap();
-        let write_set = objs.write.pop().unwrap();
         let atomic_clone = atomic_cnt.clone();
         let barrier = barrier.clone();
         let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
-
+        let keys = keys[i].clone();
+        let maps = maps.clone();
         let mtx = mtx.clone();
 
         prep_time += _prep_start.elapsed();
@@ -160,43 +162,24 @@ fn run_occ(conf: Config) {
                     }
 
                     while {
-                        for read in read_set.iter() {
-                            let val = tx.read(&read);
-                            debug!("[THREAD {:} TXN {:}] READ {:}", i + 1, id, val);
-                        }
+                        let read_keys = keys.read_keys.clone();
+                        let write_keys = keys.write_keys.clone();
 
-                        for write in write_set.iter() {
-                            tx.write(&write, (i + 1) as u32);
-                            debug!("[THREAD {:} TXN {:}] WRITE {:}", i + 1, id, i + 1);
-                        }
+                        for map in maps.iter() {
+                            for read in read_keys.iter() {
+                                let tobj = map.get(&read).unwrap();
+                                debug!("[{:?}] Read {:?}", tx.commit_id(), tx.read(&tobj));
+                            }
 
-                        #[cfg(feature = "profile")]
-                        {
-                            flame::start("spinning");
-                        }
-
-                        let mut i = 0;
-                        while i < (conf.spin_time * conf.pc_num) {
-                            i += 1;
-                        }
-
-                        #[cfg(feature = "profile")]
-                        {
-                            flame::end("spinning");
-                        }
-
-                        #[cfg(feature = "profile")]
-                        {
-                            flame::start(format!("try_commit {:?}", tid));
+                            for write in write_keys.iter() {
+                                let tobj = map.get(&write).unwrap();
+                                let val :u32 = tx.commit_id().into();
+                                debug!("[{:?}] Write {:?}", tx.commit_id(), val);
+                                tx.write(&tobj, val);
+                            }
                         }
 
                         let res = tx.try_commit();
-
-                        #[cfg(feature = "profile")]
-                        {
-                            flame::end(format!("try_commit {:?}", tid));
-                        }
-
                         !res
                     } {}
 

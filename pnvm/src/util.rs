@@ -19,7 +19,7 @@ use rand::distributions::Distribution;
 use zipf::ZipfDistribution;
 
 use pnvm_lib::{
-    occ::*,
+    occ::{map::*, occ_txn::*},
     parnvm::{map::*, dep::*, nvm_txn::*, piece::*},
     tbox::*,
     tcore::*,
@@ -32,7 +32,7 @@ impl TestHelper {
     pub fn prepare_workload_occ(config: &Config) -> WorkloadOCC {
         //WorkloadOCC{dataset_: WorkloadOCC::prepare_data(config)}
         WorkloadOCC {
-            dataset_: WorkloadOCC::prepare_data_hardcoded(config),
+            dataset_: WorkloadOCC::prepare_data(config),
         }
     }
 
@@ -51,89 +51,64 @@ impl WorkloadOCC {
     }
 
     fn prepare_data(conf: &Config) -> DataSet {
-        let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
-        let mut read_idx = vec![0; conf.obj_num];
-        let mut write_idx = vec![0; conf.obj_num];
+        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new())).collect();
 
-        let mut dataset = DataSet {
-            read: Vec::with_capacity(conf.thread_num),
-            write: Vec::with_capacity(conf.thread_num),
-        };
+        //Prepare data
+        let keys = generate_data(conf);
 
-        let mut rng = rand::thread_rng();
-        let dis = ZipfDistribution::new(conf.obj_num - 1, conf.zipf_coeff).unwrap();
-
-        for i in 0..conf.thread_num {
-            dataset.read.push(Vec::new());
-            dataset.write.push(Vec::new());
-
-            for _ in 0..conf.set_size {
-                let rk = dis.sample(&mut rng);
-                let wk = dis.sample(&mut rng);
-
-                read_idx[rk] += 1;
-                write_idx[wk] += 1;
-
-                dataset.read[i].push(Arc::clone(&pool[rk]));
-                dataset.write[i].push(Arc::clone(&pool[wk]));
+        for map in maps.iter() {
+            for data in keys.iter() {
+                data.fill_tmap(map);
             }
         }
 
-        read_idx.sort();
-        read_idx.reverse();
-        write_idx.sort();
-        write_idx.reverse();
-
-        //let (read_top, _) = read_idx.split_at(conf.obj_num/10 as usize);
-        //let (write_top, _) = write_idx.split_at(conf.obj_num/10 as usize);
-
-        //debug!("Read: {:?}", read_top);
-        //debug!("Write: {:?}", write_top);
-
-        dataset
-    }
-
-    fn prepare_data_hardcoded(conf: &Config) -> DataSet {
-        let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
-        let mut dataset = DataSet {
-            read: Vec::with_capacity(conf.thread_num),
-            write: Vec::with_capacity(conf.thread_num),
-        };
-
-        let mut next_item = conf.cfl_pc_num;
-
-        for thread_id in 0..conf.thread_num {
-            dataset.read.push(Vec::new());
-            dataset.write.push(Vec::new());
-
-            if thread_id < conf.cfl_txn_num {
-                for i in 0..conf.cfl_pc_num {
-                    /* Conflicting Txns */
-                    //Read and Write same TBox
-                    dataset.read[thread_id].push(Arc::clone(&pool[i]));
-                    dataset.write[thread_id].push(Arc::clone(&pool[i]));
-                }
-
-                /* Non-conflicting pieces */
-                for i in conf.cfl_pc_num..conf.pc_num {
-                    dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
-                    dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
-                    next_item += 1;
-                }
-            } else {
-                /* Non conflicting txns */
-                for i in 0..conf.pc_num {
-                    dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
-                    dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
-                    next_item += 1;
-                }
-            }
+        DataSet {
+            keys : keys,
+            maps : maps,
         }
-
-        trace!("data: {:#?}", dataset);
-
-        dataset
     }
+
+   // fn prepare_data_hardcoded(conf: &Config) -> DataSet {
+   //     let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
+   //     let mut dataset = DataSet {
+   //         read: Vec::with_capacity(conf.thread_num),
+   //         write: Vec::with_capacity(conf.thread_num),
+   //     };
+
+   //     let mut next_item = conf.cfl_pc_num;
+
+   //     for thread_id in 0..conf.thread_num {
+   //         dataset.read.push(Vec::new());
+   //         dataset.write.push(Vec::new());
+
+   //         if thread_id < conf.cfl_txn_num {
+   //             for i in 0..conf.cfl_pc_num {
+   //                 /* Conflicting Txns */
+   //                 //Read and Write same TBox
+   //                 dataset.read[thread_id].push(Arc::clone(&pool[i]));
+   //                 dataset.write[thread_id].push(Arc::clone(&pool[i]));
+   //             }
+
+   //             /* Non-conflicting pieces */
+   //             for i in conf.cfl_pc_num..conf.pc_num {
+   //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
+   //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
+   //                 next_item += 1;
+   //             }
+   //         } else {
+   //             /* Non conflicting txns */
+   //             for i in 0..conf.pc_num {
+   //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
+   //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
+   //                 next_item += 1;
+   //             }
+   //         }
+   //     }
+
+   //     trace!("data: {:#?}", dataset);
+
+   //     dataset
+   // }
 }
 
 pub struct WorkloadNVM {
@@ -144,12 +119,18 @@ impl WorkloadNVM {
     pub fn new_parnvm(conf: &Config) -> WorkloadNVM {
         let mut threads_work = Vec::with_capacity(conf.thread_num);
 
-        //Prepare registry
+        //Prepare maps
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps = (0..conf.pc_num).map(|i| Arc::new(PMap::new())).collect();
+        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new())).collect();
 
         //Prepare data
-        let keys = Self::generate_data(conf, &maps);
+        let keys = generate_data(conf);
+
+        for map in maps.iter() {
+            for data in keys.iter() {
+                data.fill_pmap(map);
+            }
+        }
 
         //Prepare TXNs
         //   For now, thread_num == txn_num
@@ -169,42 +150,6 @@ impl WorkloadNVM {
         }
     }
 
-    fn generate_data(conf : &Config,  maps: &Vec<Arc<PMap<u32,u32>>>) -> Vec<ThreadData<u32>> {
-        
-        let mut dataset : Vec<ThreadData<u32>> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
-
-        let mut rng = rand::thread_rng();
-        let dis = ZipfDistribution::new(conf.obj_num - 1, conf.zipf_coeff).unwrap();
-
-        for i in 0..conf.thread_num {
-            let data = &mut dataset[i];
-
-            for _ in 0..conf.set_size {
-
-                let rk = dis.sample(&mut rng) as u32;
-                let mut wk = dis.sample(&mut rng) as u32;
-
-                while data.has_read(wk) {
-                    wk = dis.sample(&mut rng) as u32; 
-                }
-
-                data.add_read(rk);
-                data.add_write(wk);
-            }
-
-            data.read_keys.sort();
-            data.write_keys.sort();
-            
-            //Populate the map
-            for map in maps.iter() {
-                data.fill_map(map);
-            }
-
-        }
-
-        warn!("{:?}", dataset);
-        dataset
-    }
 
     fn make_txn_base(
         tx_id: usize,
@@ -272,11 +217,6 @@ impl WorkloadNVM {
                     debug!("[{:?}] Write {:?}", tx.id(), tid);
                 }
 
-                //Drop logs
-                drop(w_g);
-                drop(r_g);
-
-                //TODO
                 1
             };
 
@@ -325,10 +265,39 @@ impl WorkloadNVM {
     }
 }
 
+fn generate_data(conf : &Config) -> Vec<ThreadData<u32>> {
+
+    let mut dataset : Vec<ThreadData<u32>> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
+
+    let mut rng = rand::thread_rng();
+    let dis = ZipfDistribution::new(conf.obj_num - 1, conf.zipf_coeff).unwrap();
+
+    for i in 0..conf.thread_num {
+        let data = &mut dataset[i];
+
+        for _ in 0..conf.set_size {
+
+            let rk = dis.sample(&mut rng) as u32;
+            let mut wk = dis.sample(&mut rng) as u32;
+
+            while data.has_read(wk) {
+                wk = dis.sample(&mut rng) as u32; 
+            }
+
+            data.add_read(rk);
+            data.add_write(wk);
+        }
+
+        data.read_keys.sort();
+        data.write_keys.sort();
+
+    }
+    dataset
+}
 #[derive(Debug)]
 pub struct DataSet {
-    pub read: Vec<Vec<TObject<u32>>>,
-    pub write: Vec<Vec<TObject<u32>>>,
+    pub keys : Vec<ThreadData<u32>>,
+    pub maps : Vec<Arc<TMap<u32, u32>>>,
 }
 
 
@@ -338,7 +307,7 @@ where M: Clone+PartialEq+ Debug + Hash
     pub data : Vec<ThreadData<M>>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ThreadData<M> 
 where M: Clone+PartialEq+ Debug + Hash
 {
@@ -368,7 +337,7 @@ where M: Clone+PartialEq+ Debug+ Hash
     }
    
     //FIXME: r/w non overlapping
-    pub fn fill_map(&self, map: &Arc<PMap<M, M>>) {
+    pub fn fill_pmap(&self, map: &Arc<PMap<M, M>>) {
         for v in self.read_keys.iter() {
             map.insert(v.clone(), PValue::new_default(v.clone()));
         }
@@ -376,6 +345,17 @@ where M: Clone+PartialEq+ Debug+ Hash
         for v in self.write_keys.iter() {
             map.insert(v.clone(), PValue::new_default(v.clone()));
         }
+    }
+
+    pub fn fill_tmap(&self, map: &Arc<TMap<M, M>>) {
+        for v in self.read_keys.iter() {
+            map.insert(v.clone(), Arc::new(TBox::new_default(v.clone())));
+        }
+
+        for v in self.write_keys.iter() {
+            map.insert(v.clone(), Arc::new(TBox::new_default(v.clone())));
+        }
+
     }
 
     pub fn new()-> ThreadData<M> {
