@@ -3,7 +3,11 @@ extern crate config;
 extern crate rand;
 extern crate zipf;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    iter::FromIterator,
+};
 use std::{
     fmt::Debug,
     hash::Hash,
@@ -142,7 +146,7 @@ impl WorkloadNVM {
 
         //Prepare registry
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps = (0..conf.thread_num).map(|i| Arc::new(PMap::new())).collect();
+        let maps = (0..conf.pc_num).map(|i| Arc::new(PMap::new())).collect();
 
         //Prepare data
         let keys = Self::generate_data(conf, &maps);
@@ -190,10 +194,15 @@ impl WorkloadNVM {
 
             data.read_keys.sort();
             data.write_keys.sort();
-
-            data.fill_map(maps[i].clone());
+            
+            //Populate the map
+            for map in maps.iter() {
+                data.fill_map(map);
+            }
 
         }
+
+        warn!("{:?}", dataset);
         dataset
     }
 
@@ -201,7 +210,7 @@ impl WorkloadNVM {
         tx_id: usize,
         tx_name: String,
         conf: &Config,
-        maps: &Vec<Arc<PMap<u32, u32>>>,
+        data_map: &Vec<Arc<PMap<u32, u32>>>, 
         data: &ThreadData<u32>,
     ) -> TransactionParBase {
 
@@ -209,7 +218,7 @@ impl WorkloadNVM {
 
         //Create closures
         for piece_id in 0..conf.pc_num {
-            let mut data_map = maps[tx_id].clone();
+            let data_map = data_map[piece_id].clone();
             let read_keys = data.read_keys.clone();
             let write_keys = data.write_keys.clone();
 
@@ -217,43 +226,55 @@ impl WorkloadNVM {
             let set_size = conf.set_size;
 
             let callback = move |tx: &mut TransactionPar| {
-                let mut w_v = vec![];
-                let mut r_v = vec![];
+                let mut rw_v = vec![];
                 let mut w_g : Vec<PMutexGuard<u32>> = vec![];
                 let mut r_g : Vec<PMutexGuard<u32>>= vec![];
-
-                debug!("[{:?}]------Locking....", tx.id());
-
-                for i in 0..set_size {
-                    w_v.push(data_map.get(&write_keys[i]).unwrap());
-                    r_v.push(data_map.get(&read_keys[i]).unwrap());
-                }
-                debug!("[{:?}]------Locked....", tx.id());
                 
-                //Get the write locks 
-                for x in w_v.iter() {
-                    w_g.push(x.write(tx));
+                let write_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter()); 
+                let _read_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter());
+                let read_set  : HashSet<_> = _read_set.difference(&write_set).cloned().collect();
+                    
+                let mut write_vec :Vec<_> = write_set.iter().map(|x| (x, 0)).collect();
+                let mut read_vec : Vec<_> = read_set.iter().map(|x| (x, 1)).collect();
+
+                let mut comb_vec = vec![];
+                comb_vec.append(&mut write_vec);
+                comb_vec.append(&mut read_vec);
+
+                comb_vec.sort_unstable_by_key(|(x,r)| *x);
+
+                //Get the values references
+                for (x, rw) in comb_vec.iter() {
+                    rw_v.push((data_map.get(&x).unwrap(), *rw));
                 }
 
-                //Get the read locks
-                for x in r_v.iter() {
-                    r_g.push(x.read(tx));
+                for (x, rw) in rw_v.iter() {
+                    if *rw == 1 { /* read */
+                        r_g.push(x.read(tx));
+                    } else { /* write */
+                        w_g.push(x.write(tx));
+                    }
                 }
 
                 //TODO: Do persist here
                 
                 //Do reads
-                for i in 0..set_size {
-                    let x = *(r_g[i]).as_ref().unwrap();
+                for i in r_g.iter_mut() {
+                    let x = *i.as_ref().unwrap();
                     debug!("[{:?}] Read {:?}", tx.id(), x);
                 }
                 
                 //Do writes
-                for i in 0..set_size {
-                    let w = &mut w_g[i];
-                    *w.as_mut().unwrap() = tx_id as u32;
-                    debug!("[{:?}] Write {:?}", tx.id(), tx_id);
+                let tid :u32 = tx.id().clone().into();
+                for mut i in w_g.iter_mut() {
+                    let w = &mut i;
+                    *w.as_mut().unwrap() = tid ;
+                    debug!("[{:?}] Write {:?}", tx.id(), tid);
                 }
+
+                //Drop logs
+                drop(w_g);
+                drop(r_g);
 
                 //TODO
                 1
@@ -317,6 +338,7 @@ where M: Clone+PartialEq+ Debug + Hash
     pub data : Vec<ThreadData<M>>
 }
 
+#[derive(Debug)]
 pub struct ThreadData<M> 
 where M: Clone+PartialEq+ Debug + Hash
 {
@@ -346,7 +368,7 @@ where M: Clone+PartialEq+ Debug+ Hash
     }
    
     //FIXME: r/w non overlapping
-    pub fn fill_map(&self, map: Arc<PMap<M, M>>) {
+    pub fn fill_map(&self, map: &Arc<PMap<M, M>>) {
         for v in self.read_keys.iter() {
             map.insert(v.clone(), PValue::new_default(v.clone()));
         }

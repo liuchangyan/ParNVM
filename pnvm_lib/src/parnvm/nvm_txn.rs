@@ -136,7 +136,7 @@ impl TransactionPar {
         for dep in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_commit() && !dep.has_done(cur_rank) {
-                    trace!("waiting waiting for {:?}", dep.id());
+                    warn!("waiting waiting for {:?}", dep.id());
                 } else {
                     break;
                 }
@@ -154,6 +154,7 @@ impl TransactionPar {
         self.status_ = TxState::ACTIVE;
 
         while let Some(piece) = self.get_next_piece() {
+            self.wait_deps_start();
             self.execute_piece(piece);
         }
 
@@ -164,7 +165,7 @@ impl TransactionPar {
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: Piece) {
-        warn!(
+        info!(
             "execute_piece::[{:?}] Running piece - {:?}",
             self.id(),
             &piece
@@ -199,7 +200,7 @@ impl TransactionPar {
     }
 
     pub fn add_dep(&mut self, txn_info: Arc<TxnInfo>) {
-        println!("add_dep::\t{:?}", txn_info);
+        warn!("add_dep::{:?} - {:?}", self.id(), txn_info);
         self.deps_.push(txn_info);
     }
 
@@ -233,7 +234,7 @@ impl TransactionPar {
         for dep in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_commit(){
-                    trace!("wait_deps_commit\t::\twaiting for {:?} to commit", dep.id());
+                    warn!("wait_deps_commit::{:?} waiting for {:?} to commit", self.id(),  dep.id());
                 } else {
                     break;
                 }
@@ -250,11 +251,21 @@ pub struct TxnName {
     name: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TxnInfo {
     tid_ : Tid,
     committed_ : AtomicBool,
     rank_ : AtomicUsize,
+}
+
+impl Default for TxnInfo {
+    fn default() -> Self {
+        TxnInfo {
+            tid_ : Tid::default(),
+            committed_: AtomicBool::new(true),
+            rank_ : AtomicUsize::default()
+        }
+    }
 }
 
 
@@ -273,7 +284,7 @@ impl TxnInfo {
     }
 
     pub fn has_done(&self, rank: usize) -> bool {
-        self.rank_.load(Ordering::SeqCst) == rank
+        self.rank_.load(Ordering::SeqCst) > rank
     }
 
     pub fn commit(&self) {

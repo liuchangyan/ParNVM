@@ -13,7 +13,7 @@ use std::sync::{
 };
 
 use std::{
-    fmt::Debug,
+    fmt::{self, Debug},
     ops::{Deref, DerefMut},
 };
 
@@ -69,7 +69,6 @@ where K : PartialEq+Hash,
     }
 }
 
-#[derive(Debug)]
 pub struct PValue<V> 
 where V : Debug
 {
@@ -100,7 +99,7 @@ where V : Debug
     }
 
     pub fn read(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-        debug!("read\t{:?}", self);
+        debug!("{:?} read\t{:?}", tx.id(), self);
         match self.data_.try_lock() {
             Ok(g) => {
                 self.is_write_locked.store(false, Ordering::SeqCst);
@@ -110,10 +109,10 @@ where V : Debug
                 }
             }
             Err(_) => { 
+                let g = self.data_.lock().unwrap();
                 if self.is_write_locked.load(Ordering::SeqCst) { /* Locked by a writer */
                     tx.add_dep(self.last_writer_.get());
                 }
-                let g = self.data_.lock().unwrap();
                 self.is_write_locked.store(false, Ordering::SeqCst);
                 PMutexGuard {
                     g_ : g,
@@ -124,7 +123,7 @@ where V : Debug
     }
 
     pub fn write(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-        debug!("write\t{:?}", self);
+        debug!("{:?} write\t{:?}", tx.id(), self);
         match self.data_.try_lock() {
             Ok(g) => {
                 self.is_write_locked.store(true, Ordering::SeqCst);
@@ -135,9 +134,9 @@ where V : Debug
                 }
             },
             Err(_) => {
-                tx.add_dep(self.last_writer_.get());
                 let g = self.data_.lock().unwrap();
                 self.is_write_locked.store(true, Ordering::SeqCst);
+                tx.add_dep(self.last_writer_.get());
                 self.last_writer_.set(tx.txn_info().clone());
                 PMutexGuard {
                     g_ : g,
@@ -150,6 +149,48 @@ where V : Debug
     pub fn unlock(&self) {
         self.is_write_locked.store(false, Ordering::SeqCst);
     }
+
+    //If has writer on it check if own 
+   // pub fn lock_read(&self, tx: &mut TransactionPar) {
+   //     while self.is_read_locked() && *self.read_locker() == *tx.id() {}
+
+
+   // }
+   // 
+   // //If has other readers or writers 
+   // //write lock before read lock
+   // pub fn lock_write(&self, tx: &mut TransactionPar) {
+   //     let tid = tx.id();
+
+   //     loop {
+   //         let locker = self.try_lock(tid);
+   //         if locker != 0 {
+   //             if self.write_locker() == locker { /* Could this be unlocked already?*/
+   //                 //add dep
+   //                 //recheck if locker still holds on the lock?
+   //                 //nah, it is fine to have false positives I think
+   //             } else {
+   //                 //add all read deps
+   //             }
+   //         } else {
+   //             //locked
+   //             //update write_locker
+   //             break;
+   //         }
+   //     }
+
+   //     //assert here I am the locker
+
+
+   // }
+
+   // pub fn unlock_read(&self, tx: &mut TransactionPar) {
+
+   // }
+
+   // pub fn unlock_write(&self, tx: &mut TransactionPar) {
+
+   // }
 }
 
 impl<V> Default for PValue<V> 
@@ -161,6 +202,14 @@ where V: Debug
             last_writer_: ArcCell::new(Arc::new(TxnInfo::default())),
             is_write_locked: AtomicBool::default(),
         }
+    }
+}
+
+impl<V> Debug for PValue<V>
+where V: Debug 
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "PValue {{ data: {:?}, last_writer_: {:?}, write_locked: {:?} }}", self.data_, self.last_writer_.get(), self.is_write_locked)
     }
 }
 
