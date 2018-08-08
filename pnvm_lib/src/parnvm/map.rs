@@ -21,6 +21,17 @@ use crossbeam::sync::ArcCell;
 
 use std::hash::Hash;
 
+//FIXME: waiting for alloc::allocator to be stable
+#[cfg(feature="pmem")]
+use core::alloc::Layout;
+
+#[cfg(feature="pmem")]
+use std::{
+    ptr,
+    mem,
+};
+
+
 pub struct PMap<K,V>
 where K : PartialEq+Hash,
       V : Debug
@@ -128,6 +139,13 @@ where V : Debug
             Ok(g) => {
                 self.is_write_locked.store(true, Ordering::SeqCst);
                 self.last_writer_.set(tx.txn_info().clone());
+
+                #[cfg(feature = "pmem")]
+                {
+                    let (ptr, layout) = Self::make_log(&g, tx);
+                    tx.add_log(ptr, layout);
+                }
+
                 PMutexGuard {
                     g_ : g,
                     val_ : self,
@@ -138,10 +156,28 @@ where V : Debug
                 self.is_write_locked.store(true, Ordering::SeqCst);
                 tx.add_dep(self.last_writer_.get());
                 self.last_writer_.set(tx.txn_info().clone());
+
+                #[cfg(feature = "pmem")]
+                {
+                    let (ptr, layout) = Self::make_log(&g, tx);
+                    tx.add_log(ptr, layout);
+                }
+
                 PMutexGuard {
                     g_ : g,
                     val_ : self,
                 }
+            }
+        }
+    }
+    
+    #[cfg(feature = "pmem")]
+    fn make_log(g : &MutexGuard<Option<V>>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
+        match g.as_ref() {
+            None =>  (None, Layout::new::<V>()),
+            Some(t)  => {
+                let ptr = unsafe {mem::transmute::<&V, *const V>(t)};
+                (Some(ptr as *mut u8), Layout::new::<V>())
             }
         }
     }

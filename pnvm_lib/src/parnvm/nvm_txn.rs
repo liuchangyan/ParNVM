@@ -4,7 +4,7 @@ use tcore;
 
 use super::dep::*;
 use super::piece::*;
-use plog;
+use plog::{self, PLog};
 
 use std::{
     cell::{RefCell},
@@ -17,6 +17,9 @@ use std::{
     thread,
     default::Default,
 };
+
+#[cfg(feature="pmem")]
+use core::alloc::Layout;
 
 use crossbeam::sync::ArcCell;
 use parking_lot::RwLock;
@@ -51,6 +54,7 @@ pub struct TransactionPar {
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
     wait_:      Option<Piece>,
+    logs_ :     Vec<PLog>,
 }
 
 
@@ -68,7 +72,8 @@ impl TransactionPar {
             name_:      name,
             status_:    TxState::EMBRYO,
             wait_:      None,
-            txn_info_:  Arc::new(TxnInfo::new(id))
+            txn_info_:  Arc::new(TxnInfo::new(id)),
+            logs_ :     Vec::new(),
         }
     }
 
@@ -83,6 +88,7 @@ impl TransactionPar {
             deps_:      Vec::new(),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
             wait_:      None,
+            logs_ :     Vec::new(),
         }
     }
 
@@ -162,6 +168,21 @@ impl TransactionPar {
         self.wait_deps_commit();
         self.commit();
     }
+    
+    #[cfg(feature = "pmem")]
+    pub fn add_log(&mut self, ptr: Option<*mut u8>, layout: Layout) {
+        let id = *(self.id());
+        match ptr {
+            None => self.logs_.push(PLog::new_none(layout, id)),
+            Some(ptr) => self.logs_.push(PLog::new(ptr, layout, id)),
+        }
+    }
+
+    #[cfg(feature = "pmem")]
+    pub fn persist_logs(&mut self) {
+        let logs = self.logs_.drain(..).collect();
+        plog::persist_log(logs);
+    }
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: Piece) {
@@ -227,6 +248,7 @@ impl TransactionPar {
     pub fn commit(&mut self) {
         self.txn_info_.commit();
         self.status_ = TxState::COMMITTED;
+        tcore::BenchmarkCounter::success();
     }
 
     #[cfg_attr(feature = "profile", flame)]

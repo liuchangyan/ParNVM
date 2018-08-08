@@ -8,14 +8,21 @@ import numpy as np
 
 
 micro_bench_config = {
-        "thread_num" :np.linspace(4, 28, num=4, dtype=np.int16),
-        "obj_num" : [10],
-        "set_size" : [2000],
-        "zipf": np.linspace(0.050, 1.000, num=100),
+        "thread_num" :[16],
+        "pc_num": [10],
+        "obj_num" : 20000,
+        "set_size" : [10, 20, 30, 50],
+        "zipf": np.linspace(0.0001, 1.000, num=10),
+        "name": 'PNVM',
+        "round_num": 500,
 }
+out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/output.csv"), "w+")
+
+def print_header():
+    out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,spin_time,prep_time\n")
+    out_fd.flush()
 
 def run():
-    out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/output.csv"), "w+")
     print('-------------CONFIG-----------')
     print(micro_bench_config)
 
@@ -23,24 +30,24 @@ def run():
     env = dict(os.environ)
 
     for thread_num in micro_bench_config["thread_num"] :
-        for (idx, obj_num) in enumerate(micro_bench_config["obj_num"]):
+        for (idx, pc_num) in enumerate(micro_bench_config["pc_num"]):
             for zipf in micro_bench_config["zipf"]:
-                set_size = micro_bench_config["set_size"][idx]
-                exp_env= {
-                        "PNVM_ZIPF_COEFF" : str(zipf),
-                        'PNVM_THREAD_NUM' : str(thread_num),
-                        'PNVM_OBJ_NUM' : str(obj_num),
-                        'PNVM_SET_SIZE' : str(set_size),
-                        'PNVM_USE_PMEM' : 'true',
-                        }
+                for set_size in micro_bench_config["set_size"]:
+                    obj_num = micro_bench_config["obj_num"]
+                    exp_env= {
+                            "PNVM_ZIPF_COEFF" : str(zipf),
+                            'PNVM_THREAD_NUM' : str(thread_num),
+                            'PNVM_OBJ_NUM' : str(obj_num),
+                            'PNVM_SET_SIZE' : str(set_size),
+                            'PNVM_PC_NUM': str(pc_num),
+                            'PNVM_USE_PMEM' : 'false',
+                            'PNVM_TEST_NAME' : micro_bench_config['name'],
+                            'PNVM_ROUND_NUM' : str(micro_bench_config['round_num']),
+                            }
+                    sys_env = dict(os.environ)
+                    env = {**sys_env, **exp_env}
+                    run_exp(env, command, out_fd)
 
-                # out_name = "benchmark/out.{}.{}.{}.{}".format(thread_num, obj_num, set_size, zipf)
-                sys_env = dict(os.environ)
-                env = {**sys_env, **exp_env}
-                run_exp(env, command, out_fd)
-                # process_result(out_name, thread_num, obj_num, set_size, zipf)
-
-    print("thread,obj_num,set_size,zipf,success,abort,time, pmem", file=out_fd)
 
 
 
@@ -50,17 +57,9 @@ def run_exp(env, command, out_fd):
         subprocess.run(command,shell=True, env=env, stderr=out_fd, stdout=out_fd)
 
 
-# [Deprecated] print results
-def process_result(file_name, thread_num, obj_num, set_size, zipf):
-    with open(file_name, 'r+') as f:
-        text = f.read()
-        sucess = text.count("true")
-        abort = text.count("false")
-        print("{}, {}, {}, {}, {}, {}, {}"
-                .format(thread_num, obj_num, set_size, zipf, sucess, abort))
 
 
-
+print_header()
 run()
 
 

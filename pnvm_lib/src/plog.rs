@@ -2,7 +2,7 @@ use libc;
 use pnvm_sys;
 use std::{
     mem::{self, size_of},
-    ptr::Unique,
+    ptr::{self, Unique},
 };
 use tcore::TObject;
 use txn::Tid;
@@ -11,19 +11,23 @@ use txn::Tid;
 use core::alloc::Layout;
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct PLog {
     header: PLogHeader,
     data:   PLogData,
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct PLogHeader {
     log_kind: u16,
     len:      usize,
     txn_id:   u32,
+    is_none:  bool,
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct PLogData {
     addr: *mut u8,
     size: usize,
@@ -39,11 +43,27 @@ impl PLog {
                 log_kind: LOG_KIND_DATA,
                 len:      layout.size(),
                 txn_id:   id.into(),
+                is_none: false,
             },
             data:   PLogData {
                 addr: ptr,
                 size: layout.size(),
             },
+        }
+    }
+
+    pub fn new_none(layout: Layout, id: Tid) -> PLog {
+        PLog {
+            header: PLogHeader {
+                log_kind: LOG_KIND_DATA,
+                len:    layout.size(),
+                txn_id: id.into(),
+                is_none: true,
+            },
+            data: PLogData {
+                addr: ptr::null_mut(),
+                size: layout.size(),
+            }
         }
     }
 
@@ -118,6 +138,7 @@ pub fn persist_txn(id: u32) {
             log_kind: LOG_KIND_TXN,
             len:      size_of::<u32>(),
             txn_id:   id,
+            is_none: false,
         },
 
         data: PLogData {

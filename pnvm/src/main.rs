@@ -232,17 +232,16 @@ fn report_stat(
     //let total_time =  start.elapsed() - spin_time;
     let total_time = start.elapsed();
     println!(
-        "{},{},{}, {}, {}, {}, {}, {}, {:?}, {:?}, {:?}",
+        "{},{},{}, {}, {}, {}, {}, {:?}, {:?}, {:?}",
         conf.thread_num,
         conf.obj_num,
         conf.set_size,
         conf.zipf_coeff,
-        conf.cfl_pc_num,
-        conf.cfl_txn_num,
+        conf.pc_num,
         total_success,
         total_abort,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
-        spin_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+        spin_time.as_secs() as u32 * 1000 + spin_time.subsec_millis(),
         prep_time.as_secs() as u32 * 1000 + prep_time.subsec_millis(),
     )
 }

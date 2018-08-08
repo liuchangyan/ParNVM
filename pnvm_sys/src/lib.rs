@@ -391,7 +391,7 @@ impl PLog {
     }
 
     fn append_many(&self, iovecs: &Vec<iovec>, size: usize) {
-        trace!("appendv : {} items", size);
+        warn!("appendv : {} items", size);
         unsafe { pmemlog_appendv(self.plp, iovecs.as_ptr() as *const iovec, size) };
     }
 

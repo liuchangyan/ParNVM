@@ -167,7 +167,6 @@ impl WorkloadNVM {
             let read_keys = data.read_keys.clone();
             let write_keys = data.write_keys.clone();
 
-            let spin_time = conf.spin_time;
             let set_size = conf.set_size;
 
             let callback = move |tx: &mut TransactionPar| {
@@ -200,7 +199,9 @@ impl WorkloadNVM {
                         w_g.push(x.write(tx));
                     }
                 }
-
+                
+                #[cfg(feature="pmem")]
+                tx.persist_logs();
                 //TODO: Do persist here
                 
                 //Do reads
@@ -379,7 +380,6 @@ pub struct Config {
     pub cfl_pc_num: usize,
     pub cfl_txn_num: usize,
     pub pc_num: usize,
-    pub spin_time: usize,
 }
 
 pub fn read_env() -> Config {
@@ -402,6 +402,5 @@ pub fn read_env() -> Config {
         cfl_txn_num: settings.get_int("CFL_TXN_NUM").unwrap() as usize,
         cfl_pc_num: settings.get_int("CFL_PC_NUM").unwrap() as usize,
         pc_num: settings.get_int("PC_NUM").unwrap() as usize,
-        spin_time: settings.get_int("SPIN_TIME").unwrap() as usize,
     }
 }
