@@ -20,6 +20,8 @@ use std::{
 
 #[cfg(feature="pmem")]
 use core::alloc::Layout;
+extern crate pnvm_sys;
+
 
 use crossbeam::sync::ArcCell;
 use parking_lot::RwLock;
@@ -54,7 +56,9 @@ pub struct TransactionPar {
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
     wait_:      Option<Piece>,
-    logs_ :     Vec<PLog>,
+
+    #[cfg(feature="pmem")]
+    records_ :     Vec<(Option<*mut u8>, Layout)>,
 }
 
 
@@ -73,7 +77,8 @@ impl TransactionPar {
             status_:    TxState::EMBRYO,
             wait_:      None,
             txn_info_:  Arc::new(TxnInfo::new(id)),
-            logs_ :     Vec::new(),
+            #[cfg(feature="pmem")]
+            records_ :     Vec::new(),
         }
     }
 
@@ -88,7 +93,8 @@ impl TransactionPar {
             deps_:      Vec::new(),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
             wait_:      None,
-            logs_ :     Vec::new(),
+            #[cfg(feature="pmem")]
+            records_ :     Vec::new(),
         }
     }
 
@@ -162,7 +168,11 @@ impl TransactionPar {
         while let Some(piece) = self.get_next_piece() {
             self.wait_deps_start();
             self.execute_piece(piece);
+
+            #[cfg(feature = "pmem")]
+            self.persist_data();
         }
+        
 
         //Commit
         self.wait_deps_commit();
@@ -170,18 +180,30 @@ impl TransactionPar {
     }
     
     #[cfg(feature = "pmem")]
-    pub fn add_log(&mut self, ptr: Option<*mut u8>, layout: Layout) {
-        let id = *(self.id());
-        match ptr {
-            None => self.logs_.push(PLog::new_none(layout, id)),
-            Some(ptr) => self.logs_.push(PLog::new(ptr, layout, id)),
-        }
+    pub fn add_record(&mut self, ptr: Option<*mut u8>, layout: Layout) {
+        self.records_.push((ptr, layout));
     }
 
     #[cfg(feature = "pmem")]
-    pub fn persist_logs(&mut self) {
-        let logs = self.logs_.drain(..).collect();
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn persist_logs(&self) {
+        let id = *(self.id());
+        let logs = self.records_.iter().map(|(ptr, layout)| {
+            match ptr {
+                Some(ptr) => PLog::new(*ptr, layout.clone(), id),
+                None => PLog::new_none(layout.clone(), id),
+            }
+        }).collect();
         plog::persist_log(logs);
+    }
+
+    #[cfg(feature="pmem")]
+    pub fn persist_data(&mut self) {
+       for (ptr, layout) in self.records_.drain(..) {
+            if let Some(ptr) = ptr {
+                pnvm_sys::flush(ptr, layout.clone());
+            }
+       }
     }
 
     #[cfg_attr(feature = "profile", flame)]
@@ -220,6 +242,7 @@ impl TransactionPar {
         self.wait_.take().or_else(|| self.all_ps_.pop())
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn add_dep(&mut self, txn_info: Arc<TxnInfo>) {
         warn!("add_dep::{:?} - {:?}", self.id(), txn_info);
         self.deps_.push(txn_info);
@@ -234,9 +257,18 @@ impl TransactionPar {
     }
 
     #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
     fn persist_log(&self, records: &Vec<DataRecord>) {
         let id = self.id();
         plog::persist_log(records.iter().map(|ref r| r.as_log(*id)).collect());
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn persist_txn(&self) {
+        pnvm_sys::drain();
+        plog::persist_txn(self.id().into());
+        self.txn_info_.persist();
     }
 
     #[cfg_attr(feature = "profile", flame)]
@@ -249,6 +281,27 @@ impl TransactionPar {
         self.txn_info_.commit();
         self.status_ = TxState::COMMITTED;
         tcore::BenchmarkCounter::success();
+
+        #[cfg(feature="pmem")]
+        {
+            self.wait_deps_persist();
+            self.persist_txn();
+            self.status_ = TxState::PERSIST;
+        }
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn wait_deps_persist(&self) {
+        for dep in self.deps_.iter() {
+            loop { /* Busy wait here */
+                if !dep.has_persist(){
+                    warn!("wait_deps_persist::{:?} waiting for {:?} to commit", self.id(),  dep.id());
+                } else {
+                    break;
+                }
+            }
+        }
     }
 
     #[cfg_attr(feature = "profile", flame)]
@@ -278,6 +331,8 @@ pub struct TxnInfo {
     tid_ : Tid,
     committed_ : AtomicBool,
     rank_ : AtomicUsize,
+    #[cfg(feature = "pmem")]
+    persist_: AtomicBool,
 }
 
 impl Default for TxnInfo {
@@ -285,7 +340,9 @@ impl Default for TxnInfo {
         TxnInfo {
             tid_ : Tid::default(),
             committed_: AtomicBool::new(true),
-            rank_ : AtomicUsize::default()
+            rank_ : AtomicUsize::default(),
+            #[cfg(feature = "pmem")]
+            persist_: AtomicBool::new(true), 
         }
     }
 }
@@ -297,9 +354,16 @@ impl TxnInfo {
             tid_ : tid,
             committed_: AtomicBool::new(false),
             rank_ : AtomicUsize::new(0),
+
+            #[cfg(feature = "pmem")]
+            persist_ : AtomicBool::new(false),
         }
     }
 
+    #[cfg(feature = "pmem")] 
+    pub fn has_persist(&self) -> bool {
+        self.persist_.load(Ordering::SeqCst)
+    }
 
     pub fn has_commit(&self) -> bool {
         self.committed_.load(Ordering::SeqCst)
@@ -311,6 +375,11 @@ impl TxnInfo {
 
     pub fn commit(&self) {
         self.committed_.store(true, Ordering::SeqCst);
+    }
+
+    #[cfg(feature = "pmem")]
+    pub fn persist(&self) {
+        self.persist_.store(true, Ordering::SeqCst);
     }
 
     pub fn done(&self, rank: usize) {

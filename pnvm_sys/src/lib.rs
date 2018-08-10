@@ -52,6 +52,10 @@ pub fn flush(ptr: *mut u8, layout: Layout) {
     unsafe { pmem_flush(ptr as *const c_void, layout.size()) };
 }
 
+pub fn drain() {
+    unsafe {pmem_drain()};
+}
+
 //pub fn persist_single(addr : *const c_void, size : usize) {
 //    trace!("persit_single::(addr : {:p}, size : {})", addr, size);
 //    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_single(addr, size));

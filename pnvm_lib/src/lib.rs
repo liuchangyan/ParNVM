@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 #![feature(allocator_api)]
 #![feature(libc)]
+#![feature(test)]
 #![feature(ptr_internals)]
 #![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
 #![cfg_attr(feature = "profile", plugin(flamer))]
@@ -17,6 +18,8 @@ extern crate lazy_static;
 extern crate log;
 extern crate crossbeam;
 extern crate libc;
+
+extern crate test;
 
 extern crate chashmap;
 
@@ -37,7 +40,8 @@ mod tests {
     extern crate crossbeam;
     extern crate env_logger;
 
-    use super::occ::occ_txn::TransactionOCC;
+    use super::occ::occ_txn::{TransactionOCC};
+    use super::occ::map::TMap;
     use super::tbox::TBox;
     use super::tcore::TObject;
     use super::txn;
@@ -277,6 +281,24 @@ mod tests {
         });
 
         // Dump the report to disk
+    }
+
+    use test::Bencher;
+
+    #[bench]
+    fn bench_map_get(b: &mut Bencher) {
+        let map : Arc<TMap<u32, u32>> = Arc::new(TMap::new());
+        for key in 0..10000 {
+            map.insert(key as u32,TBox::new(key as u32));
+        }
+
+        let mut tx = TransactionOCC::new(Tid::new(1));
+        
+        b.iter(|| {
+            let g = map.get(&1).unwrap();
+            let tag = tx.retrieve_tag(g.get_id(), g.clone());
+        });
+
     }
 
 }

@@ -142,8 +142,8 @@ where V : Debug
 
                 #[cfg(feature = "pmem")]
                 {
-                    let (ptr, layout) = Self::make_log(&g, tx);
-                    tx.add_log(ptr, layout);
+                    let (ptr, layout) = Self::make_record(&g, tx);
+                    tx.add_record(ptr, layout);
                 }
 
                 PMutexGuard {
@@ -159,8 +159,8 @@ where V : Debug
 
                 #[cfg(feature = "pmem")]
                 {
-                    let (ptr, layout) = Self::make_log(&g, tx);
-                    tx.add_log(ptr, layout);
+                    let (ptr, layout) = Self::make_record(&g, tx);
+                    tx.add_record(ptr, layout);
                 }
 
                 PMutexGuard {
@@ -172,7 +172,7 @@ where V : Debug
     }
     
     #[cfg(feature = "pmem")]
-    fn make_log(g : &MutexGuard<Option<V>>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
+    fn make_record(g : &MutexGuard<Option<V>>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
         match g.as_ref() {
             None =>  (None, Layout::new::<V>()),
             Some(t)  => {

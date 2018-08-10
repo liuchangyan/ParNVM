@@ -25,6 +25,8 @@ impl<T> Transaction<T> for TransactionOCC<T>
 where
     T: Clone,
 {
+
+    #[cfg_attr(feature = "profile", flame)]
     fn try_commit(&mut self) -> bool {
         debug!("Tx[{:?}] is commiting", self.tid_);
         self.state_ = TxState::COMMITTED;
@@ -45,6 +47,7 @@ where
         true
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     fn read(&mut self, tobj: &TObject<T>) -> T {
         let tobj = Arc::clone(tobj);
 
@@ -58,6 +61,8 @@ where
         }
     }
 
+
+    #[cfg_attr(feature = "profile", flame)]
     fn write(&mut self, tobj: &TObject<T>, val: T) {
         let tobj = Arc::clone(tobj);
 
@@ -107,6 +112,7 @@ where
         false
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
         let mut locks: Vec<&TTag<T>> = Vec::new();
 
@@ -130,6 +136,7 @@ where
         true
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     fn check(&mut self) -> bool {
         for tag in self.deps_.values() {
             if !tag.has_read() {
@@ -143,55 +150,31 @@ where
         true
     }
 
+
+    #[cfg_attr(feature = "profile", flame)]
     fn commit(&mut self) -> bool {
         //#[cfg(benchmark)]
         tcore::BenchmarkCounter::success();
 
         //Persist the write set logs
 
-        #[cfg(feature = "profile")]
-        {
-            flame::start("persist_log");
-        }
-
         #[cfg(feature = "pmem")]
         self.persist_log();
 
-        #[cfg(feature = "profile")]
-        {
-            flame::end("persist_log");
-        }
 
         //Install write sets into the underlying data
         self.install_data();
 
-        #[cfg(feature = "profile")]
-        {
-            flame::start("persist_data");
-        }
 
         //Persist the data
         #[cfg(feature = "pmem")]
         self.persist_data();
 
-        #[cfg(feature = "profile")]
-        {
-            flame::end("persist_data");
-        }
 
-        #[cfg(feature = "profile")]
-        {
-            flame::start("persist_tx");
-        }
 
         //Persist commit the transaction
         #[cfg(feature = "pmem")]
         self.persist_commit();
-
-        #[cfg(feature = "profile")]
-        {
-            flame::end("persist_tx");
-        }
 
         //Clean up local data structures.
         txn::mark_commit(self.commit_id());
@@ -200,12 +183,14 @@ where
     }
 
     #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
     fn persist_commit(&self) {
         //FIXME:: Can it be async?
         plog::persist_txn(self.commit_id().into());
     }
 
     #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
     fn persist_log(&self) {
         let mut logs = vec![];
         let id = self.commit_id();
@@ -219,12 +204,14 @@ where
     }
 
     #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&self) {
         for tag in self.deps_.values() {
             tag.persist_data(self.commit_id());
         }
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     fn install_data(&mut self) {
         let id = self.commit_id();
         for tag in self.deps_.values_mut() {
@@ -233,6 +220,7 @@ where
         }
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     fn clean_up(&mut self) {
         for tag in self.deps_.values() {
             if tag.has_write() {
@@ -241,6 +229,7 @@ where
         }
     }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn retrieve_tag(&mut self, id: ObjectId, tobj_ref: TObject<T>) -> &mut TTag<T> {
         self.deps_.entry(id).or_insert(TTag::new(id, tobj_ref))
     }

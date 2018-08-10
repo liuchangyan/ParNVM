@@ -3,6 +3,9 @@ extern crate config;
 extern crate rand;
 extern crate zipf;
 
+#[cfg(feature = "profile")]
+extern crate flame;
+
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -39,7 +42,34 @@ impl TestHelper {
     pub fn prepare_workload_nvm(config: &Config) -> WorkloadNVM {
         WorkloadNVM::new_parnvm(config)
     }
+
+    pub fn prepare_workload_single(config : &Config) -> WorkloadSingle {
+        WorkloadSingle::new(config)
+    }
 }
+
+
+pub struct WorkloadSingle {
+    pub keys : ThreadData<u32>,
+    pub maps : Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>>
+}
+
+impl WorkloadSingle {
+    pub fn new(conf:&Config) ->  WorkloadSingle {
+       let mut maps : Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>> = (0..conf.pc_num).map(|i| Arc::new(HashMap::new())).collect(); 
+       let keys = generate_data(conf)[0].clone();
+        
+       for map in maps.iter_mut() {
+            keys.fill_single(map);
+       }
+
+       WorkloadSingle {
+           keys,
+           maps,
+       }
+    }
+}
+
 
 pub struct WorkloadOCC {
     dataset_: DataSet,
@@ -170,6 +200,10 @@ impl WorkloadNVM {
             let set_size = conf.set_size;
 
             let callback = move |tx: &mut TransactionPar| {
+                #[cfg(feature = "profile")]
+                {
+                    flame::start("prep");
+                }
                 let mut rw_v = vec![];
                 let mut w_g : Vec<PMutexGuard<u32>> = vec![];
                 let mut r_g : Vec<PMutexGuard<u32>>= vec![];
@@ -186,7 +220,16 @@ impl WorkloadNVM {
                 comb_vec.append(&mut read_vec);
 
                 comb_vec.sort_unstable_by_key(|(x,r)| *x);
+                
+                #[cfg(feature = "profile")]
+                {
+                    flame::end("prep");
+                }
 
+                #[cfg(feature = "profile")]
+                {
+                    flame::start("acquire locks");
+                }
                 //Get the values references
                 for (x, rw) in comb_vec.iter() {
                     rw_v.push((data_map.get(&x).unwrap(), *rw));
@@ -200,11 +243,20 @@ impl WorkloadNVM {
                     }
                 }
                 
+                #[cfg(feature = "profile")]
+                {
+                    flame::end("acquire locks");
+                }
+                
                 #[cfg(feature="pmem")]
                 tx.persist_logs();
                 //TODO: Do persist here
                 
-                //Do reads
+                #[cfg(feature = "profile")]
+                {
+                    flame::start("modify data");
+                }
+                //Do readsstart
                 for i in r_g.iter_mut() {
                     let x = *i.as_ref().unwrap();
                     debug!("[{:?}] Read {:?}", tx.id(), x);
@@ -218,6 +270,10 @@ impl WorkloadNVM {
                     debug!("[{:?}] Write {:?}", tx.id(), tid);
                 }
 
+                #[cfg(feature = "profile")]
+                {
+                    flame::end("modify data");
+                }
                 1
             };
 
@@ -303,14 +359,14 @@ pub struct DataSet {
 
 
 pub struct DataSetPar<M> 
-where M: Clone+PartialEq+ Debug + Hash
+where M: Clone+PartialEq+ Debug + Hash+Eq
 {
     pub data : Vec<ThreadData<M>>
 }
 
 #[derive(Debug, Clone)]
 pub struct ThreadData<M> 
-where M: Clone+PartialEq+ Debug + Hash
+where M: Clone+PartialEq+ Debug + Hash+Eq
 {
     pub read_keys: Vec<M>,
     pub write_keys:  Vec<M>,
@@ -318,7 +374,7 @@ where M: Clone+PartialEq+ Debug + Hash
 
 
 impl<M> ThreadData<M>
-where M: Clone+PartialEq+ Debug+ Hash
+where M: Clone+PartialEq+ Debug+ Hash+Eq
 {
     pub fn add_read(&mut self, m: M) {
         self.read_keys.push(m);
@@ -357,6 +413,17 @@ where M: Clone+PartialEq+ Debug+ Hash
             map.insert(v.clone(), Arc::new(TBox::new_default(v.clone())));
         }
 
+    }
+
+    pub fn fill_single(&self, map: &mut Arc<HashMap<M, RwLock<Box<M>>>>) {
+        for v in self.read_keys.iter() {
+            Arc::get_mut(map).unwrap().insert(v.clone(), RwLock::new(Box::new(v.clone())));
+        }
+
+        for v in self.write_keys.iter() {
+            Arc::get_mut(map).unwrap().insert(v.clone(), RwLock::new(Box::new(v.clone())));
+        }
+        
     }
 
     pub fn new()-> ThreadData<M> {

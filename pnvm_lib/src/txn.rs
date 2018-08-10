@@ -66,6 +66,7 @@ pub enum TxState {
     EMBRYO,
     ACTIVE,
     ABORTED,
+    PERSIST,
 }
 
 impl Default for TxState {
