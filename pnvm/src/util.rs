@@ -199,32 +199,24 @@ impl WorkloadNVM {
 
             let set_size = conf.set_size;
 
+
+            let write_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter()); 
+            let _read_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter());
+            let read_set  : HashSet<_> = _read_set.difference(&write_set).cloned().collect();
+
+            let mut write_vec :Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
+            let mut read_vec : Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
+
+            let mut comb_vec = vec![];
+            comb_vec.append(&mut write_vec);
+            comb_vec.append(&mut read_vec);
+
+            comb_vec.sort_unstable_by_key(|(x,r)| *x);
+
             let callback = move |tx: &mut TransactionPar| {
-                #[cfg(feature = "profile")]
-                {
-                    flame::start("prep");
-                }
                 let mut rw_v = vec![];
                 let mut w_g : Vec<PMutexGuard<u32>> = vec![];
                 let mut r_g : Vec<PMutexGuard<u32>>= vec![];
-                
-                let write_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter()); 
-                let _read_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter());
-                let read_set  : HashSet<_> = _read_set.difference(&write_set).cloned().collect();
-                    
-                let mut write_vec :Vec<_> = write_set.iter().map(|x| (x, 0)).collect();
-                let mut read_vec : Vec<_> = read_set.iter().map(|x| (x, 1)).collect();
-
-                let mut comb_vec = vec![];
-                comb_vec.append(&mut write_vec);
-                comb_vec.append(&mut read_vec);
-
-                comb_vec.sort_unstable_by_key(|(x,r)| *x);
-                
-                #[cfg(feature = "profile")]
-                {
-                    flame::end("prep");
-                }
 
                 #[cfg(feature = "profile")]
                 {

@@ -16,3 +16,5 @@ benchmark/
 
 # pmem dir
 /data
+
+pnvm/Settings.toml
