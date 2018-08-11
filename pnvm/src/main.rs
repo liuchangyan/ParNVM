@@ -79,14 +79,11 @@ fn run_nvm(conf: Config) {
 
         let handle = builder
             .spawn(move || {
+                TidFac::set_thd_mask(i as u32);
                 barrier.wait();
                 for _ in 0..conf.round_num {
                     /* Get tid */
-                    let now = time::Instant::now();
-                    let id = atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
-                    BenchmarkCounter::add_time(now.elapsed());
-
-                    let tid = Tid::new(id);
+                    let tid = TidFac::get_thd_next();
 
                     #[cfg(feature = "profile")]
                     {
