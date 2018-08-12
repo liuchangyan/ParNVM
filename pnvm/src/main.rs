@@ -179,29 +179,13 @@ fn run_occ(conf: Config) {
                         }
                         for map in maps.iter() {
                             for read in read_keys.iter() {
-                                #[cfg(feature = "profile")]
-                                {
-                                    flame::start("map::get");
-                                }
                                 let tobj = map.get(&read).unwrap();
-                                #[cfg(feature = "profile")]
-                                {
-                                    flame::end("map::get");
-                                }
                                 let val = tx.read(&tobj);
                                 debug!("[{:?}] Read {:?}", tx.commit_id(), val);
                             }
 
                             for write in write_keys.iter() {
-                                #[cfg(feature = "profile")]
-                                {
-                                    flame::start("map::get");
-                                }
                                 let tobj = map.get(&write).unwrap();
-                                #[cfg(feature = "profile")]
-                                {
-                                    flame::end("map::get");
-                                }
                                 let val :u32 = tx.commit_id().into();
                                 debug!("[{:?}] Write {:?}", tx.commit_id(), val);
                                 tx.write(&tobj, val);
@@ -211,16 +195,8 @@ fn run_occ(conf: Config) {
                         {
                             flame::end("data");
                         }
-                        #[cfg(feature = "profile")]
-                        {
-                            flame::start("try_commit");
-                        }
 
                         let res = tx.try_commit();
-                        #[cfg(feature = "profile")]
-                        {
-                            flame::end("try_commit");
-                        }
                         !res
                     } {}
 

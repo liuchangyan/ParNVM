@@ -1,5 +1,10 @@
 #[allow(unused_imports)]
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    sync::{Arc, Mutex, RwLock,
+        atomic::{AtomicU32, Ordering}
+    },
+};
+
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use tbox::TBox;
@@ -112,7 +117,7 @@ pub struct ObjectId(u32);
 pub struct TVersion {
     pub last_writer_: Option<Tid>,
     //lock_:        Arc<Mutex<bool>>,
-    pub lock_owner_: Option<Tid>, //lock_owner_:  Option<Tid>
+    pub lock_owner_: AtomicU32, //lock_owner_:  Option<Tid>
 }
 
 //TTag is attached with each logical segment (identified by key)
@@ -120,25 +125,15 @@ pub struct TVersion {
 //TTag is a local object to the thread.
 
 impl TVersion {
-    pub fn lock(&mut self, tid: Tid) -> bool {
-        match self.lock_owner_ {
-            Some(ref cur_owner) => {
-                if *cur_owner != tid {
-                    false
-                } else {
-                    true
-                }
-            }
-            None => {
-                self.lock_owner_ = Some(tid);
-                true
-            }
-        }
+    pub fn lock(&self, tid: Tid) -> bool {
+        let tid : u32 = tid.into();
+        let cur = self.lock_owner_.load(Ordering::SeqCst);
+        cur == 0 || cur == tid
     }
 
     //Caution: whoever has access to self can unlock
-    pub fn unlock(&mut self) {
-        self.lock_owner_ = None;
+    pub fn unlock(&self) {
+        self.lock_owner_.store(0, Ordering::SeqCst);
     }
 
     pub fn check_version(&self, tid: &Option<Tid>) -> bool {
@@ -148,17 +143,36 @@ impl TVersion {
             self.last_writer_
         );
         //let lock_owner = self.lock_owner_.lock().unwrap();
-        match (tid, self.last_writer_, self.lock_owner_) {
-            (Some(ref cur_tid), Some(ref tid), None) => {
-                if *cur_tid == *tid {
-                    true
-                } else {
-                    false
-                }
+        
+        
+        if self.lock_owner_.load(Ordering::SeqCst) != 0 {
+           false 
+        } else {
+            match (tid, self.last_writer_) {
+                (Some(ref tid), Some(ref cur_tid)) => {
+                    if *cur_tid == *tid {
+                        true
+                    } else {
+                        false
+                    }
+                },
+                (None, None) => true,
+                (_, _) => false,
             }
-            (None, None, None) => true,
-            (_, _, _) => false,
         }
+
+
+       // match (tid, self.last_writer_, self.lock_owner_) {
+       //     (Some(ref cur_tid), Some(ref tid), None) => {
+       //         if *cur_tid == *tid {
+       //             true
+       //         } else {
+       //             false
+       //         }
+       //     }
+       //     (None, None, None) => true,
+       //     (_, _, _) => false,
+       // }
     }
 
     //What if the last writer is own? -> Extension

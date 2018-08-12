@@ -56,17 +56,17 @@ pub struct WorkloadSingle {
 
 impl WorkloadSingle {
     pub fn new(conf:&Config) ->  WorkloadSingle {
-       let mut maps : Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>> = (0..conf.pc_num).map(|i| Arc::new(HashMap::new())).collect(); 
-       let keys = generate_data(conf)[0].clone();
-        
-       for map in maps.iter_mut() {
-            keys.fill_single(map);
-       }
+        let mut maps : Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>> = (0..conf.pc_num).map(|i| Arc::new(HashMap::new())).collect(); 
+        let keys = generate_data(conf)[0].clone();
 
-       WorkloadSingle {
-           keys,
-           maps,
-       }
+        for map in maps.iter_mut() {
+            keys.fill_single(map);
+        }
+
+        WorkloadSingle {
+            keys,
+            maps,
+        }
     }
 }
 
@@ -98,47 +98,47 @@ impl WorkloadOCC {
         }
     }
 
-   // fn prepare_data_hardcoded(conf: &Config) -> DataSet {
-   //     let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
-   //     let mut dataset = DataSet {
-   //         read: Vec::with_capacity(conf.thread_num),
-   //         write: Vec::with_capacity(conf.thread_num),
-   //     };
+    // fn prepare_data_hardcoded(conf: &Config) -> DataSet {
+    //     let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
+    //     let mut dataset = DataSet {
+    //         read: Vec::with_capacity(conf.thread_num),
+    //         write: Vec::with_capacity(conf.thread_num),
+    //     };
 
-   //     let mut next_item = conf.cfl_pc_num;
+    //     let mut next_item = conf.cfl_pc_num;
 
-   //     for thread_id in 0..conf.thread_num {
-   //         dataset.read.push(Vec::new());
-   //         dataset.write.push(Vec::new());
+    //     for thread_id in 0..conf.thread_num {
+    //         dataset.read.push(Vec::new());
+    //         dataset.write.push(Vec::new());
 
-   //         if thread_id < conf.cfl_txn_num {
-   //             for i in 0..conf.cfl_pc_num {
-   //                 /* Conflicting Txns */
-   //                 //Read and Write same TBox
-   //                 dataset.read[thread_id].push(Arc::clone(&pool[i]));
-   //                 dataset.write[thread_id].push(Arc::clone(&pool[i]));
-   //             }
+    //         if thread_id < conf.cfl_txn_num {
+    //             for i in 0..conf.cfl_pc_num {
+    //                 /* Conflicting Txns */
+    //                 //Read and Write same TBox
+    //                 dataset.read[thread_id].push(Arc::clone(&pool[i]));
+    //                 dataset.write[thread_id].push(Arc::clone(&pool[i]));
+    //             }
 
-   //             /* Non-conflicting pieces */
-   //             for i in conf.cfl_pc_num..conf.pc_num {
-   //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
-   //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
-   //                 next_item += 1;
-   //             }
-   //         } else {
-   //             /* Non conflicting txns */
-   //             for i in 0..conf.pc_num {
-   //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
-   //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
-   //                 next_item += 1;
-   //             }
-   //         }
-   //     }
+    //             /* Non-conflicting pieces */
+    //             for i in conf.cfl_pc_num..conf.pc_num {
+    //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
+    //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
+    //                 next_item += 1;
+    //             }
+    //         } else {
+    //             /* Non conflicting txns */
+    //             for i in 0..conf.pc_num {
+    //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
+    //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
+    //                 next_item += 1;
+    //             }
+    //         }
+    //     }
 
-   //     trace!("data: {:#?}", dataset);
+    //     trace!("data: {:#?}", dataset);
 
-   //     dataset
-   // }
+    //     dataset
+    // }
 }
 
 pub struct WorkloadNVM {
@@ -187,7 +187,7 @@ impl WorkloadNVM {
         conf: &Config,
         data_map: &Vec<Arc<PMap<u32, u32>>>, 
         data: &ThreadData<u32>,
-    ) -> TransactionParBase {
+        ) -> TransactionParBase {
 
         let mut pieces = Vec::new();
 
@@ -234,32 +234,49 @@ impl WorkloadNVM {
                         w_g.push(x.write(tx));
                     }
                 }
-                
+
                 #[cfg(feature = "profile")]
                 {
                     flame::end("acquire locks");
                 }
-                
+
                 #[cfg(feature="pmem")]
                 tx.persist_logs();
                 //TODO: Do persist here
-                
+
                 #[cfg(feature = "profile")]
                 {
                     flame::start("modify data");
                 }
                 //Do readsstart
                 for i in r_g.iter_mut() {
+
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::start("read");
+                    }
                     let x = *i.as_ref().unwrap();
                     debug!("[{:?}] Read {:?}", tx.id(), x);
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end("read");
+                    }
                 }
-                
+
                 //Do writes
                 let tid :u32 = tx.id().clone().into();
                 for mut i in w_g.iter_mut() {
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::start("write");
+                    }
                     let w = &mut i;
                     *w.as_mut().unwrap() = tid ;
                     debug!("[{:?}] Write {:?}", tx.id(), tid);
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end("write");
+                    }
                 }
 
                 #[cfg(feature = "profile")]
@@ -275,7 +292,7 @@ impl WorkloadNVM {
                 Arc::new(Box::new(callback)),
                 "cb",
                 piece_id,
-            );
+                );
 
             pieces.push(piece);
         }
@@ -285,19 +302,19 @@ impl WorkloadNVM {
         TransactionParBase::new( pieces, tx_name.clone())
     }
 
-//    fn add_dep(conf: &Config, pid: usize, tx_id: usize, dep: &mut Dep) {
-//        let cfl_txn_num = conf.cfl_txn_num;
-//        let pid = Pid::new(pid as u32);
-//        for i in 0..cfl_txn_num {
-//            //No conflict with self yet
-//            if i != tx_id {
-//                dep.add(
-//                    pid,
-//                    ConflictInfo::new(WorkloadNVM::make_txn_name(i), pid, ConflictType::Write),
-//                );
-//            }
-//        }
-//    }
+    //    fn add_dep(conf: &Config, pid: usize, tx_id: usize, dep: &mut Dep) {
+    //        let cfl_txn_num = conf.cfl_txn_num;
+    //        let pid = Pid::new(pid as u32);
+    //        for i in 0..cfl_txn_num {
+    //            //No conflict with self yet
+    //            if i != tx_id {
+    //                dep.add(
+    //                    pid,
+    //                    ConflictInfo::new(WorkloadNVM::make_txn_name(i), pid, ConflictType::Write),
+    //                );
+    //            }
+    //        }
+    //    }
 
     fn make_txn_names(thread_num: usize) -> Vec<String> {
         let mut names = Vec::with_capacity(thread_num);
@@ -379,12 +396,12 @@ where M: Clone+PartialEq+ Debug+ Hash+Eq
     pub fn has_read(&self, m : M) -> bool {
         for x in self.read_keys.iter() {
             if *x == m {
-               return true;
+                return true;
             }
         }
         false
     }
-   
+
     //FIXME: r/w non overlapping
     pub fn fill_pmap(&self, map: &Arc<PMap<M, M>>) {
         for v in self.read_keys.iter() {
@@ -415,7 +432,7 @@ where M: Clone+PartialEq+ Debug+ Hash+Eq
         for v in self.write_keys.iter() {
             Arc::get_mut(map).unwrap().insert(v.clone(), RwLock::new(Box::new(v.clone())));
         }
-        
+
     }
 
     pub fn new()-> ThreadData<M> {

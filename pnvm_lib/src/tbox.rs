@@ -3,7 +3,7 @@ use txn::Tid;
 use std::{
     ptr::Unique,
     //rc::Rc,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicU32},
 };
 
 //nightly
@@ -104,7 +104,7 @@ where
             id_:     id,
             vers_:   RwLock::new(TVersion {
                 last_writer_: None,
-                lock_owner_:  None,
+                lock_owner_:  AtomicU32::new(0),
             }),
         })
     }
@@ -121,7 +121,7 @@ where
             id_ : id,
             vers_: RwLock::new(TVersion {
                 last_writer_ : None,
-                lock_owner_: None,
+                lock_owner_: AtomicU32::new(0),
             }),
         }
     }

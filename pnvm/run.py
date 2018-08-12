@@ -26,7 +26,7 @@ def run():
     print('-------------CONFIG-----------')
     print(micro_bench_config)
 
-    command = ["../target/debug/pnvm"]
+    command = ["../target/release/pnvm"]
     env = dict(os.environ)
 
     for thread_num in micro_bench_config["thread_num"] :
