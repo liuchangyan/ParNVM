@@ -9,12 +9,13 @@ use std::sync::{
     Mutex,
     MutexGuard,
     Arc,    
-    atomic::{Ordering, AtomicBool},
+    atomic::{Ordering, AtomicU32, AtomicBool},
 };
 
 use std::{
     fmt::{self, Debug},
     ops::{Deref, DerefMut},
+    cell::{UnsafeCell},
 };
 
 use crossbeam::sync::ArcCell;
@@ -80,12 +81,21 @@ where K : PartialEq+Hash,
     }
 }
 
-pub struct PValue<V> 
-where V : Debug
+//pub struct PValue<V> 
+//where V : Debug
+//{
+//    data_ : Mutex<Option<V>>,
+//    last_writer_ : ArcCell<TxnInfo>, //ASSUMP: Must exist a creator>
+//    is_write_locked: AtomicBool,
+//}
+
+pub struct PValue<V>
+where V : Debug 
 {
-    data_ : Mutex<Option<V>>,
-    last_writer_ : ArcCell<TxnInfo>, //ASSUMP: Must exist a creator>
-    is_write_locked: AtomicBool,
+    lock_ : AtomicU32,
+    data_ : UnsafeCell<Option<V>>,
+    is_write_locked_ : AtomicBool,
+    last_writer_ : ArcCell<TxnInfo>,
 }
 
 
@@ -95,85 +105,126 @@ where V : Debug
     pub fn new(t : V, tx: &mut TransactionPar) -> PValue<V> {
         let ctor = tx.txn_info();
         PValue {
-            data_ : Mutex::new(Some(t)),
+            data_ : UnsafeCell::new(Some(t)),
             last_writer_ : ArcCell::new(ctor.clone()),
-            is_write_locked: AtomicBool::new(false),
+            is_write_locked_: AtomicBool::new(false),
+            lock_ : AtomicU32::new(0),
         }
     }
 
     pub fn new_default(t : V) -> PValue<V> {
         PValue {
-            data_: Mutex::new(Some(t)),
+            data_: UnsafeCell::new(Some(t)),
             last_writer_ : ArcCell::new(Arc::new(TxnInfo::default())),
-            is_write_locked: AtomicBool::default(),
+            is_write_locked_: AtomicBool::default(),
+            lock_: AtomicU32::new(0),
+        }
+    }
+
+   // pub fn read(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
+   //     debug!("{:?} read\t{:?}", tx.id(), self);
+   //     match self.data_.try_lock() {
+   //         Ok(g) => {
+   //             self.is_write_locked.store(false, Ordering::SeqCst);
+   //             PMutexGuard {
+   //                 g_ : g,
+   //                 val_ : self,
+   //             }
+   //         }
+   //         Err(_) => { 
+   //             let g = self.data_.lock().unwrap();
+   //             if self.is_write_locked.load(Ordering::SeqCst) { /* Locked by a writer */
+   //                 tx.add_dep(self.last_writer_.get());
+   //             }
+   //             self.is_write_locked.store(false, Ordering::SeqCst);
+   //             PMutexGuard {
+   //                 g_ : g,
+   //                 val_ : self,
+   //             }
+   //         }
+   //     }
+   // }
+
+    fn lock(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
+        let tid :u32 = tx.id().into();
+        loop {
+            let cur = self.lock_.compare_and_swap(0, tid, Ordering::SeqCst);
+            if cur == 0 { /* Get the lock */
+                return PMutexGuard {
+                    data_: self.data_.get(),
+                    val_ : self,
+                    cur_: tid,
+                }
+            } else { /* Add dep */
+                /* FIXME: Anti-dependency not tracked */
+                if self.is_write_locked_.load(Ordering::SeqCst){
+                    tx.add_dep(self.last_writer_.get());
+                }
+            }
         }
     }
 
     pub fn read(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-        debug!("{:?} read\t{:?}", tx.id(), self);
-        match self.data_.try_lock() {
-            Ok(g) => {
-                self.is_write_locked.store(false, Ordering::SeqCst);
-                PMutexGuard {
-                    g_ : g,
-                    val_ : self,
-                }
-            }
-            Err(_) => { 
-                let g = self.data_.lock().unwrap();
-                if self.is_write_locked.load(Ordering::SeqCst) { /* Locked by a writer */
-                    tx.add_dep(self.last_writer_.get());
-                }
-                self.is_write_locked.store(false, Ordering::SeqCst);
-                PMutexGuard {
-                    g_ : g,
-                    val_ : self,
-                }
-            }
-        }
+        self.lock(tx)
     }
 
-    pub fn write(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-        debug!("{:?} write\t{:?}", tx.id(), self);
-        match self.data_.try_lock() {
-            Ok(g) => {
-                self.is_write_locked.store(true, Ordering::SeqCst);
-                self.last_writer_.set(tx.txn_info().clone());
+    pub fn write(&self, tx : &mut TransactionPar) -> PMutexGuard<V> {
+        let g = self.lock(tx);
+        /* These can be delayed after lock acquired since others'll spin*/
+        self.is_write_locked_.store(true, Ordering::SeqCst);
+        self.last_writer_.set(tx.txn_info().clone());
 
-                #[cfg(feature = "pmem")]
-                {
-                    let (ptr, layout) = Self::make_record(&g, tx);
-                    tx.add_record(ptr, layout);
-                }
-
-                PMutexGuard {
-                    g_ : g,
-                    val_ : self,
-                }
-            },
-            Err(_) => {
-                let g = self.data_.lock().unwrap();
-                self.is_write_locked.store(true, Ordering::SeqCst);
-                tx.add_dep(self.last_writer_.get());
-                self.last_writer_.set(tx.txn_info().clone());
-
-                #[cfg(feature = "pmem")]
-                {
-                    let (ptr, layout) = Self::make_record(&g, tx);
-                    tx.add_record(ptr, layout);
-                }
-
-                PMutexGuard {
-                    g_ : g,
-                    val_ : self,
-                }
-            }
+        #[cfg(feature = "pmem")]
+        {
+            let (ptr, layout) = Self::make_record(&g, tx);
+            tx.add_record(ptr, layout);
         }
+
+        return g;
     }
+
+   // pub fn write(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
+   //     debug!("{:?} write\t{:?}", tx.id(), self);
+   //     match self.data_.try_lock() {
+   //         Ok(g) => {
+   //             self.is_write_locked.store(true, Ordering::SeqCst);
+   //             self.last_writer_.set(tx.txn_info().clone());
+
+   //             #[cfg(feature = "pmem")]
+   //             {
+   //                 let (ptr, layout) = Self::make_record(&g, tx);
+   //                 tx.add_record(ptr, layout);
+   //             }
+
+   //             PMutexGuard {
+   //                 g_ : g,
+   //                 val_ : self,
+   //             }
+   //         },
+   //         Err(_) => {
+   //             let g = self.data_.lock().unwrap();
+   //             self.is_write_locked.store(true, Ordering::SeqCst);
+   //             tx.add_dep(self.last_writer_.get());
+   //             self.last_writer_.set(tx.txn_info().clone());
+
+   //             #[cfg(feature = "pmem")]
+   //             {
+   //                 let (ptr, layout) = Self::make_record(&g, tx);
+   //                 tx.add_record(ptr, layout);
+   //             }
+
+   //             PMutexGuard {
+   //                 g_ : g,
+   //                 val_ : self,
+   //             }
+   //         }
+   //     }
+   // }
     
     #[cfg(feature = "pmem")]
-    fn make_record(g : &MutexGuard<Option<V>>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
-        match g.as_ref() {
+    fn make_record(g : &PMutexGuard<V>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
+        let ref_ : &Option<V> = g.data_;
+        match ref_.as_ref() {
             None =>  (None, Layout::new::<V>()),
             Some(t)  => {
                 let ptr = unsafe {mem::transmute::<&V, *const V>(t)};
@@ -182,8 +233,12 @@ where V : Debug
         }
     }
 
-    pub fn unlock(&self) {
-        self.is_write_locked.store(false, Ordering::SeqCst);
+    pub fn unlock(&self, cur: u32) {
+        debug_assert!(self.lock_.load(Ordering::Relaxed) == cur);
+        self.lock_.compare_exchange(cur, 0,
+                                    Ordering::Acquire, 
+                                    Ordering::Relaxed)
+            .expect("lock poisoned");
     }
 
     //If has writer on it check if own 
@@ -234,9 +289,10 @@ where V: Debug
 {
     fn default() -> Self {
         PValue  {
-            data_ : Mutex::new(None),
+            data_ : UnsafeCell::new(None),
             last_writer_: ArcCell::new(Arc::new(TxnInfo::default())),
-            is_write_locked: AtomicBool::default(),
+            is_write_locked_: AtomicBool::default(),
+            lock_: AtomicU32::new(0),
         }
     }
 }
@@ -245,42 +301,45 @@ impl<V> Debug for PValue<V>
 where V: Debug 
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PValue {{ data: {:?}, last_writer_: {:?}, write_locked: {:?} }}", self.data_, self.last_writer_.get(), self.is_write_locked)
+        write!(f, "PValue {{ data: {:?}, last_writer_: {:?}, write_locked: {:?} }}", self.data_, self.last_writer_.get(), self.is_write_locked_)
     }
 }
 
+unsafe impl<V:Debug> Sync for PValue<V> {}
 
-pub struct PMutexGuard<'mutex, 'v, V> 
-where V: Debug + 'mutex + 'v
+
+pub struct PMutexGuard< 'v, V> 
+where V: Debug +'v
 {
-    g_ : MutexGuard<'mutex,Option<V>>,
-    val_ : &'v PValue<V>
+    data_ : *mut Option<V>,
+    val_ : &'v PValue<V>,
+    cur_ : u32
 }
 
 
-impl<'mutex, 'v,  V> Drop for PMutexGuard<'mutex,'v, V> 
+impl< 'v,  V> Drop for PMutexGuard<'v, V> 
 where V: Debug 
 {
     fn drop(&mut self) {
-        self.val_.unlock()
+        self.val_.unlock(self.cur_)
     }
 }
 
 
-impl<'mutex, 'v, V> Deref for PMutexGuard<'mutex,'v,  V>
+impl< 'v, V> Deref for PMutexGuard<'v,  V>
 where V: Debug 
 {
     type Target = Option<V>;
 
     fn deref(&self) -> &Option<V> {
-        &*(self.g_)
+        unsafe {&*(self.data_)}
     }
 }
 
-impl<'mutex,'v,  V> DerefMut for PMutexGuard<'mutex,'v,  V> 
+impl<'v,  V> DerefMut for PMutexGuard<'v,  V> 
 where V: Debug 
 {
     fn deref_mut(&mut self) -> &mut Option<V> {
-        &mut *(self.g_)
+        unsafe {&mut *(self.data_)}
     }
 }

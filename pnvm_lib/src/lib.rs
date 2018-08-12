@@ -4,6 +4,7 @@
 #![feature(libc)]
 #![feature(test)]
 #![feature(ptr_internals)]
+#![feature(integer_atomics)]
 #![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
 #![cfg_attr(feature = "profile", plugin(flamer))]
 extern crate pnvm_sys;
