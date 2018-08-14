@@ -200,9 +200,10 @@ impl WorkloadNVM {
             let set_size = conf.set_size;
 
 
-            let write_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter()); 
-            let _read_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter());
-            let read_set  : HashSet<_> = _read_set.difference(&write_set).cloned().collect();
+            let write_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter()); 
+            let read_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
+            //let _read_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
+            //let read_set  : HashSet<_> = _read_set.difference(&write_set).cloned().collect();
 
             let mut write_vec :Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
             let mut read_vec : Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
@@ -222,10 +223,22 @@ impl WorkloadNVM {
                 {
                     flame::start("acquire locks");
                 }
+
+                #[cfg(feature = "profile")]
+                {
+                    flame::start("maps get");
+                }
+
+
                 //Get the values references
                 for (x, rw) in comb_vec.iter() {
-                    rw_v.push((data_map.get(&x).unwrap(), *rw));
+                    rw_v.push((data_map.get(&x).expect("map get panic"), *rw));
                 }
+                #[cfg(feature = "profile")]
+                {
+                    flame::end("maps get");
+                }
+
 
                 for (x, rw) in rw_v.iter() {
                     if *rw == 1 { /* read */
@@ -255,7 +268,7 @@ impl WorkloadNVM {
                     {
                         flame::start("read");
                     }
-                    let x = *i.as_ref().unwrap();
+                    let x = *i.as_ref().expect("unwrapping reads");
                     debug!("[{:?}] Read {:?}", tx.id(), x);
                     #[cfg(feature = "profile")]
                     {
@@ -271,7 +284,7 @@ impl WorkloadNVM {
                         flame::start("write");
                     }
                     let w = &mut i;
-                    *w.as_mut().unwrap() = tid ;
+                    *w.as_mut().expect("unwrapping writes") = tid ;
                     debug!("[{:?}] Write {:?}", tx.id(), tid);
                     #[cfg(feature = "profile")]
                     {
@@ -346,9 +359,9 @@ fn generate_data(conf : &Config) -> Vec<ThreadData<u32>> {
             let rk = dis.sample(&mut rng) as u32;
             let mut wk = dis.sample(&mut rng) as u32;
 
-            while data.has_read(wk) {
-                wk = dis.sample(&mut rng) as u32; 
-            }
+           // while data.has_read(wk) {
+           //     wk = dis.sample(&mut rng) as u32; 
+           // }
 
             data.add_read(rk);
             data.add_write(wk);

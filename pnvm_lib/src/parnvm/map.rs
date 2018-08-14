@@ -149,9 +149,9 @@ where V : Debug
         let tid :u32 = tx.id().into();
         loop {
             let cur = self.lock_.compare_and_swap(0, tid, Ordering::SeqCst);
-            if cur == 0 { /* Get the lock */
+            if cur == 0 || cur == tid { /* Get the lock */
                 return PMutexGuard {
-                    data_: self.data_.get(),
+                    data_: unsafe{&mut *self.data_.get()},
                     val_ : self,
                     cur_: tid,
                 }
@@ -232,13 +232,16 @@ where V : Debug
             }
         }
     }
-
+    
+    //FIXME: unlock twice
     pub fn unlock(&self, cur: u32) {
-        debug_assert!(self.lock_.load(Ordering::Relaxed) == cur);
-        self.lock_.compare_exchange(cur, 0,
-                                    Ordering::Acquire, 
-                                    Ordering::Relaxed)
-            .expect("lock poisoned");
+        //debug_assert!(self.lock_.load(Ordering::Relaxed) == cur);
+       // self.lock_.compare_exchange(cur, 0,
+       //                             Ordering::Acquire, 
+       //                             Ordering::Relaxed)
+       //     .expect("lock poisoned");
+       
+        self.lock_.store(0, Ordering::Acquire);
     }
 
     //If has writer on it check if own 
@@ -308,16 +311,17 @@ where V: Debug
 unsafe impl<V:Debug> Sync for PValue<V> {}
 
 
-pub struct PMutexGuard< 'v, V> 
+#[derive(Debug)]
+pub struct PMutexGuard<'mutex,'v:'mutex, V> 
 where V: Debug +'v
 {
-    data_ : *mut Option<V>,
+    data_ : &'mutex mut Option<V>,
     val_ : &'v PValue<V>,
     cur_ : u32
 }
 
 
-impl< 'v,  V> Drop for PMutexGuard<'v, V> 
+impl<'mutex, 'v,  V> Drop for PMutexGuard<'mutex,'v, V> 
 where V: Debug 
 {
     fn drop(&mut self) {
@@ -326,20 +330,20 @@ where V: Debug
 }
 
 
-impl< 'v, V> Deref for PMutexGuard<'v,  V>
+impl<'mutex, 'v, V> Deref for PMutexGuard<'mutex,'v,  V>
 where V: Debug 
 {
     type Target = Option<V>;
 
     fn deref(&self) -> &Option<V> {
-        unsafe {&*(self.data_)}
+        self.data_
     }
 }
 
-impl<'v,  V> DerefMut for PMutexGuard<'v,  V> 
+impl<'mutex,'v,  V> DerefMut for PMutexGuard<'mutex,'v,  V> 
 where V: Debug 
 {
     fn deref_mut(&mut self) -> &mut Option<V> {
-        unsafe {&mut *(self.data_)}
+        self.data_
     }
 }

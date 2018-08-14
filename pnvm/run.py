@@ -8,13 +8,13 @@ import numpy as np
 
 
 micro_bench_config = {
-        "thread_num" :[4,8,16, 32],
-        "pc_num": [10],
+        "thread_num" :[1,4,8,16, 32],
+        "pc_num": [5],
         "obj_num" : 20000,
-        "set_size" : [30],
-        "zipf": np.linspace(0.0001, 1.000, num=10),
-        "name": 'OCC',
-        "round_num": 1000,
+        "set_size" : [10],
+        "zipf": np.linspace(0.000001, 1.0, num=10),
+        "name": 'PNVM',
+        "round_num": 10000,
 }
 out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/output.csv"), "w+")
 

@@ -255,6 +255,7 @@ where
     pub tobj_ref_: TObject<T>,
     pub oid_:      ObjectId,
     write_val_:    Option<T>,
+    pub has_write_: bool,
     pub vers_:     Option<Tid>,
 }
 
@@ -268,9 +269,11 @@ where
             tobj_ref_:  tobj_ref,
             write_val_: None,
             vers_:      None,
+            has_write_: false,
         }
     }
-
+    
+    /* Only called after has_write() true arm */
     pub fn write_value(&self) -> T {
         match self.write_val_ {
             Some(ref t) => T::clone(t),
@@ -295,10 +298,7 @@ where
     // }
 
     pub fn has_write(&self) -> bool {
-        match self.write_val_ {
-            Some(_) => true,
-            None => false,
-        }
+        self.has_write_
     }
 
     pub fn has_read(&self) -> bool {
@@ -310,7 +310,8 @@ where
     }
 
     pub fn write(&mut self, val: T) {
-        self.write_val_ = Some(val)
+        self.write_val_ = Some(val);
+        self.has_write_ = true; 
     }
 
     #[cfg(feature = "pmem")]
