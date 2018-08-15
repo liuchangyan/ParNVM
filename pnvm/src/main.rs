@@ -183,9 +183,10 @@ fn run_occ(conf: Config) {
                                 {
                                     flame::start("read_start");
                                 }
+                                let id = tx.commit_id();
                                 let tobj = map.get(&read).unwrap();
                                 let val = tx.read(&tobj);
-                                debug!("[{:?}] Read {:?}", tx.commit_id(), val);
+                                debug!("[{:?}] Read {:?}", id , val);
                                 #[cfg(feature = "profile")]
                                 {
                                     flame::end("read_start");

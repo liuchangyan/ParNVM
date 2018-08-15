@@ -20,7 +20,7 @@ pub struct TBox<T>
 where
     T: Clone,
 {
-    tvalue_: RwLock<TValue<T>>,
+    tvalue_: TValue<T>,
     vers_:   TVersion,
     id_:     ObjectId,
 }
@@ -40,8 +40,7 @@ where
     }
 
     pub fn install(&self, val: &T, tid: Tid) {
-        let mut tvalue = self.tvalue_.write().unwrap();
-        tvalue.store(T::clone(val));
+        self.tvalue_.store(T::clone(val));
         self.vers_.set_version(tid);
     }
 
@@ -51,9 +50,8 @@ where
     
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn get_data(&self) -> &T {
-        let tvalue = self.tvalue_.read().unwrap();
-        tvalue.load()
+    pub fn get_data<'a>(&'a self) -> &'a T {
+        self.tvalue_.load()
     }
 
     #[cfg_attr(feature = "profile", flame)]
@@ -66,14 +64,13 @@ where
     }
 
     pub fn get_ptr(&self) -> *mut T {
-        let tvalue = self.tvalue_.read().unwrap();
-        tvalue.get_ptr()
+        self.tvalue_.get_ptr()
     }
 
-    pub fn get_addr(&self) -> Unique<T> {
-        let tvalue = self.tvalue_.read().unwrap();
-        tvalue.get_addr()
-    }
+   // pub fn get_addr(&self) -> Unique<T> {
+   //     let tvalue = self.tvalue_.read().unwrap();
+   //     tvalue.get_addr()
+   // }
 
     pub fn get_layout(&self) -> Layout {
         Layout::new::<T>()
@@ -81,13 +78,12 @@ where
 
     /* No Trans Access method */
     pub fn raw_read(&self) -> T {
-        let tvalue = self.tvalue_.read().unwrap();
-        T::clone(tvalue.load())
+        let tvalue = self.tvalue_.load();
+        T::clone(tvalue)
     }
 
     pub fn raw_write(&mut self, val: T) {
-        let mut tvalue = self.tvalue_.write().unwrap();
-        tvalue.store(val);
+        self.tvalue_.store(val);
     }
 }
 
@@ -101,7 +97,7 @@ where
             id = tcore::next_id();
         }
         Arc::new(TBox {
-            tvalue_: RwLock::new(TValue::new(val)),
+            tvalue_: TValue::new(val),
             id_:     id,
             vers_:   TVersion {
                 last_writer_: AtomicU32::new(0),
@@ -118,7 +114,7 @@ where
         }
 
         TBox {
-            tvalue_ : RwLock::new(TValue::new(val)),
+            tvalue_ : TValue::new(val),
             id_ : id,
             vers_: TVersion {
                 last_writer_ : AtomicU32::new(0),
@@ -127,3 +123,5 @@ where
         }
     }
 }
+
+unsafe impl<T: Clone> Sync for TBox<T>{}

@@ -13,7 +13,7 @@ use txn::Tid;
 #[allow(unused_imports)]
 use std::{
     self,
-    cell::RefCell,
+    cell::{RefCell,UnsafeCell},
     fmt, mem,
     ptr::Unique,
     rc::Rc,
@@ -175,7 +175,8 @@ pub struct TValue<T>
 where
     T: Clone,
 {
-    ptr_: Unique<T>,
+    //ptr_: Unique<T>,
+    data_ : UnsafeCell<T>,
 }
 
 impl<T> TValue<T>
@@ -183,33 +184,27 @@ where
     T: Clone,
 {
     pub fn new(val: T) -> TValue<T> {
-        let ptr = unsafe { alloc::alloc(Layout::new::<T>()) };
-
-        if ptr.is_null() {
-            panic!("Tvalue::new failed")
-        } else {
-            let ptr = unsafe { mem::transmute::<*mut u8, *mut T>(ptr) };
-            unsafe { ptr.write(val) };
-            return TValue {
-                ptr_: Unique::new(ptr).expect("Tvalue::new failed"),
-            };
+        TValue {
+            data_ : UnsafeCell::new(val),
         }
     }
-    pub fn store(&mut self, data: T) {
-        unsafe { self.ptr_.as_ptr().write(data) };
+    pub fn store(&self, data: T) {
+        unsafe {*self.data_.get() = data};
+        //unsafe { self.ptr_.as_ptr().write(data) };
     }
 
     pub fn load(&self) -> &T {
-        unsafe { self.ptr_.as_ref() }
+        //unsafe { self.ptr_.as_ref() }
+        unsafe { &*self.data_.get()}
     }
 
     pub fn get_ptr(&self) -> *mut T {
-        self.ptr_.as_ptr()
+        self.data_.get()
     }
 
-    pub fn get_addr(&self) -> Unique<T> {
-        self.ptr_
-    }
+    //pub fn get_addr(&self) -> Unique<T> {
+    //    self.ptr_
+    //}
 
     //FIXME::This is super dangerous...
     //But it might be a feasible option. Wrapping the underlying data with
@@ -219,18 +214,19 @@ where
     //However, there seems to be no direct methods that place
     //data from a pointer to a refcell.
     //
-    pub fn get_ref(&self) -> Rc<T> {
-        unsafe { Rc::from_raw(self.ptr_.as_ref()) }
-    }
+    //pub fn get_ref(&self) -> Rc<T> {
+    //    unsafe { Rc::from_raw(self.ptr_.as_ref()) }
+    //}
 }
-impl<T> Drop for TValue<T>
-where
-    T: Clone,
-{
-    fn drop(&mut self) {
-        unsafe { alloc::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>()) }
-    }
-}
+
+//impl<T> Drop for TValue<T>
+//where
+//    T: Clone,
+//{
+//    fn drop(&mut self) {
+//        unsafe { alloc::dealloc(self.ptr_.as_ptr() as *mut u8, Layout::new::<T>()) }
+//    }
+//}
 
 //#[derive(PartialEq, Eq, Hash)]
 pub struct TTag<T>

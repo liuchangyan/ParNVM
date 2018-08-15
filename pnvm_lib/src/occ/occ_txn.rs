@@ -48,34 +48,46 @@ where
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    fn read(&mut self, tobj: &TObject<T>) -> &T {
+    fn read<'b>(&'b mut self, tobj: &'b TObject<T>) -> &'b T {
+        
+       #[cfg(feature = "profile")]
+       flame::start("inner");
+
         let id = tobj.get_id();
 
-       // #[cfg(feature = "profile")]
-       // flame::start("clone");
 
-        let _tobj = Arc::clone(tobj);
+        #[cfg(feature = "profile")]
+        flame::start("clone");
+        let _tobj = Arc::clone(&tobj);
 
-       // #[cfg(feature = "profile")]
-       // flame::end("clone");
+        #[cfg(feature = "profile")]
+        flame::end("clone");
 
 
         let tag = self.retrieve_tag(id, _tobj);
         tag.add_version(tobj.get_version());
 
        if tag.has_write() {
-            tag.write_value()
+            let res = tag.write_value();
+
+            #[cfg(feature = "profile")]
+            flame::end("inner");
+
+            return res;
         } else {
-            tobj.get_data()
+            let res = tobj.get_data();
+
+            #[cfg(feature = "profile")]
+            flame::end("inner");
+
+            return res;
         }
     }
 
 
     #[cfg_attr(feature = "profile", flame)]
     fn write(&mut self, tobj: &TObject<T>, val: T) {
-        let tobj = Arc::clone(tobj);
-
-        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(&tobj));
+        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
         tag.write(val);
     }
     /*Non TransactionOCC Functions*/
