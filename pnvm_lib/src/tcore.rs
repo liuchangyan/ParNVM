@@ -31,6 +31,9 @@ use pnvm_sys::{
     self, Alloc, AllocErr, Layout, MemKind, PMem, PMEM_DEFAULT_SIZE, PMEM_FILE_DIR_BYTES,
 };
 
+#[cfg(feature = "profile")]
+use flame;
+
 #[cfg(feature = "pmem")]
 use plog::PLog;
 
@@ -115,7 +118,7 @@ pub struct ObjectId(u32);
 //[TODO:]To be optimized later
 #[derive(Debug)]
 pub struct TVersion {
-    pub last_writer_: Option<Tid>,
+    pub last_writer_ : AtomicU32,
     //lock_:        Arc<Mutex<bool>>,
     pub lock_owner_: AtomicU32, //lock_owner_:  Option<Tid>
 }
@@ -136,32 +139,13 @@ impl TVersion {
         self.lock_owner_.store(0, Ordering::SeqCst);
     }
 
-    pub fn check_version(&self, tid: &Option<Tid>) -> bool {
-        trace!(
-            "--- [Checking Version] {:?} <-> {:?}",
-            tid,
-            self.last_writer_
-        );
+    pub fn check_version(&self, tid: u32) -> bool {
         //let lock_owner = self.lock_owner_.lock().unwrap();
-        
-        
         if self.lock_owner_.load(Ordering::SeqCst) != 0 {
-           false 
+            false 
         } else {
-            match (tid, self.last_writer_) {
-                (Some(ref tid), Some(ref cur_tid)) => {
-                    if *cur_tid == *tid {
-                        true
-                    } else {
-                        false
-                    }
-                },
-                (None, None) => true,
-                (_, _) => false,
-            }
+            self.last_writer_.load(Ordering::SeqCst) == tid
         }
-
-
        // match (tid, self.last_writer_, self.lock_owner_) {
        //     (Some(ref cur_tid), Some(ref tid), None) => {
        //         if *cur_tid == *tid {
@@ -176,12 +160,13 @@ impl TVersion {
     }
 
     //What if the last writer is own? -> Extension
-    pub fn get_version(&self) -> Option<Tid> {
-        self.last_writer_
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn get_version(&self) -> u32 {
+        self.last_writer_.load(Ordering::SeqCst)
     }
 
-    pub fn set_version(&mut self, tid: Tid) {
-        self.last_writer_ = Some(tid);
+    pub fn set_version(&self, tid: Tid) {
+        self.last_writer_.store(tid.into(), Ordering::SeqCst)
     }
 }
 
@@ -256,7 +241,7 @@ where
     pub oid_:      ObjectId,
     write_val_:    Option<T>,
     pub has_write_: bool,
-    pub vers_:     Option<Tid>,
+    pub vers_:     u32, /* 0 means empty */
 }
 
 impl<T> TTag<T>
@@ -268,15 +253,16 @@ where
             oid_:       oid,
             tobj_ref_:  tobj_ref,
             write_val_: None,
-            vers_:      None,
+            vers_:      0,
             has_write_: false,
         }
     }
     
     /* Only called after has_write() true arm */
-    pub fn write_value(&self) -> T {
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn write_value(&self) -> &T {
         match self.write_val_ {
-            Some(ref t) => T::clone(t),
+            Some(ref t) => t,
             None => panic!("Write Tag Should Have Write Value"),
         }
     }
@@ -297,6 +283,7 @@ where
     //     }
     // }
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn has_write(&self) -> bool {
         self.has_write_
     }
@@ -305,7 +292,8 @@ where
         !self.has_write()
     }
 
-    pub fn add_version(&mut self, vers: Option<Tid>) {
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn add_version(&mut self, vers: u32) {
         self.vers_ = vers;
     }
 

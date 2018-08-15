@@ -151,7 +151,7 @@ impl WorkloadNVM {
 
         //Prepare maps
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new())).collect();
+        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new_with_size(conf.set_size*32, 1024*1024*conf.thread_num))).collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -238,7 +238,6 @@ impl WorkloadNVM {
                 {
                     flame::end("maps get");
                 }
-
 
                 for (x, rw) in rw_v.iter() {
                     if *rw == 1 { /* read */

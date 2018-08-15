@@ -48,13 +48,22 @@ where
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    fn read(&mut self, tobj: &TObject<T>) -> T {
-        let tobj = Arc::clone(tobj);
-
+    fn read(&mut self, tobj: &TObject<T>) -> &T {
         let id = tobj.get_id();
-        let tag = self.retrieve_tag(id, Arc::clone(&tobj));
+
+       // #[cfg(feature = "profile")]
+       // flame::start("clone");
+
+        let _tobj = Arc::clone(tobj);
+
+       // #[cfg(feature = "profile")]
+       // flame::end("clone");
+
+
+        let tag = self.retrieve_tag(id, _tobj);
         tag.add_version(tobj.get_version());
-        if tag.has_write() {
+
+       if tag.has_write() {
             tag.write_value()
         } else {
             tobj.get_data()
@@ -67,11 +76,6 @@ where
         let tobj = Arc::clone(tobj);
 
         let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(&tobj));
-        if !tag.has_read() {
-            //persist log
-            //let log = PLog(tobj);
-
-        }
         tag.write(val);
     }
     /*Non TransactionOCC Functions*/
@@ -95,7 +99,7 @@ where
         TransactionOCC {
             tid_,
             state_: TxState::EMBRYO,
-            deps_: HashMap::new(),
+            deps_: HashMap::with_capacity(512),
         }
     }
 
@@ -143,7 +147,7 @@ where
                 continue;
             }
 
-            if !tag.tobj_ref_.check(&tag.vers_) {
+            if !tag.tobj_ref_.check(tag.vers_) {
                 return false;
             }
         }
@@ -230,7 +234,12 @@ where
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn retrieve_tag(&mut self, id: ObjectId, tobj_ref: TObject<T>) -> &mut TTag<T> {
-        self.deps_.entry(id).or_insert(TTag::new(id, tobj_ref))
+    pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref: TObject<T>) -> &mut TTag<T> {
+        //self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref));
+        if !self.deps_.contains_key(id) {
+            self.deps_.insert(*id, TTag::new(*id, tobj_ref));
+        }
+
+        self.deps_.get_mut(id).expect("entry should exist")
     }
 }

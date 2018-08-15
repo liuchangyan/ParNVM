@@ -9,6 +9,9 @@ use std::{
 //nightly
 use core::alloc::Layout;
 
+#[cfg(feature = "profile")]
+use flame;
+
 use tcore;
 use tcore::{ObjectId, TValue, TVersion};
 
@@ -18,7 +21,7 @@ where
     T: Clone,
 {
     tvalue_: RwLock<TValue<T>>,
-    vers_:   RwLock<TVersion>,
+    vers_:   TVersion,
     id_:     ObjectId,
 }
 
@@ -29,39 +32,37 @@ where
 {
     /*Commit callbacks*/
     pub fn lock(&self, tid: Tid) -> bool {
-        let mut vers = self.vers_.write().unwrap();
-        vers.lock(tid)
+        self.vers_.lock(tid)
     }
 
-    pub fn check(&self, tid: &Option<Tid>) -> bool {
-        let vers = self.vers_.read().unwrap();
-        vers.check_version(tid)
+    pub fn check(&self, tid: u32) -> bool {
+        self.vers_.check_version(tid)
     }
 
-    pub fn install(&self, val: T, tid: Tid) {
+    pub fn install(&self, val: &T, tid: Tid) {
         let mut tvalue = self.tvalue_.write().unwrap();
-        let mut vers = self.vers_.write().unwrap();
-        tvalue.store(val);
-        vers.set_version(tid);
+        tvalue.store(T::clone(val));
+        self.vers_.set_version(tid);
     }
 
     pub fn unlock(&self) {
-        let mut vers = self.vers_.write().unwrap();
-        vers.unlock();
+        self.vers_.unlock();
     }
+    
 
-    pub fn get_data(&self) -> T {
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn get_data(&self) -> &T {
         let tvalue = self.tvalue_.read().unwrap();
-        T::clone(tvalue.load())
+        tvalue.load()
     }
 
-    pub fn get_id(&self) -> ObjectId {
-        self.id_
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn get_id(&self) -> &ObjectId {
+        &self.id_
     }
 
-    pub fn get_version(&self) -> Option<Tid> {
-        let vers = self.vers_.read().unwrap();
-        vers.get_version()
+    pub fn get_version(&self) -> u32 {
+        self.vers_.get_version()
     }
 
     pub fn get_ptr(&self) -> *mut T {
@@ -102,10 +103,10 @@ where
         Arc::new(TBox {
             tvalue_: RwLock::new(TValue::new(val)),
             id_:     id,
-            vers_:   RwLock::new(TVersion {
-                last_writer_: None,
+            vers_:   TVersion {
+                last_writer_: AtomicU32::new(0),
                 lock_owner_:  AtomicU32::new(0),
-            }),
+            },
         })
     }
 
@@ -119,10 +120,10 @@ where
         TBox {
             tvalue_ : RwLock::new(TValue::new(val)),
             id_ : id,
-            vers_: RwLock::new(TVersion {
-                last_writer_ : None,
+            vers_: TVersion {
+                last_writer_ : AtomicU32::new(0),
                 lock_owner_: AtomicU32::new(0),
-            }),
+            },
         }
     }
 }

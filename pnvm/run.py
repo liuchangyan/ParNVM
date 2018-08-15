@@ -8,7 +8,7 @@ import numpy as np
 
 
 micro_bench_config = {
-        "thread_num" :[1,4,8,16, 32],
+        "thread_num" :[1, 4, 8,16, 32],
         "pc_num": [5],
         "obj_num" : 20000,
         "set_size" : [10],

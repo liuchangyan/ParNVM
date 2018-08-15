@@ -35,7 +35,7 @@ where
 {
     fn try_commit(&mut self) -> bool;
     fn write(&mut self, tobj: &TObject<T>, val: T);
-    fn read(&mut self, tobj: &TObject<T>) -> T;
+    fn read(&mut self, tobj: &TObject<T>) -> &T;
     fn notrans_read(tobj: &TObject<T>) -> T;
     fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool;
 }

@@ -9,7 +9,7 @@ use std::sync::{
     Mutex,
     MutexGuard,
     Arc,    
-    atomic::{Ordering, AtomicU32, AtomicBool},
+    atomic::{Ordering, AtomicU32, AtomicBool, AtomicU8},
 };
 
 use std::{
@@ -48,6 +48,15 @@ where K : PartialEq+Hash,
     pub fn new() -> PMap<K,V> {
         PMap {
             inner_ : CHashMap::new()
+        }
+    }
+
+    pub fn new_with_size(cap : usize, bucket_num : usize) -> PMap<K, V> {
+        let inner = CHashMap::with_capacity(cap);  
+        inner.reserve(bucket_num);
+
+        PMap {
+            inner_ : inner
         }
     }
 
@@ -96,6 +105,7 @@ where V : Debug
     data_ : UnsafeCell<Option<V>>,
     is_write_locked_ : AtomicBool,
     last_writer_ : ArcCell<TxnInfo>,
+    count_ : AtomicU8,
 }
 
 
@@ -109,6 +119,7 @@ where V : Debug
             last_writer_ : ArcCell::new(ctor.clone()),
             is_write_locked_: AtomicBool::new(false),
             lock_ : AtomicU32::new(0),
+            count_ : AtomicU8::new(0),
         }
     }
 
@@ -118,6 +129,7 @@ where V : Debug
             last_writer_ : ArcCell::new(Arc::new(TxnInfo::default())),
             is_write_locked_: AtomicBool::default(),
             lock_: AtomicU32::new(0),
+            count_ : AtomicU8::new(0),
         }
     }
 
@@ -149,7 +161,15 @@ where V : Debug
         let tid :u32 = tx.id().into();
         loop {
             let cur = self.lock_.compare_and_swap(0, tid, Ordering::SeqCst);
-            if cur == 0 || cur == tid { /* Get the lock */
+            if cur == 0 { /* Get the lock */
+                self.count_.fetch_add(1, Ordering::SeqCst);
+                return PMutexGuard {
+                    data_: unsafe{&mut *self.data_.get()},
+                    val_ : self,
+                    cur_: tid,
+                }
+            } else if cur == tid {
+                self.count_.fetch_add(1, Ordering::SeqCst);
                 return PMutexGuard {
                     data_: unsafe{&mut *self.data_.get()},
                     val_ : self,
@@ -240,8 +260,14 @@ where V : Debug
        //                             Ordering::Acquire, 
        //                             Ordering::Relaxed)
        //     .expect("lock poisoned");
-       
-        self.lock_.store(0, Ordering::Acquire);
+        
+        if self.count_.fetch_sub(1, Ordering::SeqCst) == 1 { /* Last unlock */
+            self.lock_.compare_exchange(cur, 0,
+                                        Ordering::SeqCst, 
+                                        Ordering::Relaxed)
+                .expect("lock poisoned");
+             
+        }
     }
 
     //If has writer on it check if own 
@@ -296,6 +322,7 @@ where V: Debug
             last_writer_: ArcCell::new(Arc::new(TxnInfo::default())),
             is_write_locked_: AtomicBool::default(),
             lock_: AtomicU32::new(0),
+            count_ : AtomicU8::new(0),
         }
     }
 }

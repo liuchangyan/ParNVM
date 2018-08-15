@@ -179,9 +179,17 @@ fn run_occ(conf: Config) {
                         }
                         for map in maps.iter() {
                             for read in read_keys.iter() {
+                                #[cfg(feature = "profile")]
+                                {
+                                    flame::start("read_start");
+                                }
                                 let tobj = map.get(&read).unwrap();
                                 let val = tx.read(&tobj);
                                 debug!("[{:?}] Read {:?}", tx.commit_id(), val);
+                                #[cfg(feature = "profile")]
+                                {
+                                    flame::end("read_start");
+                                }
                             }
 
                             for write in write_keys.iter() {
