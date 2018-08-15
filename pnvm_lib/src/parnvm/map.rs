@@ -4,6 +4,9 @@ use chashmap::{
     ReadGuard,
 };
 
+use concurrent_hashmap::*;
+use std::collections::hash_map::RandomState;
+
 use super::nvm_txn::*;
 use std::sync::{
     Mutex,
@@ -34,54 +37,58 @@ use std::{
 
 
 pub struct PMap<K,V>
-where K : PartialEq+Hash,
+where K : PartialEq+Hash + Send+ Sync + Eq,
       V : Debug
       {
-          inner_ : CHashMap<K, PValue<V>>
+          //inner_ : CHashMap<K, PValue<V>>,
+          inner_ : ConcHashMap<K, PValue<V>>,
       }
 
 
 impl<K,V> PMap<K,V> 
-where K : PartialEq+Hash,
+where K : PartialEq+Hash + Send+ Sync + Eq,
       V : Debug
 {
     pub fn new() -> PMap<K,V> {
         PMap {
-            inner_ : CHashMap::new()
+            //inner_ : CHashMap::new()
+            inner_ : ConcHashMap::<_, _, RandomState>::new(),
         }
     }
 
-    pub fn new_with_size(cap : usize, bucket_num : usize) -> PMap<K, V> {
-        let inner = CHashMap::with_capacity(cap);  
-        inner.reserve(bucket_num);
+    pub fn new_with_size(cap : usize, bucket_num : u16) -> PMap<K, V> {
+        let mut opt = Options::default();
+        
+        opt.concurrency = bucket_num;
+        opt.capacity = cap;
 
         PMap {
-            inner_ : inner
+            inner_ : ConcHashMap::with_options(opt),
         }
     }
 
-    pub fn new_with_keys(keys: Vec<K>) -> PMap<K, V> 
-    {
-        let pmap = PMap::new();
-        for key in keys.into_iter() {
-           let pval = PValue::default(); 
-           pmap.insert_new(key, pval);
-        }
+   // pub fn new_with_keys(keys: Vec<K>) -> PMap<K, V> 
+   // {
+   //     let pmap = PMap::new();
+   //     for key in keys.into_iter() {
+   //        let pval = PValue::default(); 
+   //        pmap.insert_new(key, pval);
+   //     }
 
-        pmap
-    }
+   //     pmap
+   // }
 
     pub fn get(&self, k: &K) 
-        -> Option<ReadGuard<K,PValue<V>>> 
+        -> Option<Accessor<K,PValue<V>>> 
               {
-                  self.inner_.get(k) 
+                  self.inner_.find(k) 
               }
 
 
-    pub fn insert_new(&self, key: K, pval : PValue<V>) 
-    {
-        self.inner_.insert_new(key, pval);
-    }
+   // pub fn insert_new(&self, key: K, pval : PValue<V>) 
+   // {
+   //     self.inner_.insert_new(key, pval);
+   // }
 
     pub fn insert(&self, key: K, pval : PValue<V>) 
         -> Option<PValue<V>>
@@ -336,6 +343,7 @@ where V: Debug
 }
 
 unsafe impl<V:Debug> Sync for PValue<V> {}
+unsafe impl<V:Debug> Send for PValue<V> {}
 
 
 #[derive(Debug)]

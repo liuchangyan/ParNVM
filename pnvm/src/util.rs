@@ -151,7 +151,7 @@ impl WorkloadNVM {
 
         //Prepare maps
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new_with_size(conf.set_size*32, 1024*1024*conf.thread_num))).collect();
+        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new_with_size(0, (conf.thread_num * 2) as u16))).collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -215,7 +215,7 @@ impl WorkloadNVM {
             comb_vec.sort_unstable_by_key(|(x,r)| *x);
 
             let callback = move |tx: &mut TransactionPar| {
-                let mut rw_v = vec![];
+                //let mut rw_v = vec![];
                 let mut w_g : Vec<PMutexGuard<u32>> = vec![];
                 let mut r_g : Vec<PMutexGuard<u32>>= vec![];
 
@@ -228,24 +228,30 @@ impl WorkloadNVM {
                 {
                     flame::start("maps get");
                 }
-
+                
 
                 //Get the values references
                 for (x, rw) in comb_vec.iter() {
-                    rw_v.push((data_map.get(&x).expect("map get panic"), *rw));
+                    if *rw == 1{
+                        r_g.push(data_map.get(&x).expect("map get panic").get().read(tx));
+                    } else {
+                        w_g.push(data_map.get(&x).expect("map get panic").get().write(tx));
+                    }
+                    //rw_v.push((data_map.get(&x).expect("map get panic"), *rw));
                 }
                 #[cfg(feature = "profile")]
                 {
                     flame::end("maps get");
                 }
 
-                for (x, rw) in rw_v.iter() {
-                    if *rw == 1 { /* read */
-                        r_g.push(x.read(tx));
-                    } else { /* write */
-                        w_g.push(x.write(tx));
-                    }
-                }
+               // for (x, rw) in rw_v.iter() {
+               //     if *rw == 1 { /* read */
+               //         r_g.push(x.get().read(tx));
+               //     } else { /* write */
+               //         w_g.push(x.get().write(tx));
+               //     }
+               // }
+
 
                 #[cfg(feature = "profile")]
                 {
