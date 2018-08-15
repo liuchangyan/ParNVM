@@ -185,7 +185,8 @@ fn run_occ(conf: Config) {
                                 }
                                 let id = tx.commit_id();
                                 let tobj = map.get(&read).unwrap();
-                                let val = tx.read(&tobj);
+                                //let val = tx.read(&tobj);
+                                let val = tx.read(tobj.get());
                                 debug!("[{:?}] Read {:?}", id , val);
                                 #[cfg(feature = "profile")]
                                 {
@@ -197,7 +198,7 @@ fn run_occ(conf: Config) {
                                 let tobj = map.get(&write).unwrap();
                                 let val :u32 = tx.commit_id().into();
                                 debug!("[{:?}] Write {:?}", tx.commit_id(), val);
-                                tx.write(&tobj, val);
+                                tx.write(tobj.get(), val);
                             }
                         }
                         #[cfg(feature = "profile")]

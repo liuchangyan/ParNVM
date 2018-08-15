@@ -125,3 +125,4 @@ where
 }
 
 unsafe impl<T: Clone> Sync for TBox<T>{}
+unsafe impl<T: Clone> Send for TBox<T>{}

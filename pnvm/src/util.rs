@@ -81,7 +81,7 @@ impl WorkloadOCC {
     }
 
     fn prepare_data(conf: &Config) -> DataSet {
-        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new())).collect();
+        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.thread_num*8) as u16))).collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -372,7 +372,8 @@ fn generate_data(conf : &Config) -> Vec<ThreadData<u32>> {
     }
     dataset
 }
-#[derive(Debug)]
+
+
 pub struct DataSet {
     pub keys : Vec<ThreadData<u32>>,
     pub maps : Vec<Arc<TMap<u32, u32>>>,
@@ -380,14 +381,14 @@ pub struct DataSet {
 
 
 pub struct DataSetPar<M> 
-where M: Clone+PartialEq+ Debug + Hash+Eq
+where M: Clone+PartialEq+ Debug+ Hash+Eq+Send+Sync
 {
     pub data : Vec<ThreadData<M>>
 }
 
 #[derive(Debug, Clone)]
 pub struct ThreadData<M> 
-where M: Clone+PartialEq+ Debug + Hash+Eq
+where M: Clone+PartialEq+ Debug+ Hash+Eq+Send+Sync
 {
     pub read_keys: Vec<M>,
     pub write_keys:  Vec<M>,
@@ -395,7 +396,7 @@ where M: Clone+PartialEq+ Debug + Hash+Eq
 
 
 impl<M> ThreadData<M>
-where M: Clone+PartialEq+ Debug+ Hash+Eq
+where M: Clone+PartialEq+ Debug+ Hash+Eq+Send+Sync
 {
     pub fn add_read(&mut self, m: M) {
         self.read_keys.push(m);

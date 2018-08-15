@@ -22,6 +22,7 @@ extern crate libc;
 
 extern crate test;
 
+extern crate concurrent_hashmap;
 extern crate chashmap;
 
 extern crate evmap;
