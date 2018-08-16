@@ -219,6 +219,8 @@ impl WorkloadNVM {
                 let mut w_g : Vec<PMutexGuard<u32>> = vec![];
                 let mut r_g : Vec<PMutexGuard<u32>>= vec![];
 
+                let mut vs = vec![];
+
                 #[cfg(feature = "profile")]
                 {
                     flame::start("acquire locks");
@@ -233,9 +235,15 @@ impl WorkloadNVM {
                 //Get the values references
                 for (x, rw) in comb_vec.iter() {
                     if *rw == 1{
-                        r_g.push(data_map.get(&x).expect("map get panic").get().read(tx));
+                        let v = data_map.get(&x).expect("map get panic").get();
+                        r_g.push(v.read(tx));
+                        vs.push(v);
+                        //r_g.push(data_map.get(&x).expect("map get panic").get().read(tx));
                     } else {
-                        w_g.push(data_map.get(&x).expect("map get panic").get().write(tx));
+                        let v = data_map.get(&x).expect("map get panic").get();
+                        w_g.push(v.write(tx));
+                        vs.push(v);
+                        //w_g.push(data_map.get(&x).expect("map get panic").get().write(tx));
                     }
                     //rw_v.push((data_map.get(&x).expect("map get panic"), *rw));
                 }
