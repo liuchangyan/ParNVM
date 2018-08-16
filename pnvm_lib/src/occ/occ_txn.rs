@@ -49,38 +49,13 @@ where
 
     #[cfg_attr(feature = "profile", flame)]
     fn read<'b>(&'b mut self, tobj: &'b TObject<T>) -> &'b T {
-        
-       #[cfg(feature = "profile")]
-       flame::start("inner");
-
-        let id = tobj.get_id();
-
-
-        #[cfg(feature = "profile")]
-        flame::start("clone");
-        let _tobj = Arc::clone(&tobj);
-
-        #[cfg(feature = "profile")]
-        flame::end("clone");
-
-
-        let tag = self.retrieve_tag(id, _tobj);
+        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
         tag.add_version(tobj.get_version());
 
-       if tag.has_write() {
-            let res = tag.write_value();
-
-            #[cfg(feature = "profile")]
-            flame::end("inner");
-
-            return res;
+        if tag.has_write() {
+            tag.write_value()
         } else {
-            let res = tobj.get_data();
-
-            #[cfg(feature = "profile")]
-            flame::end("inner");
-
-            return res;
+            tobj.get_data()
         }
     }
 
@@ -246,12 +221,8 @@ where
     }
 
     #[cfg_attr(feature = "profile", flame)]
+    #[inline(always)]
     pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref: TObject<T>) -> &mut TTag<T> {
-        //self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref));
-        if !self.deps_.contains_key(id) {
-            self.deps_.insert(*id, TTag::new(*id, tobj_ref));
-        }
-
-        self.deps_.get_mut(id).expect("entry should exist")
+        self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
     }
 }

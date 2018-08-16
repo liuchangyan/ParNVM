@@ -128,6 +128,7 @@ pub struct TVersion {
 //TTag is a local object to the thread.
 
 impl TVersion {
+    #[inline]
     pub fn lock(&self, tid: Tid) -> bool {
         let tid : u32 = tid.into();
         let cur = self.lock_owner_.load(Ordering::SeqCst);
@@ -135,10 +136,12 @@ impl TVersion {
     }
 
     //Caution: whoever has access to self can unlock
+    #[inline]
     pub fn unlock(&self) {
         self.lock_owner_.store(0, Ordering::SeqCst);
     }
 
+    #[inline]
     pub fn check_version(&self, tid: u32) -> bool {
         //let lock_owner = self.lock_owner_.lock().unwrap();
         if self.lock_owner_.load(Ordering::SeqCst) != 0 {
@@ -161,10 +164,12 @@ impl TVersion {
 
     //What if the last writer is own? -> Extension
     #[cfg_attr(feature = "profile", flame)]
+    #[inline]
     pub fn get_version(&self) -> u32 {
         self.last_writer_.load(Ordering::SeqCst)
     }
 
+    #[inline]
     pub fn set_version(&self, tid: Tid) {
         self.last_writer_.store(tid.into(), Ordering::SeqCst)
     }
@@ -257,10 +262,11 @@ where
     /* Only called after has_write() true arm */
     #[cfg_attr(feature = "profile", flame)]
     pub fn write_value(&self) -> &T {
-        match self.write_val_ {
-            Some(ref t) => t,
-            None => panic!("Write Tag Should Have Write Value"),
-        }
+       // match self.write_val_ {
+       //     Some(ref t) => t,
+       //     None => panic!("Write Tag Should Have Write Value"),
+       // }
+       self.write_val_.as_ref().unwrap()
     }
 
     pub fn commit_data(&mut self, id: Tid) {
@@ -280,15 +286,18 @@ where
     // }
 
     #[cfg_attr(feature = "profile", flame)]
+    #[inline(always)]
     pub fn has_write(&self) -> bool {
         self.has_write_
     }
 
+    #[inline(always)]
     pub fn has_read(&self) -> bool {
         !self.has_write()
     }
 
     #[cfg_attr(feature = "profile", flame)]
+    #[inline(always)]
     pub fn add_version(&mut self, vers: u32) {
         self.vers_ = vers;
     }

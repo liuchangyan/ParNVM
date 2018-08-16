@@ -31,38 +31,46 @@ where
     T: Clone,
 {
     /*Commit callbacks*/
+    #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool {
         self.vers_.lock(tid)
     }
 
+    #[inline(always)]
     pub fn check(&self, tid: u32) -> bool {
         self.vers_.check_version(tid)
     }
 
+    #[inline]
     pub fn install(&self, val: &T, tid: Tid) {
         self.tvalue_.store(T::clone(val));
         self.vers_.set_version(tid);
     }
 
+    #[inline(always)]
     pub fn unlock(&self) {
         self.vers_.unlock();
     }
     
 
     #[cfg_attr(feature = "profile", flame)]
+    #[inline(always)]
     pub fn get_data<'a>(&'a self) -> &'a T {
         self.tvalue_.load()
     }
 
     #[cfg_attr(feature = "profile", flame)]
+    #[inline(always)]
     pub fn get_id(&self) -> &ObjectId {
         &self.id_
     }
-
+    
+    #[inline(always)]
     pub fn get_version(&self) -> u32 {
         self.vers_.get_version()
     }
 
+    #[inline(always)]
     pub fn get_ptr(&self) -> *mut T {
         self.tvalue_.get_ptr()
     }

@@ -10,7 +10,7 @@ import numpy as np
 micro_bench_config = {
         "thread_num" :[1, 4, 8,16, 32],
         "pc_num": [5],
-        "obj_num" : 20000,
+        "obj_num" : 50000,
         "set_size" : [10],
         "zipf": np.linspace(0.000001, 1.0, num=10),
         "name": 'PNVM',
