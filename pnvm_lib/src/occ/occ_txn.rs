@@ -19,6 +19,7 @@ where
     tid_:   Tid,
     state_: TxState,
     deps_:  HashMap<ObjectId, TTag<T>>,
+    locks_ : Vec<*const TTag<T>>,
 }
 
 impl<T> Transaction<T> for TransactionOCC<T>
@@ -87,6 +88,7 @@ where
             tid_,
             state_: TxState::EMBRYO,
             deps_: HashMap::with_capacity(512),
+            locks_: Vec::with_capacity(64),
         }
     }
 
@@ -105,21 +107,19 @@ where
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
-        let mut locks: Vec<&TTag<T>> = Vec::new();
-
         for tag in self.deps_.values() {
             if !tag.has_write() {
                 continue;
             }
             let _tobj = Arc::clone(&tag.tobj_ref_);
             if !_tobj.lock(self.commit_id()) {
-                while let Some(_tag) = locks.pop() {
-                    _tag.tobj_ref_.unlock();
+                while let Some(_tag) = self.locks_.pop() {
+                    unsafe{ _tag.as_ref().unwrap().tobj_ref_.unlock()};
                 }
                 debug!("{:#?} failed to locked!", tag);
                 return false;
             } else {
-                locks.push(tag);
+                self.locks_.push(tag as *const TTag<T>);
             }
             debug!("{:#?} locked!", tag);
         }
