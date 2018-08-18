@@ -81,7 +81,7 @@ impl WorkloadOCC {
     }
 
     fn prepare_data(conf: &Config) -> DataSet {
-        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.thread_num*8) as u16))).collect();
+        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.set_size * conf.thread_num*64) as u16))).collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -151,7 +151,7 @@ impl WorkloadNVM {
 
         //Prepare maps
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new_with_size(0, (conf.thread_num * 2) as u16))).collect();
+        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new_with_size(0, (conf.thread_num * conf.set_size *64) as u16))).collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -226,10 +226,6 @@ impl WorkloadNVM {
                     flame::start("acquire locks");
                 }
 
-                #[cfg(feature = "profile")]
-                {
-                    flame::start("maps get");
-                }
                 
 
                 //Get the values references
@@ -246,10 +242,6 @@ impl WorkloadNVM {
                         //w_g.push(data_map.get(&x).expect("map get panic").get().write(tx));
                     }
                     //rw_v.push((data_map.get(&x).expect("map get panic"), *rw));
-                }
-                #[cfg(feature = "profile")]
-                {
-                    flame::end("maps get");
                 }
 
                // for (x, rw) in rw_v.iter() {
@@ -282,7 +274,7 @@ impl WorkloadNVM {
                         flame::start("read");
                     }
                     let x = *i.as_ref().expect("unwrapping reads");
-                    debug!("[{:?}] Read {:?}", tx.id(), x);
+                    //debug!("[{:?}] Read {:?}", tx.id(), x);
                     #[cfg(feature = "profile")]
                     {
                         flame::end("read");
@@ -298,7 +290,7 @@ impl WorkloadNVM {
                     }
                     let w = &mut i;
                     *w.as_mut().expect("unwrapping writes") = tid ;
-                    debug!("[{:?}] Write {:?}", tx.id(), tid);
+                    //debug!("[{:?}] Write {:?}", tx.id(), tid);
                     #[cfg(feature = "profile")]
                     {
                         flame::end("write");

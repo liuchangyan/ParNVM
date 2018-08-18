@@ -82,7 +82,7 @@ where
     T: Clone,
 {
     pub fn new(tid_: Tid) -> TransactionOCC<T> {
-        txn::mark_start(tid_);
+        //txn::mark_start(tid_);
         TransactionOCC {
             tid_,
             state_: TxState::EMBRYO,
@@ -168,7 +168,7 @@ where
         self.persist_commit();
 
         //Clean up local data structures.
-        txn::mark_commit(self.commit_id());
+        //txn::mark_commit(self.commit_id());
         self.clean_up();
         true
     }

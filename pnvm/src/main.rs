@@ -107,13 +107,14 @@ fn run_nvm(conf: Config) {
 
         handles.push(handle);
     }
+    let thd_num = conf.thread_num;
 
     report_stat(handles, start, prep_time, conf);
 
     #[cfg(feature = "profile")]
     {
         flame::end("benchmark");
-        let mut f = File::create("profile/nvm.profile").unwrap();
+        let mut f = File::create(format!("profile/nvm.profile.{}", thd_num).as_str()).unwrap();
         flame::dump_text_to_writer(f);
     }
 }
@@ -146,14 +147,14 @@ fn run_occ(conf: Config) {
         prep_time += _prep_start.elapsed();
         let handle = builder
             .spawn(move || {
+                TidFac::set_thd_mask(i as u32);
                 barrier.wait();
 
                 for _ in 0..conf.round_num {
-                    let now = time::Instant::now();
-                    let id = atomic_clone.fetch_add(1, Ordering::SeqCst) as u32;
-                    BenchmarkCounter::add_time(now.elapsed());
-                    let tx = &mut occ_txn::TransactionOCC::new(Tid::new(id));
-                    let tid = Tid::new(id);
+                    let tid = TidFac::get_thd_next();
+
+                    let tx = &mut occ_txn::TransactionOCC::new(tid);
+                    let tid = tid.clone();
                     #[cfg(feature = "profile")]
                     {
                         flame::start(format!("start_txn - {:?}", tid));
@@ -179,19 +180,11 @@ fn run_occ(conf: Config) {
                         }
                         for map in maps.iter() {
                             for read in read_keys.iter() {
-                                #[cfg(feature = "profile")]
-                                {
-                                    flame::start("read_start");
-                                }
                                 let id = tx.commit_id();
                                 let tobj = map.get(&read).unwrap();
                                 //let val = tx.read(&tobj);
                                 let val = tx.read(tobj.get());
                                 debug!("[{:?}] Read {:?}", id , val);
-                                #[cfg(feature = "profile")]
-                                {
-                                    flame::end("read_start");
-                                }
                             }
 
                             for write in write_keys.iter() {
@@ -210,7 +203,7 @@ fn run_occ(conf: Config) {
                         !res
                     } {}
 
-                    info!("[THREAD {:} - TXN {:}] COMMITS", i + 1, id);
+                    info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
 
                     #[cfg(feature = "profile")]
                     {
@@ -225,12 +218,13 @@ fn run_occ(conf: Config) {
         handles.push(handle);
     }
 
+    let thd_num :usize = conf.thread_num;
     report_stat(handles, start, prep_time, conf);
 
     #[cfg(feature = "profile")]
     {
         flame::end("benchmark_start");
-        let mut f = File::create("profile/occ.profile").unwrap();
+        let mut f = File::create(format!("profile/occ.profile.{}", thd_num).as_str()).unwrap();
         flame::dump_text_to_writer(f);
     }
 }

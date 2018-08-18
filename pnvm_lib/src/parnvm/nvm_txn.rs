@@ -50,7 +50,7 @@ impl TransactionParBase {
 #[derive(Default)]
 pub struct TransactionPar {
     all_ps_:    Vec<Piece>,
-    deps_:      Vec<Arc<TxnInfo>>,
+    deps_:      HashMap<u32, Arc<TxnInfo>>,
     id_:        Tid,
     name_:      String,
     status_:    TxState,
@@ -67,11 +67,12 @@ thread_local!{
     pub static CUR_TXN : Rc<RefCell<TransactionPar>> = Rc::new(RefCell::new(Default::default()));
 }
 
+const DEP_DEFAULT_SIZE : usize = 128;
 impl TransactionPar {
     pub fn new(pieces: Vec<Piece>, id: Tid, name: String) -> TransactionPar {
         TransactionPar {
             all_ps_:    pieces,
-            deps_:      Vec::new(),
+            deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             id_:        id,
             name_:      name,
             status_:    TxState::EMBRYO,
@@ -90,7 +91,7 @@ impl TransactionPar {
             name_:      txn_base.name_,
             id_:        tid,
             status_:    TxState::EMBRYO,
-            deps_:      Vec::new(),
+            deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
             wait_:      None,
             #[cfg(feature="pmem")]
@@ -145,7 +146,7 @@ impl TransactionPar {
     #[cfg_attr(feature = "profile", flame)]
     pub fn wait_deps_start(&self) {
         let cur_rank = self.cur_rank();
-        for dep in self.deps_.iter() {
+        for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_commit() && !dep.has_done(cur_rank) {
                     warn!("waiting waiting for {:?}", dep.id());
@@ -243,9 +244,11 @@ impl TransactionPar {
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn add_dep(&mut self, txn_info: Arc<TxnInfo>) {
+    pub fn add_dep(&mut self, tid: u32, txn_info: Arc<TxnInfo>) {
         warn!("add_dep::{:?} - {:?}", self.id(), txn_info);
-        self.deps_.push(txn_info);
+        if !self.deps_.contains_key(&tid) {
+            self.deps_.insert(tid, txn_info);
+        } 
     }
 
     pub fn has_next_piece(&self) -> bool {
@@ -293,7 +296,7 @@ impl TransactionPar {
     #[cfg(feature = "pmem")]
     #[cfg_attr(feature = "profile", flame)]
     fn wait_deps_persist(&self) {
-        for dep in self.deps_.iter() {
+        for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_persist(){
                     warn!("wait_deps_persist::{:?} waiting for {:?} to commit", self.id(),  dep.id());
@@ -306,7 +309,7 @@ impl TransactionPar {
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn wait_deps_commit(&self) {
-        for dep in self.deps_.iter() {
+        for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_commit(){
                     warn!("wait_deps_commit::{:?} waiting for {:?} to commit", self.id(),  dep.id());

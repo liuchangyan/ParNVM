@@ -165,17 +165,11 @@ where V : Debug
    // }
 
     fn lock(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
+        let mut prev = 0;
         let tid :u32 = tx.id().into();
         loop {
             let cur = self.lock_.compare_and_swap(0, tid, Ordering::SeqCst);
-            if cur == 0 { /* Get the lock */
-                self.count_.fetch_add(1, Ordering::SeqCst);
-                return PMutexGuard {
-                    data_: unsafe{&mut *self.data_.get()},
-                    val_ : self,
-                    cur_: tid,
-                }
-            } else if cur == tid {
+            if cur == 0 || cur == tid { /* Get the lock */
                 self.count_.fetch_add(1, Ordering::SeqCst);
                 return PMutexGuard {
                     data_: unsafe{&mut *self.data_.get()},
@@ -184,8 +178,9 @@ where V : Debug
                 }
             } else { /* Add dep */
                 /* FIXME: Anti-dependency not tracked */
-                if self.is_write_locked_.load(Ordering::SeqCst){
-                    tx.add_dep(self.last_writer_.get());
+                if prev != cur && self.is_write_locked_.load(Ordering::SeqCst){
+                    tx.add_dep(cur, self.last_writer_.get());
+                    prev = cur;
                 }
             }
         }

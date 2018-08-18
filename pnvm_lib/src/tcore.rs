@@ -60,31 +60,31 @@ impl BenchmarkCounter {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn success() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).success_cnt += 1;
         });
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn abort() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).abort_cnt += 1;
         });
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_duration(dur: time::Duration) {
         COUNTER.with(|c| (*c.borrow_mut()).duration = dur)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn copy() -> BenchmarkCounter {
         COUNTER.with(|c| *c.borrow())
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn add_time(dur: time::Duration) {
         COUNTER.with(|c| (*c.borrow_mut()).duration += dur)
     }
@@ -128,7 +128,7 @@ pub struct TVersion {
 //TTag is a local object to the thread.
 
 impl TVersion {
-    #[inline]
+    #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool {
         let tid : u32 = tid.into();
         let cur = self.lock_owner_.load(Ordering::SeqCst);
@@ -136,12 +136,12 @@ impl TVersion {
     }
 
     //Caution: whoever has access to self can unlock
-    #[inline]
+    #[inline(always)]
     pub fn unlock(&self) {
         self.lock_owner_.store(0, Ordering::SeqCst);
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn check_version(&self, tid: u32) -> bool {
         //let lock_owner = self.lock_owner_.lock().unwrap();
         if self.lock_owner_.load(Ordering::SeqCst) != 0 {
@@ -164,12 +164,12 @@ impl TVersion {
 
     //What if the last writer is own? -> Extension
     #[cfg_attr(feature = "profile", flame)]
-    #[inline]
+    #[inline(always)]
     pub fn get_version(&self) -> u32 {
         self.last_writer_.load(Ordering::SeqCst)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn set_version(&self, tid: Tid) {
         self.last_writer_.store(tid.into(), Ordering::SeqCst)
     }
@@ -260,6 +260,7 @@ where
     }
     
     /* Only called after has_write() true arm */
+    #[inline(always)]
     #[cfg_attr(feature = "profile", flame)]
     pub fn write_value(&self) -> &T {
        // match self.write_val_ {
@@ -302,6 +303,7 @@ where
         self.vers_ = vers;
     }
 
+    #[inline(always)]
     pub fn write(&mut self, val: T) {
         self.write_val_ = Some(val);
         self.has_write_ = true; 

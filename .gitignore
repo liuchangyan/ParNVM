@@ -13,6 +13,8 @@ TO_DISCUSS
 benchmark/
 */profile/
 
+perf.*
+
 
 # pmem dir
 /data

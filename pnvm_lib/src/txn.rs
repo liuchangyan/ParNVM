@@ -8,27 +8,27 @@ use std::{
 };
 use tcore::{self, ObjectId, TObject, TTag};
 
-lazy_static! {
-    static ref TXN_RUNNING: Arc<RwLock<HashMap<Tid, bool>>> =
-        { Arc::new(RwLock::new(HashMap::new())) };
-}
+//lazy_static! {
+//    static ref TXN_RUNNING: Arc<RwLock<HashMap<Tid, bool>>> =
+//        { Arc::new(RwLock::new(HashMap::new())) };
+//}
 
 
 thread_local! {
     pub static TID_FAC: Rc<RefCell<TidFac>> = Rc::new(RefCell::new(TidFac::new()));
 }
-pub fn mark_commit(tid: Tid) {
-    TXN_RUNNING
-        .write()
-        .unwrap()
-        .remove(&tid)
-        .expect("mark_commit : txn not in the map");
-}
-
-pub fn mark_start(tid: Tid) {
-    TXN_RUNNING.write().unwrap().insert(tid, true).is_none();
-}
-
+//pub fn mark_commit(tid: Tid) {
+//    TXN_RUNNING
+//        .write()
+//        .unwrap()
+//        .remove(&tid)
+//        .expect("mark_commit : txn not in the map");
+//}
+//
+//pub fn mark_start(tid: Tid) {
+//    TXN_RUNNING.write().unwrap().insert(tid, true).is_none();
+//}
+//
 pub trait Transaction<T>
 where
     T: Clone,
@@ -79,7 +79,8 @@ impl TidFac {
     pub fn set_thd_mask(mask : u32) {
         TID_FAC.with(|fac| fac.borrow_mut().set_mask(mask))
     }
-
+    
+    #[inline(always)]
     pub fn get_thd_next() -> Tid {
         TID_FAC.with(|fac| fac.borrow_mut().get_next())
     }
