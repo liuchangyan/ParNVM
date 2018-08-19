@@ -48,6 +48,7 @@ pub struct BenchmarkCounter {
     pub success_cnt: u32,
     pub abort_cnt:   u32,
     pub duration:    time::Duration,
+    pub start : time::Instant,
 }
 
 //#[cfg(benchmark)]
@@ -56,7 +57,8 @@ impl BenchmarkCounter {
         BenchmarkCounter {
             success_cnt: 0,
             abort_cnt:   0,
-            duration:    time::Duration::default(),
+            start:    time::Instant::now(),
+            duration: time::Duration::default(),
         }
     }
 
@@ -68,20 +70,30 @@ impl BenchmarkCounter {
     }
 
     #[inline(always)]
+    pub fn start() {
+        COUNTER.with(|c| c.borrow_mut().start = time::Instant::now())
+    }
+
+    #[inline(always)]
     pub fn abort() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).abort_cnt += 1;
         });
     }
 
-    #[inline(always)]
-    pub fn set_duration(dur: time::Duration) {
-        COUNTER.with(|c| (*c.borrow_mut()).duration = dur)
-    }
+    //#[inline(always)]
+    //pub fn set_duration(dur: time::Duration) {
+    //    COUNTER.with(|c| (*c.borrow_mut()).duration = dur)
+    //}
 
     #[inline(always)]
     pub fn copy() -> BenchmarkCounter {
-        COUNTER.with(|c| *c.borrow())
+        COUNTER.with(|c| {
+            let mut g = c.borrow_mut();
+            let dur = g.start.elapsed();
+            g.duration = dur;
+            *g
+        })
     }
 
     #[inline(always)]
@@ -131,23 +143,23 @@ impl TVersion {
     #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool {
         let tid : u32 = tid.into();
-        let cur = self.lock_owner_.load(Ordering::SeqCst);
+        let cur = self.lock_owner_.load(Ordering::Acquire);
         cur == 0 || cur == tid
     }
 
     //Caution: whoever has access to self can unlock
     #[inline(always)]
     pub fn unlock(&self) {
-        self.lock_owner_.store(0, Ordering::SeqCst);
+        self.lock_owner_.store(0, Ordering::Release);
     }
 
     #[inline(always)]
     pub fn check_version(&self, tid: u32) -> bool {
         //let lock_owner = self.lock_owner_.lock().unwrap();
-        if self.lock_owner_.load(Ordering::SeqCst) != 0 {
+        if self.lock_owner_.load(Ordering::Acquire) != 0 {
             false 
         } else {
-            self.last_writer_.load(Ordering::SeqCst) == tid
+            self.last_writer_.load(Ordering::Acquire) == tid
         }
        // match (tid, self.last_writer_, self.lock_owner_) {
        //     (Some(ref cur_tid), Some(ref tid), None) => {
@@ -166,12 +178,12 @@ impl TVersion {
     #[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
     pub fn get_version(&self) -> u32 {
-        self.last_writer_.load(Ordering::SeqCst)
+        self.last_writer_.load(Ordering::Acquire)
     }
 
     #[inline(always)]
     pub fn set_version(&self, tid: Tid) {
-        self.last_writer_.store(tid.into(), Ordering::SeqCst)
+        self.last_writer_.store(tid.into(), Ordering::Release)
     }
 }
 

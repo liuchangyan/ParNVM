@@ -61,26 +61,24 @@ fn run_nvm(conf: Config) {
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut prep_time = time::Duration::new(0, 0);
 
-    let start = time::Instant::now();
 
     #[cfg(feature = "profile")]
     flame::start("benchmark");
 
     for i in 0..conf.thread_num {
         /* Per thread preparation */
-        let _prep_start = time::Instant::now();
         let conf = conf.clone();
         let barrier = barrier.clone();
         let thread_txn_base = work[i].clone();
         let builder = thread::Builder::new().name(format!("TXN-{}", i + 1));
         let atomic_clone = atomic_cnt.clone();
 
-        prep_time += _prep_start.elapsed();
-
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 barrier.wait();
+                BenchmarkCounter::start();
+
                 for _ in 0..conf.round_num {
                     /* Get tid */
                     let tid = TidFac::get_thd_next();
@@ -109,7 +107,7 @@ fn run_nvm(conf: Config) {
     }
     let thd_num = conf.thread_num;
 
-    report_stat(handles, start, prep_time, conf);
+    report_stat(handles, conf);
 
     #[cfg(feature = "profile")]
     {
@@ -127,15 +125,12 @@ fn run_occ(conf: Config) {
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
-    let start = time::Instant::now();
     let barrier = Arc::new(Barrier::new(conf.thread_num));
-    let mut prep_time = time::Duration::new(0, 0);
 
     #[cfg(feature = "profile")]
     flame::start("benchmark_start");
 
     for i in 0..conf.thread_num {
-        let _prep_start = time::Instant::now();
         let conf = conf.clone();
         let atomic_clone = atomic_cnt.clone();
         let barrier = barrier.clone();
@@ -144,11 +139,12 @@ fn run_occ(conf: Config) {
         let maps = maps.clone();
         let mtx = mtx.clone();
 
-        prep_time += _prep_start.elapsed();
         let handle = builder
             .spawn(move || {
+
                 TidFac::set_thd_mask(i as u32);
                 barrier.wait();
+                BenchmarkCounter::start();
 
                 for _ in 0..conf.round_num {
                     let tid = TidFac::get_thd_next();
@@ -219,7 +215,7 @@ fn run_occ(conf: Config) {
     }
 
     let thd_num :usize = conf.thread_num;
-    report_stat(handles, start, prep_time, conf);
+    report_stat(handles, conf);
 
     #[cfg(feature = "profile")]
     {
@@ -304,13 +300,11 @@ fn run_single(conf : Config) {
 
 fn report_stat(
     handles: Vec<thread::JoinHandle<BenchmarkCounter>>,
-    start: time::Instant,
-    prep_time: time::Duration,
     conf: Config,
     ) {
     let mut total_abort = 0;
     let mut total_success = 0;
-    let mut spin_time = time::Duration::new(0, 0);
+    let mut total_time = time::Duration::new(0, 0);
 
     for handle in handles {
         //#[cfg(benchmark)]
@@ -318,15 +312,14 @@ fn report_stat(
             Ok(per_thd) => {
                 total_success += per_thd.success_cnt;
                 total_abort += per_thd.abort_cnt;
-                spin_time += per_thd.duration;
+                total_time = std::cmp::max(total_time, per_thd.duration);
             }
             Err(_) => warn!("thread panics"),
         }
     }
     //let total_time =  start.elapsed() - spin_time;
-    let total_time = start.elapsed();
     println!(
-        "{},{},{}, {}, {}, {}, {}, {:?}, {:?}, {:?}",
+        "{},{},{}, {}, {}, {}, {}, {:?}",
         conf.thread_num,
         conf.obj_num,
         conf.set_size,
@@ -335,7 +328,5 @@ fn report_stat(
         total_success,
         total_abort,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
-        spin_time.as_secs() as u32 * 1000 + spin_time.subsec_millis(),
-        prep_time.as_secs() as u32 * 1000 + prep_time.subsec_millis(),
         )
 }
