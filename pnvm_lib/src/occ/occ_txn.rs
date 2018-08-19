@@ -87,8 +87,8 @@ where
         TransactionOCC {
             tid_,
             state_: TxState::EMBRYO,
-            deps_: HashMap::with_capacity(512),
-            locks_: Vec::with_capacity(64),
+            deps_: HashMap::with_capacity(32),
+            locks_: Vec::with_capacity(32),
         }
     }
 
