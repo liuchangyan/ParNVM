@@ -1,10 +1,10 @@
-use txn::{self, Tid, Transaction, TxState};
-
-use tcore;
+use txn::{self, Tid, AbortReason, Transaction, TxState};
+use tcore::{self, ObjectId, TObject, TTag};
 
 use super::dep::*;
 use super::piece::*;
 use plog::{self, PLog};
+
 
 use std::{
     cell::{RefCell},
@@ -48,7 +48,8 @@ impl TransactionParBase {
 }
 
 #[derive(Default)]
-pub struct TransactionPar {
+pub struct TransactionPar
+{
     all_ps_:    Vec<Piece>,
     deps_:      HashMap<u32, Arc<TxnInfo>>,
     id_:        Tid,
@@ -61,6 +62,153 @@ pub struct TransactionPar {
     records_ :     Vec<(Option<*mut u8>, Layout)>,
 }
 
+pub struct TransactionParOCC<T>
+where T: Clone, 
+{
+    base_: TransactionPar,
+    tags_ : HashMap<ObjectId, TTag<T>>,
+    locks_ : Vec<*const TTag<T>>,
+    
+}
+
+
+impl<T> TransactionParOCC<T>
+where T: Clone, 
+{
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn execute_piece(&mut self, mut piece: Piece) {
+        info!(
+            "execute_piece::[{:?}] Running piece - {:?}",
+            self.base_.id(),
+            &piece
+        );
+        
+        while {
+            //Any states created in the run must be reset
+            piece.run(self);
+            self.try_commit_piece(piece.rank())
+        } {}
+    }
+
+    /* Implement OCC interface */
+    pub fn read<'a>(&'a mut self, tobj: &'a TObject<T>) -> &'a T {
+        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
+        tag.add_version(tobj.get_version());
+
+        if tag.has_write() {
+            tag.write_value()
+        } else {
+            tobj.get_data()
+        }
+    }
+
+    pub fn write(&mut self, tobj: &TObject<T>, val : T) {
+        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
+        tag.write(val);
+    }
+
+    #[inline(always)]
+    fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : TObject<T>) -> &mut TTag<T> {
+        self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
+
+    }
+
+
+
+    pub fn try_commit_piece(&mut self, rank: usize) -> bool {
+        if !self.lock() {
+            return self.abort(AbortReason::FailedLocking);
+        }
+
+        if !self.check() {
+            return self.abort(AbortReason::FailedLocking);
+        }
+
+        self.commit_piece(rank);
+    }
+
+    fn abort_piece(&mut self, _ : AbortReason) -> bool {
+        
+        self.clean_up();
+    }
+
+    fn commit_piece(&mut self, rank: usize) {
+
+        #[cfg(feature = "pmem")]
+        self.persist_log();
+
+
+        //Install write sets into the underlying data
+        self.install_data();
+
+        //Persist the data
+        #[cfg(feature = "pmem")]
+        self.persist_data();
+
+        //Persist commit the transaction
+        #[cfg(feature = "pmem")]
+        self.persist_commit();
+
+        self.update_rank(rank);
+
+        //Clean up local data structures.
+        self.clean_up();
+        
+        true
+    }
+
+    fn install_data(&mut self) {
+        let id = self.id();
+        for tag in self.deps_.values_mut() {
+            tag.commit_data(id);
+        }
+    }
+
+    fn clean_up(&mut self) {
+        for tag in self.deps_.drain() {
+            if tag.has_write() {
+                tag.tobj_ref_.unlock();
+            }
+        }
+
+        self.locks_.clear();
+    }
+
+
+    fn lock(&mut self) -> bool {
+        for tag in self.deps_.values() {
+            if !tag.has_write() {
+                continue;
+            }
+            let _tobj = Arc::clone(&tag.tobj_ref_);
+            if !_tobj.lock(self.commit_id()) {
+                while let Some(_tag) = self.locks_.pop() {
+                    unsafe{ _tag.as_ref().unwrap().tobj_ref_.unlock()};
+                }
+                debug!("{:#?} failed to locked!", tag);
+                return false;
+            } else {
+                self.locks_.push(tag as *const TTag<T>);
+            }
+            debug!("{:#?} locked!", tag);
+        }
+        true
+    }
+
+    fn check(&mut self) -> bool {
+        for tag in self.deps_.values() {
+            if !tag.has_read() {
+                continue;
+            }
+
+            if !tag.tobj_ref_.check(tag.vers_) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 
 
 thread_local!{
@@ -68,8 +216,10 @@ thread_local!{
 }
 
 const DEP_DEFAULT_SIZE : usize = 128;
-impl TransactionPar {
-    pub fn new(pieces: Vec<Piece>, id: Tid, name: String) -> TransactionPar {
+
+impl TransactionPar
+{
+    pub fn new(pieces: Vec<Piece>, id: Tid, name: String) -> TransactionPar{
         TransactionPar {
             all_ps_:    pieces,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
@@ -83,7 +233,7 @@ impl TransactionPar {
         }
     }
 
-    pub fn new_from_base(txn_base: &TransactionParBase, tid: Tid) -> TransactionPar {
+    pub fn new_from_base(txn_base: &TransactionParBase, tid: Tid) -> TransactionPar{
         let txn_base = txn_base.clone();
 
         TransactionPar {
@@ -120,8 +270,7 @@ impl TransactionPar {
 
     //    can_run(piece)
     //    - check all current deps(tx_y) :
-    //        - if tx_y still uncommitted && has not ran the rank < tx_x.cur
-    //          => false
+    //        - if tx_y still uncommitted && has not ran the rank < tx_x.cur => false
     //        - else tx_y still uncommitted && has >= rank  || if tx committed
     //          => go on
 
@@ -214,9 +363,9 @@ impl TransactionPar {
             self.id(),
             &piece
         );
-
+        
         piece.run(self);
-        self.update_rank(piece.rank());
+        self.commit(piece.rank())
     }
 
     pub fn update_rank(&self, rank: usize) {
@@ -320,6 +469,8 @@ impl TransactionPar {
         }
 
     }
+
+
 }
 
 
