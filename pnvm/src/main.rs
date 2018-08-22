@@ -29,7 +29,7 @@ use std::{
 
 use pnvm_lib::{
     occ::*,
-    parnvm::nvm_txn::{TransactionPar},
+    parnvm::nvm_txn::{TransactionPar, TransactionParOCC},
     tbox::*,
     tcore::*,
     txn::*,
@@ -115,6 +115,72 @@ fn run_nvm(conf: Config) {
         let mut f = File::create(format!("profile/nvm.profile.{}", thd_num).as_str()).unwrap();
         flame::dump_text_to_writer(f);
     }
+}
+
+fn run_nvm_occ(conf: Config) {
+    let workload = util::TestHelper::prepare_workload_nvm(&conf);
+    let work = workload.work_;
+    let mut handles = Vec::new();
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
+
+    let atomic_cnt = Arc::new(AtomicUsize::new(1));
+    let mut prep_time = time::Duration::new(0, 0);
+
+
+    #[cfg(feature = "profile")]
+    flame::start("benchmark");
+
+    for i in 0..conf.thread_num {
+        /* Per thread preparation */
+        let conf = conf.clone();
+        let barrier = barrier.clone();
+        let thread_txn_base = work[i].clone();
+        let builder = thread::Builder::new().name(format!("TXN-{}", i + 1));
+        let atomic_clone = atomic_cnt.clone();
+
+        let handle = builder
+            .spawn(move || {
+                TidFac::set_thd_mask(i as u32);
+                barrier.wait();
+                BenchmarkCounter::start();
+
+                for _ in 0..conf.round_num {
+                    /* Get tid */
+                    let tid = TidFac::get_thd_next();
+
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::start(format!("start_txn - {:?}", tid));
+                    }
+
+                    let mut tx = TransactionParOCC::new_from_base(&thread_txn_base, tid);
+
+                    TransactionParOCC::register(tx);
+                    TransactionParOCC::execute();
+
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end(format!("start_txn - {:?}", tid));
+                    }
+                }
+
+                BenchmarkCounter::copy()
+            })
+        .unwrap();
+
+        handles.push(handle);
+    }
+    let thd_num = conf.thread_num;
+
+    report_stat(handles, conf);
+
+    #[cfg(feature = "profile")]
+    {
+        flame::end("benchmark");
+        let mut f = File::create(format!("profile/nvm.profile.{}", thd_num).as_str()).unwrap();
+        flame::dump_text_to_writer(f);
+    }
+
 }
 
 fn run_occ(conf: Config) {

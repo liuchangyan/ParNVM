@@ -6,6 +6,7 @@ use super::piece::*;
 use plog::{self, PLog};
 
 
+
 use std::{
     cell::{RefCell},
     rc::Rc,
@@ -15,6 +16,7 @@ use std::{
     },
     thread,
     default::Default,
+    ptr::NonNull,
 };
 
 #[cfg(feature="pmem")]
@@ -89,6 +91,28 @@ where T: Clone,
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
         }
+    }
+
+    pub fn set_thread_txn(mut tx : TransactionParOCC<T>) {
+        CUR_TXN_OCC_PTR.with(|txn| {
+            let ptr = &mut tx as *mut _;
+            let nonnull = NonNull::new(ptr).unwrap();
+            *txn.borrow_mut() = nonnull.cast::<TransactionParOCC<u32>>();
+        })
+    }
+
+    pub fn register(tx : TransactionParOCC<T>) {
+        Self::set_thread_txn(tx)
+    }
+
+    pub fn execute() {
+        CUR_TXN_OCC_PTR.with(|txn| {
+            let mut g_ = txn.borrow_mut();
+            let ptr = unsafe{ g_.as_mut()};
+            let nonnull = NonNull::new(ptr as *mut _).unwrap();
+            let mut nonnull = nonnull.cast::<TransactionParOCC<T>>();
+            unsafe {nonnull.as_mut().base_.execute_txn()};
+        });
     }
 
 
@@ -239,6 +263,10 @@ where T: Clone,
 
         true
     }
+
+    pub fn id(&self) -> &Tid {
+       self.base_.id() 
+    }
 }
 
 
@@ -246,6 +274,8 @@ where T: Clone,
 thread_local!{
     pub static CUR_TXN : Rc<RefCell<TransactionPar>> = Rc::new(RefCell::new(Default::default()));
 
+    //Generic default type 
+    pub static CUR_TXN_OCC_PTR: Rc<RefCell<NonNull<TransactionParOCC<u32>>>> = Rc::new(RefCell::new(NonNull::dangling()));
 }
 
 const DEP_DEFAULT_SIZE : usize = 128;
