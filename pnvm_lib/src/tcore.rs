@@ -5,10 +5,12 @@ use std::{
     },
 };
 
+use crossbeam::sync::ArcCell;
+
 //use std::rc::Rc;
 //use std::cell::RefCell;
 use tbox::TBox;
-use txn::Tid;
+use txn::{Tid, TxnInfo};
 
 #[allow(unused_imports)]
 use std::{
@@ -133,6 +135,7 @@ pub struct TVersion {
     pub last_writer_ : AtomicU32,
     //lock_:        Arc<Mutex<bool>>,
     pub lock_owner_: AtomicU32, //lock_owner_:  Option<Tid>
+    pub txn_info_ : ArcCell<TxnInfo>,
 }
 
 //TTag is attached with each logical segment (identified by key)
@@ -141,10 +144,9 @@ pub struct TVersion {
 
 impl TVersion {
     #[inline(always)]
-    pub fn lock(&self, tid: Tid) -> bool {
+    pub fn lock(&self, tid: Tid) -> bool{
         let tid : u32 = tid.into();
-        let cur = self.lock_owner_.load(Ordering::Acquire);
-        cur == 0 || cur == tid
+        self.lock_owner_.compare_and_swap(0, tid, Ordering::Acquire) == 0
     }
 
     //Caution: whoever has access to self can unlock
@@ -154,13 +156,16 @@ impl TVersion {
     }
 
     #[inline(always)]
-    pub fn check_version(&self, tid: u32) -> bool {
-        //let lock_owner = self.lock_owner_.lock().unwrap();
-        if self.lock_owner_.load(Ordering::Acquire) != 0 {
-            false 
-        } else {
-            self.last_writer_.load(Ordering::Acquire) == tid
-        }
+    pub fn check_version(&self, cur: u32) -> bool {
+        (self.lock_owner_.load(Ordering::Acquire) == 0 &&
+            self.last_writer_.load(Ordering::Acquire) == cur)
+
+       // if locker != 0 {
+       //     return locker;
+       // } else {
+       //     let writer = self.last_writer_.load(Ordering::Acquire);
+       //     return 
+       // }
        // match (tid, self.last_writer_, self.lock_owner_) {
        //     (Some(ref cur_tid), Some(ref tid), None) => {
        //         if *cur_tid == *tid {
@@ -184,6 +189,16 @@ impl TVersion {
     #[inline(always)]
     pub fn set_version(&self, tid: Tid) {
         self.last_writer_.store(tid.into(), Ordering::Release)
+    }
+
+    #[inline(always)]
+    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.txn_info_.get()
+    }
+
+    #[inline(always)]
+    pub fn set_writer_info(&self, txn_info : Arc<TxnInfo>) {
+        self.txn_info_.set(txn_info);
     }
 }
 

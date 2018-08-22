@@ -8,6 +8,7 @@ use concurrent_hashmap::*;
 use std::collections::hash_map::RandomState;
 
 use super::nvm_txn::*;
+use txn::TxnInfo;
 use std::sync::{
     Mutex,
     MutexGuard,

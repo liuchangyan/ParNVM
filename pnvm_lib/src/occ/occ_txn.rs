@@ -107,6 +107,7 @@ where
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
+        let me :u32 = self.commit_id().into();
         for tag in self.deps_.values() {
             if !tag.has_write() {
                 continue;
@@ -133,8 +134,7 @@ where
             if !tag.has_read() {
                 continue;
             }
-
-            if !tag.tobj_ref_.check(tag.vers_) {
+            if !tag.tobj_ref_.check(tag.vers_)  {
                 return false;
             }
         }

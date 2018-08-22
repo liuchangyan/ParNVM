@@ -1,4 +1,4 @@
-use txn::Tid;
+use txn::{Tid, TxnInfo};
 //use std::cell::RefCell;
 use std::{
     ptr::Unique,
@@ -14,6 +14,7 @@ use flame;
 
 use tcore;
 use tcore::{ObjectId, TValue, TVersion};
+use crossbeam::sync::ArcCell;
 
 #[derive(Debug)]
 pub struct TBox<T>
@@ -37,8 +38,8 @@ where
     }
 
     #[inline(always)]
-    pub fn check(&self, tid: u32) -> bool {
-        self.vers_.check_version(tid)
+    pub fn check(&self, cur_ver: u32) -> bool {
+        self.vers_.check_version(cur_ver)
     }
 
     #[inline]
@@ -84,6 +85,14 @@ where
         Layout::new::<T>()
     }
 
+    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_writer_info()
+    }
+
+    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_writer_info(info)
+    }
+
     /* No Trans Access method */
     pub fn raw_read(&self) -> T {
         let tvalue = self.tvalue_.load();
@@ -110,6 +119,7 @@ where
             vers_:   TVersion {
                 last_writer_: AtomicU32::new(0),
                 lock_owner_:  AtomicU32::new(0),
+                txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),
             },
         })
     }
@@ -127,6 +137,7 @@ where
             vers_: TVersion {
                 last_writer_ : AtomicU32::new(0),
                 lock_owner_: AtomicU32::new(0),
+                txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),
             },
         }
     }

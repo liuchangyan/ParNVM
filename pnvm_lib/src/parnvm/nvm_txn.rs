@@ -1,4 +1,4 @@
-use txn::{self, Tid, AbortReason, Transaction, TxState};
+use txn::{self, Tid, AbortReason, Transaction, TxState, TxnInfo};
 use tcore::{self, ObjectId, TObject, TTag};
 
 use super::dep::*;
@@ -12,7 +12,6 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
     default::Default,
@@ -23,7 +22,6 @@ use core::alloc::Layout;
 extern crate pnvm_sys;
 
 
-use crossbeam::sync::ArcCell;
 use parking_lot::RwLock;
 
 use evmap::{self, ReadHandle, ShallowCopy, WriteHandle};
@@ -62,6 +60,7 @@ pub struct TransactionPar
     records_ :     Vec<(Option<*mut u8>, Layout)>,
 }
 
+#[derive(Default)]
 pub struct TransactionParOCC<T>
 where T: Clone, 
 {
@@ -75,6 +74,24 @@ where T: Clone,
 impl<T> TransactionParOCC<T>
 where T: Clone, 
 {
+    pub fn new(pieces : Vec<Piece>, id : Tid, name: String) -> TransactionParOCC<T> {
+        TransactionParOCC {
+            base_: TransactionPar::new(pieces, id, name),
+            tags_: HashMap::with_capacity(16),
+            locks_ : Vec::with_capacity(16),
+        }
+    }
+
+    pub fn new_from_base(txn_base: &TransactionParBase, tid: Tid) -> TransactionParOCC<T> 
+    {
+        TransactionParOCC {
+            base_ : TransactionPar::new_from_base(txn_base, tid),
+            tags_: HashMap::with_capacity(16),
+            locks_ : Vec::with_capacity(16),
+        }
+    }
+
+
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: Piece) {
         info!(
@@ -85,7 +102,7 @@ where T: Clone,
         
         while {
             //Any states created in the run must be reset
-            piece.run(self);
+            piece.run(&mut self.base_);
             self.try_commit_piece(piece.rank())
         } {}
     }
@@ -109,30 +126,41 @@ where T: Clone,
 
     #[inline(always)]
     fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : TObject<T>) -> &mut TTag<T> {
-        self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
+        self.tags_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
 
     }
 
-
+    
+    fn add_dep(&mut self) {
+        for (_, tag) in self.tags_.iter() {
+            let txn_info = tag.tobj_ref_.get_writer_info();
+            if !txn_info.has_commit() {
+                let id : u32= txn_info.id().into();
+                self.base_.add_dep(id, txn_info);
+            }
+        }
+    }
 
     pub fn try_commit_piece(&mut self, rank: usize) -> bool {
         if !self.lock() {
-            return self.abort(AbortReason::FailedLocking);
+            return self.abort_piece(AbortReason::FailedLocking);
         }
 
         if !self.check() {
-            return self.abort(AbortReason::FailedLocking);
+            return self.abort_piece(AbortReason::FailedLocking);
         }
 
-        self.commit_piece(rank);
+        self.add_dep();
+
+        self.commit_piece(rank)
     }
 
     fn abort_piece(&mut self, _ : AbortReason) -> bool {
-        
         self.clean_up();
+        false
     }
 
-    fn commit_piece(&mut self, rank: usize) {
+    fn commit_piece(&mut self, rank: usize) -> bool {
 
         #[cfg(feature = "pmem")]
         self.persist_log();
@@ -149,7 +177,7 @@ where T: Clone,
         #[cfg(feature = "pmem")]
         self.persist_commit();
 
-        self.update_rank(rank);
+        self.base_.update_rank(rank);
 
         //Clean up local data structures.
         self.clean_up();
@@ -158,45 +186,48 @@ where T: Clone,
     }
 
     fn install_data(&mut self) {
-        let id = self.id();
-        for tag in self.deps_.values_mut() {
-            tag.commit_data(id);
+        let id = self.base_.id();
+        let txn_info = self.base_.txn_info();
+        for tag in self.tags_.values_mut() {
+            tag.commit_data(*id);
+            tag.tobj_ref_.set_writer_info(txn_info.clone()); 
         }
     }
 
     fn clean_up(&mut self) {
-        for tag in self.deps_.drain() {
+        for (_, tag) in self.tags_.drain() {
             if tag.has_write() {
                 tag.tobj_ref_.unlock();
             }
         }
-
         self.locks_.clear();
     }
 
 
     fn lock(&mut self) -> bool {
-        for tag in self.deps_.values() {
+        let me = *self.base_.id();
+        for tag in self.tags_.values() {
             if !tag.has_write() {
                 continue;
             }
             let _tobj = Arc::clone(&tag.tobj_ref_);
-            if !_tobj.lock(self.commit_id()) {
+            if !_tobj.lock(me) {
                 while let Some(_tag) = self.locks_.pop() {
+                    //FIXME: Hacky way use raw pointer to eschew lifetime checker
                     unsafe{ _tag.as_ref().unwrap().tobj_ref_.unlock()};
-                }
-                debug!("{:#?} failed to locked!", tag);
+                } debug!("{:#?} failed to locked!", tag);
                 return false;
             } else {
                 self.locks_.push(tag as *const TTag<T>);
             }
             debug!("{:#?} locked!", tag);
         }
+
         true
     }
 
     fn check(&mut self) -> bool {
-        for tag in self.deps_.values() {
+        for tag in self.tags_.values() {
             if !tag.has_read() {
                 continue;
             }
@@ -205,6 +236,7 @@ where T: Clone,
                 return false;
             }
         }
+
         true
     }
 }
@@ -213,6 +245,7 @@ where T: Clone,
 
 thread_local!{
     pub static CUR_TXN : Rc<RefCell<TransactionPar>> = Rc::new(RefCell::new(Default::default()));
+
 }
 
 const DEP_DEFAULT_SIZE : usize = 128;
@@ -365,7 +398,7 @@ impl TransactionPar
         );
         
         piece.run(self);
-        self.commit(piece.rank())
+        self.commit()
     }
 
     pub fn update_rank(&self, rank: usize) {
@@ -479,75 +512,4 @@ impl TransactionPar
 pub struct TxnName {
     name: String,
 }
-
-#[derive(Debug)]
-pub struct TxnInfo {
-    tid_ : Tid,
-    committed_ : AtomicBool,
-    rank_ : AtomicUsize,
-    #[cfg(feature = "pmem")]
-    persist_: AtomicBool,
-}
-
-impl Default for TxnInfo {
-    fn default() -> Self {
-        TxnInfo {
-            tid_ : Tid::default(),
-            committed_: AtomicBool::new(true),
-            rank_ : AtomicUsize::default(),
-            #[cfg(feature = "pmem")]
-            persist_: AtomicBool::new(true), 
-        }
-    }
-}
-
-
-impl TxnInfo {
-    pub fn new(tid: Tid) -> TxnInfo {
-        TxnInfo {
-            tid_ : tid,
-            committed_: AtomicBool::new(false),
-            rank_ : AtomicUsize::new(0),
-
-            #[cfg(feature = "pmem")]
-            persist_ : AtomicBool::new(false),
-        }
-    }
-
-    #[cfg(feature = "pmem")] 
-    pub fn has_persist(&self) -> bool {
-        self.persist_.load(Ordering::SeqCst)
-    }
-
-    pub fn has_commit(&self) -> bool {
-        self.committed_.load(Ordering::SeqCst)
-    }
-
-    pub fn has_done(&self, rank: usize) -> bool {
-        self.rank_.load(Ordering::SeqCst) > rank
-    }
-
-    pub fn commit(&self) {
-        self.committed_.store(true, Ordering::SeqCst);
-    }
-
-    #[cfg(feature = "pmem")]
-    pub fn persist(&self) {
-        self.persist_.store(true, Ordering::SeqCst);
-    }
-
-    pub fn done(&self, rank: usize) {
-        self.rank_.store(rank, Ordering::SeqCst);
-    }
-
-    pub fn id(&self) -> &Tid {
-        &self.tid_
-    }
-
-    pub fn rank(&self) -> usize {
-        self.rank_.load(Ordering::SeqCst)
-    }
-}
-
-
 

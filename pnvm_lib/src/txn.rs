@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
     cell::RefCell,
     sync::{Arc, RwLock},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use tcore::{self, ObjectId, TObject, TTag};
 
@@ -124,4 +125,91 @@ pub enum AbortReason {
     User,
     FailedLocking,
 }
+
+#[derive(Debug)]
+pub struct TxnInfo {
+    tid_ : Tid,
+    locked_ : AtomicBool,
+    committed_ : AtomicBool,
+    rank_ : AtomicUsize,
+    #[cfg(feature = "pmem")]
+    persist_: AtomicBool,
+}
+
+impl Default for TxnInfo {
+    fn default() -> Self {
+        TxnInfo {
+            tid_ : Tid::default(),
+            locked_ : AtomicBool::new(false),
+            committed_: AtomicBool::new(true),
+            rank_ : AtomicUsize::default(),
+            #[cfg(feature = "pmem")]
+            persist_: AtomicBool::new(true), 
+        }
+    }
+}
+
+
+impl TxnInfo {
+    pub fn new(tid: Tid) -> TxnInfo {
+        TxnInfo {
+            tid_ : tid,
+            committed_: AtomicBool::new(false),
+            rank_ : AtomicUsize::new(0),
+            locked_ : AtomicBool::new(false),
+
+            #[cfg(feature = "pmem")]
+            persist_ : AtomicBool::new(false),
+        }
+    }
+
+    #[cfg(feature = "pmem")] 
+    pub fn has_persist(&self) -> bool {
+        self.persist_.load(Ordering::SeqCst)
+    }
+
+    pub fn has_commit(&self) -> bool {
+        self.committed_.load(Ordering::SeqCst)
+    }
+
+    pub fn has_done(&self, rank: usize) -> bool {
+        self.rank_.load(Ordering::SeqCst) > rank
+    }
+
+    pub fn has_lock(&self) -> bool {
+        self.locked_.load(Ordering::SeqCst)
+    }
+
+    pub fn lock(&self) {
+        self.locked_.store(true, Ordering::SeqCst);
+    }
+
+    pub fn unlock(&self) {
+        self.locked_.store(false, Ordering::SeqCst);
+    }
+
+    pub fn commit(&self) {
+        self.committed_.store(true, Ordering::SeqCst);
+    }
+
+    #[cfg(feature = "pmem")]
+    pub fn persist(&self) {
+        self.persist_.store(true, Ordering::SeqCst);
+    }
+
+    pub fn done(&self, rank: usize) {
+        self.rank_.store(rank, Ordering::SeqCst);
+    }
+
+    pub fn id(&self) -> &Tid {
+        &self.tid_
+    }
+
+    pub fn rank(&self) -> usize {
+        self.rank_.load(Ordering::SeqCst)
+    }
+
+}
+
+
 
