@@ -47,6 +47,25 @@ impl TransactionParBase {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct TransactionParBaseOCC<T>
+where T: Clone
+{
+    all_ps_:    Vec<PieceOCC<T>>,
+    name_:      String,
+}
+
+impl<T> TransactionParBaseOCC<T> 
+where T: Clone
+{
+    pub fn new(all_ps: Vec<PieceOCC<T>>, name: String) -> TransactionParBaseOCC<T> {
+        TransactionParBaseOCC {
+            all_ps_:    all_ps,
+            name_:      name,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct TransactionPar
 {
@@ -66,7 +85,17 @@ pub struct TransactionPar
 pub struct TransactionParOCC<T>
 where T: Clone, 
 {
-    base_: TransactionPar,
+    all_ps_:    Vec<PieceOCC<T>>,
+    deps_:      HashMap<u32, Arc<TxnInfo>>,
+    id_:        Tid,
+    name_:      String,
+    status_:    TxState,
+    txn_info_:  Arc<TxnInfo>,
+    wait_:      Option<PieceOCC<T>>,
+
+    #[cfg(feature="pmem")]
+
+    records_ :     Vec<(Option<*mut u8>, Layout)>,
     tags_ : HashMap<ObjectId, TTag<T>>,
     locks_ : Vec<*const TTag<T>>,
     
@@ -76,58 +105,58 @@ where T: Clone,
 impl<T> TransactionParOCC<T>
 where T: Clone, 
 {
-    pub fn new(pieces : Vec<Piece>, id : Tid, name: String) -> TransactionParOCC<T> {
+    pub fn new(pieces : Vec<PieceOCC<T>>, id : Tid, name: String) -> TransactionParOCC<T> {
         TransactionParOCC {
-            base_: TransactionPar::new(pieces, id, name),
+            all_ps_:    pieces,
+            deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
+            id_:        id,
+            name_:      name,
+            status_:    TxState::EMBRYO,
+            wait_:      None,
+            txn_info_:  Arc::new(TxnInfo::new(id)),
+            #[cfg(feature="pmem")]
+            records_ :     Vec::new(),
+
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
         }
     }
 
-    pub fn new_from_base(txn_base: &TransactionParBase, tid: Tid) -> TransactionParOCC<T> 
+    pub fn new_from_base(txn_base: &TransactionParBaseOCC<T>, tid: Tid) -> TransactionParOCC<T> 
     {
+        let txn_base = txn_base.clone();
         TransactionParOCC {
-            base_ : TransactionPar::new_from_base(txn_base, tid),
+            all_ps_:    txn_base.all_ps_,
+            name_:      txn_base.name_,
+            id_:        tid,
+            status_:    TxState::EMBRYO,
+            deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
+            txn_info_:  Arc::new(TxnInfo::new(tid)),
+            wait_:      None,
+            #[cfg(feature="pmem")]
+            records_ :     Vec::new(),
+
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
         }
     }
 
-    pub fn set_thread_txn(mut tx : TransactionParOCC<T>) {
-        CUR_TXN_OCC_PTR.with(|txn| {
-            let ptr = &mut tx as *mut _;
-            let nonnull = NonNull::new(ptr).unwrap();
-            *txn.borrow_mut() = nonnull.cast::<TransactionParOCC<u32>>();
-        })
-    }
 
-    pub fn register(tx : TransactionParOCC<T>) {
-        Self::set_thread_txn(tx)
-    }
-
-    pub fn execute() {
-        CUR_TXN_OCC_PTR.with(|txn| {
-            let mut g_ = txn.borrow_mut();
-            let ptr = unsafe{ g_.as_mut()};
-            let nonnull = NonNull::new(ptr as *mut _).unwrap();
-            let mut nonnull = nonnull.cast::<TransactionParOCC<T>>();
-            unsafe {nonnull.as_mut().base_.execute_txn()};
-        });
-    }
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn execute_piece(&mut self, mut piece: Piece) {
+    pub fn execute_piece(&mut self, mut piece: PieceOCC<T>) {
         info!(
             "execute_piece::[{:?}] Running piece - {:?}",
-            self.base_.id(),
+            self.id(),
             &piece
         );
         
         while {
             //Any states created in the run must be reset
-            piece.run(&mut self.base_);
-            self.try_commit_piece(piece.rank())
+            piece.run(self);
+            let res = self.try_commit_piece(piece.rank());
+            !res
         } {}
     }
 
@@ -160,7 +189,9 @@ where T: Clone,
             let txn_info = tag.tobj_ref_.get_writer_info();
             if !txn_info.has_commit() {
                 let id : u32= txn_info.id().into();
-                self.base_.add_dep(id, txn_info);
+                if !self.deps_.contains_key(&id) {
+                    self.deps_.insert(id, txn_info);
+                } 
             }
         }
     }
@@ -201,7 +232,7 @@ where T: Clone,
         #[cfg(feature = "pmem")]
         self.persist_commit();
 
-        self.base_.update_rank(rank);
+        self.update_rank(rank);
 
         //Clean up local data structures.
         self.clean_up();
@@ -210,10 +241,10 @@ where T: Clone,
     }
 
     fn install_data(&mut self) {
-        let id = self.base_.id();
-        let txn_info = self.base_.txn_info();
+        let id = *self.id();
+        let txn_info = self.txn_info().clone();
         for tag in self.tags_.values_mut() {
-            tag.commit_data(*id);
+            tag.commit_data(id);
             tag.tobj_ref_.set_writer_info(txn_info.clone()); 
         }
     }
@@ -229,7 +260,7 @@ where T: Clone,
 
 
     fn lock(&mut self) -> bool {
-        let me = *self.base_.id();
+        let me = *self.id();
         for tag in self.tags_.values() {
             if !tag.has_write() {
                 continue;
@@ -264,12 +295,173 @@ where T: Clone,
         true
     }
 
+
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn wait_deps_start(&self) {
+        let cur_rank = self.cur_rank();
+        for (_, dep) in self.deps_.iter() {
+            loop { /* Busy wait here */
+                if !dep.has_commit() && !dep.has_done(cur_rank) {
+                    warn!("waiting waiting for {:?}", dep.id());
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    
+    pub fn cur_rank(&self) -> usize {
+        self.txn_info_.rank()
+    }
+
+
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn execute_txn(&mut self) {
+        self.status_ = TxState::ACTIVE;
+
+        while let Some(piece) = self.get_next_piece() {
+            self.wait_deps_start();
+            self.execute_piece(piece);
+
+            #[cfg(feature = "pmem")]
+            self.persist_data();
+        }
+        
+
+        //Commit
+        self.wait_deps_commit();
+        self.commit();
+    }
+    
+    #[cfg(feature = "pmem")]
+    pub fn add_record(&mut self, ptr: Option<*mut u8>, layout: Layout) {
+        self.records_.push((ptr, layout));
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn persist_logs(&self) {
+        let id = *(self.id());
+        let logs = self.records_.iter().map(|(ptr, layout)| {
+            match ptr {
+                Some(ptr) => PLog::new(*ptr, layout.clone(), id),
+                None => PLog::new_none(layout.clone(), id),
+            }
+        }).collect();
+        plog::persist_log(logs);
+    }
+
+    #[cfg(feature="pmem")]
+    pub fn persist_data(&mut self) {
+       for (ptr, layout) in self.records_.drain() {
+            if let Some(ptr) = ptr {
+                pnvm_sys::flush(ptr, layout.clone());
+            }
+       }
+    }
+
+    pub fn update_rank(&self, rank: usize) {
+        self.txn_info_.done(rank);
+    }
+
     pub fn id(&self) -> &Tid {
-       self.base_.id() 
+        &self.id_
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name_
+    }
+
+    pub fn status(&self) -> &TxState {
+        &self.status_
+    }
+
+    pub fn txn_info(&self) -> &Arc<TxnInfo> {
+        &self.txn_info_
+    }
+
+    pub fn get_next_piece(&mut self) -> Option<PieceOCC<T>> {
+        self.wait_.take().or_else(|| self.all_ps_.pop())
+    }
+
+
+    pub fn has_next_piece(&self) -> bool {
+        !self.all_ps_.is_empty()
+    }
+
+    pub fn add_wait(&mut self, p: PieceOCC<T>) {
+        self.wait_ = Some(p)
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn persist_log(&self, records: &Vec<DataRecord>) {
+        let id = self.id();
+        plog::persist_log(records.iter().map(|ref r| r.as_log(*id)).collect());
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn persist_txn(&self) {
+        pnvm_sys::drain();
+        plog::persist_txn(self.id().into());
+        self.txn_info_.persist();
+    }
+
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn add_piece(&mut self, piece: PieceOCC<T>) {
+        self.all_ps_.push(piece)
+    }
+
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn commit(&mut self) {
+        self.txn_info_.commit();
+        self.status_ = TxState::COMMITTED;
+        tcore::BenchmarkCounter::success();
+
+        #[cfg(feature="pmem")]
+        {
+            self.wait_deps_persist();
+            self.persist_txn();
+            self.status_ = TxState::PERSIST;
+        }
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn wait_deps_persist(&self) {
+        for (_, dep) in self.deps_.iter() {
+            loop { /* Busy wait here */
+                if !dep.has_persist(){
+                    warn!("wait_deps_persist::{:?} waiting for {:?} to commit", self.id(),  dep.id());
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[cfg_attr(feature = "profile", flame)]
+    pub fn wait_deps_commit(&self) {
+        for (_, dep) in self.deps_.iter() {
+            loop { /* Busy wait here */
+                if !dep.has_commit(){
+                    warn!("wait_deps_commit::{:?} waiting for {:?} to commit", self.id(),  dep.id());
+                } else {
+                    break;
+                }
+            }
+        }
+
     }
 }
 
 
+
+/*
+ * Locking Protocol
+ *
+ */
 
 thread_local!{
     pub static CUR_TXN : Rc<RefCell<TransactionPar>> = Rc::new(RefCell::new(Default::default()));
@@ -331,30 +523,6 @@ impl TransactionPar
     }
 
 
-    //    can_run(piece)
-    //    - check all current deps(tx_y) :
-    //        - if tx_y still uncommitted && has not ran the rank < tx_x.cur => false
-    //        - else tx_y still uncommitted && has >= rank  || if tx committed
-    //          => go on
-
-    //    <<-- old depdencies satisfied, check new deps now -->>
-    //    - Write lock all data(variable granularity)
-    //      - if any write-locked || read-pinned
-    //          => add to deps
-    //          => releases all write locks
-    //          => false
-    //      - else
-    //          => move on
-    //    - Read pin all
-    //      - if any write-locked by other
-    //          => add writer to deps
-    //          => releases all read pins  && write locks
-    //          => false
-    //      - else
-    //          => move on
-    //
-    //    <<-- read/write all "locked" -->>
-    //    - return true
     #[cfg_attr(feature = "profile", flame)]
     pub fn wait_deps_start(&self) {
         let cur_rank = self.cur_rank();
@@ -412,7 +580,7 @@ impl TransactionPar
 
     #[cfg(feature="pmem")]
     pub fn persist_data(&mut self) {
-       for (ptr, layout) in self.records_.drain(..) {
+       for (ptr, layout) in self.records_.drain() {
             if let Some(ptr) = ptr {
                 pnvm_sys::flush(ptr, layout.clone());
             }
@@ -532,8 +700,6 @@ impl TransactionPar
         }
 
     }
-
-
 }
 
 

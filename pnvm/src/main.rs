@@ -48,6 +48,7 @@ fn main() {
         "OCC" => run_occ(conf),
         "PNVM" => run_nvm(conf),
         "SINGLE" => run_single(conf),
+        "PNVM_OCC" => run_nvm_occ(conf),
         _ => panic!("unknown test name"),
     }
 }
@@ -118,7 +119,7 @@ fn run_nvm(conf: Config) {
 }
 
 fn run_nvm_occ(conf: Config) {
-    let workload = util::TestHelper::prepare_workload_nvm(&conf);
+    let workload = util::TestHelper::prepare_workload_nvm_occ(&conf);
     let work = workload.work_;
     let mut handles = Vec::new();
     let barrier = Arc::new(Barrier::new(conf.thread_num));
@@ -155,8 +156,7 @@ fn run_nvm_occ(conf: Config) {
 
                     let mut tx = TransactionParOCC::new_from_base(&thread_txn_base, tid);
 
-                    TransactionParOCC::register(tx);
-                    TransactionParOCC::execute();
+                    tx.execute_txn();
 
                     #[cfg(feature = "profile")]
                     {

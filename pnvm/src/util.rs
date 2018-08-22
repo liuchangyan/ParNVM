@@ -38,6 +38,10 @@ impl TestHelper {
             dataset_: WorkloadOCC::prepare_data(config),
         }
     }
+    
+    pub fn prepare_workload_nvm_occ(config: &Config) -> WorkloadNVMOCC {
+        WorkloadNVMOCC::new_parnvm_occ(config)
+    }
 
     pub fn prepare_workload_nvm(config: &Config) -> WorkloadNVM {
         WorkloadNVM::new_parnvm(config)
@@ -98,51 +102,118 @@ impl WorkloadOCC {
         }
     }
 
-    // fn prepare_data_hardcoded(conf: &Config) -> DataSet {
-    //     let pool: Vec<TObject<u32>> = (0..conf.obj_num).map(|x| TBox::new(x as u32)).collect();
-    //     let mut dataset = DataSet {
-    //         read: Vec::with_capacity(conf.thread_num),
-    //         write: Vec::with_capacity(conf.thread_num),
-    //     };
-
-    //     let mut next_item = conf.cfl_pc_num;
-
-    //     for thread_id in 0..conf.thread_num {
-    //         dataset.read.push(Vec::new());
-    //         dataset.write.push(Vec::new());
-
-    //         if thread_id < conf.cfl_txn_num {
-    //             for i in 0..conf.cfl_pc_num {
-    //                 /* Conflicting Txns */
-    //                 //Read and Write same TBox
-    //                 dataset.read[thread_id].push(Arc::clone(&pool[i]));
-    //                 dataset.write[thread_id].push(Arc::clone(&pool[i]));
-    //             }
-
-    //             /* Non-conflicting pieces */
-    //             for i in conf.cfl_pc_num..conf.pc_num {
-    //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
-    //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
-    //                 next_item += 1;
-    //             }
-    //         } else {
-    //             /* Non conflicting txns */
-    //             for i in 0..conf.pc_num {
-    //                 dataset.read[thread_id].push(Arc::clone(&pool[next_item]));
-    //                 dataset.write[thread_id].push(Arc::clone(&pool[next_item]));
-    //                 next_item += 1;
-    //             }
-    //         }
-    //     }
-
-    //     trace!("data: {:#?}", dataset);
-
-    //     dataset
-    // }
 }
 
 pub struct WorkloadNVM {
     pub work_: Vec<TransactionParBase>,
+}
+
+
+pub struct WorkloadNVMOCC
+{
+    pub work_: Vec<TransactionParBaseOCC<u32>>,
+}
+
+impl WorkloadNVMOCC
+{
+    pub fn new_parnvm_occ(conf: &Config) -> WorkloadNVMOCC {
+        let mut threads_work = Vec::with_capacity(conf.thread_num);
+
+        //Prepare maps
+        let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
+        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.set_size * conf.thread_num*64) as u16))).collect();
+        //Prepare data
+        let keys = generate_data(conf); 
+        for map in maps.iter() {
+            for data in keys.iter() {
+                data.fill_tmap(map);
+            }
+        }
+
+        //Prepare TXNs
+        //   For now, thread_num == txn_num
+        //
+        let next_item_id = conf.cfl_txn_num;
+        for thread_i in 0..conf.thread_num {
+            let txn_i = thread_i;
+            let tx_name = WorkloadNVM::make_txn_name(thread_i);
+            let txn_base = WorkloadNVMOCC::make_txn_base_occ(txn_i, tx_name, conf, &maps, &keys[thread_i]);
+            threads_work.push(txn_base);
+        }
+
+        WorkloadNVMOCC {
+            work_: threads_work,
+        }
+
+    }
+
+    fn make_txn_base_occ(
+        tx_id: usize,
+        tx_name: String,
+        conf: &Config,
+        data_map: &Vec<Arc<TMap<u32, u32>>>, 
+        data: &ThreadData<u32>,
+        ) -> TransactionParBaseOCC<u32> {
+
+        let mut pieces = Vec::new();
+
+        //Create closures
+        for piece_id in 0..conf.pc_num {
+            let data_map = data_map[piece_id].clone();
+            let read_keys = data.read_keys.clone();
+            let write_keys = data.write_keys.clone();
+
+            let set_size = conf.set_size;
+
+
+            let write_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter()); 
+            let read_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
+
+            let mut write_vec :Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
+            let mut read_vec : Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
+
+            let mut comb_vec = vec![];
+            comb_vec.append(&mut write_vec);
+            comb_vec.append(&mut read_vec);
+
+            comb_vec.sort_unstable_by_key(|(x,r)| *x);
+
+            let callback = move |tx: &mut TransactionParOCC<u32>| {
+                //let mut rw_v = vec![];
+
+                let id = *tx.id();
+
+                for (x, rw) in comb_vec.iter() {
+                    let tobj = data_map.get(&x).expect("map get panic");
+                    if *rw == 1 { /* Read */
+                        let v = tx.read(tobj.get());
+                        debug!("[{:?}] Read {:?}", id, v);
+                    } else {
+                        let val: u32 = tx.id().into();
+                        tx.write(tobj.get(), val);
+                        debug!("[{:?}] Write {:?}", id, val);
+                    }
+                }
+
+                1
+            };
+
+            let piece = PieceOCC::new(
+                Pid::new(piece_id as u32),
+                tx_name.clone(),
+                Arc::new(Box::new(callback)),
+                "cb",
+                piece_id,
+                );
+
+            pieces.push(piece);
+        }
+
+        pieces.reverse();
+
+        TransactionParBaseOCC::new(pieces, tx_name.clone())
+    }
+
 }
 
 impl WorkloadNVM {
@@ -180,105 +251,6 @@ impl WorkloadNVM {
         }
     }
 
-    pub fn new_parnvm_occ(conf: &Config) -> WorkloadNVM {
-        let mut threads_work = Vec::with_capacity(conf.thread_num);
-
-        //Prepare maps
-        let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.set_size * conf.thread_num*64) as u16))).collect();
-        //Prepare data
-        let keys = generate_data(conf);
-
-        for map in maps.iter() {
-            for data in keys.iter() {
-                data.fill_tmap(map);
-            }
-        }
-
-        //Prepare TXNs
-        //   For now, thread_num == txn_num
-        //
-        let next_item_id = conf.cfl_txn_num;
-        for thread_i in 0..conf.thread_num {
-            let txn_i = thread_i;
-            let tx_name = WorkloadNVM::make_txn_name(thread_i);
-            let txn_base = WorkloadNVM::make_txn_base_occ(txn_i, tx_name, conf, &maps, &keys[thread_i]);
-            threads_work.push(txn_base);
-        }
-
-        debug!("{:#?}", threads_work);
-        WorkloadNVM {
-            work_: threads_work,
-        }
-
-    }
-
-    fn make_txn_base_occ(
-        tx_id: usize,
-        tx_name: String,
-        conf: &Config,
-        data_map: &Vec<Arc<TMap<u32, u32>>>, 
-        data: &ThreadData<u32>,
-        ) -> TransactionParBase {
-
-        let mut pieces = Vec::new();
-
-        //Create closures
-        for piece_id in 0..conf.pc_num {
-            let data_map = data_map[piece_id].clone();
-            let read_keys = data.read_keys.clone();
-            let write_keys = data.write_keys.clone();
-
-            let set_size = conf.set_size;
-
-
-            let write_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter()); 
-            let read_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
-
-            let mut write_vec :Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
-            let mut read_vec : Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
-
-            let mut comb_vec = vec![];
-            comb_vec.append(&mut write_vec);
-            comb_vec.append(&mut read_vec);
-
-            comb_vec.sort_unstable_by_key(|(x,r)| *x);
-
-            let callback = move |tx: &mut TransactionParOCC<u32>| {
-                //let mut rw_v = vec![];
-
-                let id = tx.id();
-
-                for (x, rw) in comb_vec.iter() {
-                    let tobj = data_map.get(&x).expect("map get panic");
-                    if *rw == 1 { /* Read */
-                        let v = tx.read(tobj.get());
-                        debug!("[{:?}] Read {:?}", id, v);
-                    } else {
-                        let val: u32 = tx.id().into();
-                        tx.write(tobj.get(), val);
-                        debug!("[{:?}] Write {:?}", id, val);
-                    }
-                }
-
-                1
-            };
-
-            let piece = Piece::new(
-                Pid::new(piece_id as u32),
-                tx_name.clone(),
-                Arc::new(Box::new(callback)),
-                "cb",
-                piece_id,
-                );
-
-            pieces.push(piece);
-        }
-
-        pieces.reverse();
-
-        TransactionParBase::new( pieces, tx_name.clone())
-    }
 
     fn make_txn_base(
         tx_id: usize,
