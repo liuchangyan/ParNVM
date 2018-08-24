@@ -2,6 +2,7 @@
 use table::{Key, Table};
 
 
+#[derive(Clone)]
 pub struct Warehouse {
     pub w_id: i32,
     pub w_name: String,

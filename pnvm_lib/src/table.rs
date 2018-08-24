@@ -1,8 +1,10 @@
 
 use alloc::raw_vec::RawVec;
+use alloc::alloc::Layout;
+
 use std::{
     sync::atomic::{AtomicUsize, Ordering},
-    sync::RwLock,
+    sync::{Arc,RwLock},
     collections::{
         HashMap,
         hash_map::RandomState,
@@ -14,7 +16,7 @@ use std::{
 };
 
 use tcore::{TVersion};
-use txn::TxnInfo;
+use txn::{Tid,TxnInfo};
 
 
 pub trait Key<T> {
@@ -23,7 +25,7 @@ pub trait Key<T> {
 
 
 pub struct Table<Entry, Index, S = RandomState> 
-where Entry: Key<Index>,
+where Entry: Key<Index> + Clone,
       Index: Eq+Hash 
 {
     buckets : Vec<Bucket<Entry, Index>>,
@@ -33,7 +35,7 @@ where Entry: Key<Index>,
 
 
 impl<Entry, Index, S> Table<Entry, Index, S> 
-where Entry: Key<Index>,
+where Entry: Key<Index> + Clone,
       Index: Eq+Hash,
       S: BuildHasher
 {
@@ -74,7 +76,7 @@ where Entry: Key<Index>,
 }
 
 impl<Entry, Index> Default for Table<Entry, Index> 
-where Entry: Key<Index>,
+where Entry: Key<Index> + Clone,
       Index: Eq+Hash 
 {
     fn default() -> Self {
@@ -93,7 +95,7 @@ where Entry: Key<Index>,
 }
 
 pub struct Bucket<Entry, Index> 
-where Entry: Key<Index>,
+where Entry: Key<Index> + Clone,
       Index: Eq+Hash 
 {
     rows: RwLock<RawVec<Row<Entry>>>,
@@ -102,7 +104,7 @@ where Entry: Key<Index>,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
-where Entry: Key<Index>,
+where Entry: Key<Index> + Clone,
       Index: Eq+Hash
 {
     pub fn new() -> Bucket<Entry, Index> {
@@ -158,30 +160,87 @@ where Entry: Key<Index>,
 
 
 pub struct Row<Entry> 
+where Entry : Clone
 {
     data_: UnsafeCell<Entry>,
-    version_: TVersion,
+    vers_: TVersion,
 }
 
 
 impl<Entry>  Row<Entry> 
+where Entry: Clone
 {
     pub fn new(entry: Entry) -> Row<Entry>{
         Row{
             data_: UnsafeCell::new(entry),
-            version_: TVersion::default(), /* FIXME: this can carry txn info */
+            vers_: TVersion::default(), /* FIXME: this can carry txn info */
         }
     }
 
     pub fn new_from_txn(entry : Entry, txn_info: TxnInfo) -> Row<Entry> {
         Row {
             data_ : UnsafeCell::new(entry),
-            version_ : TVersion::new_with_info(txn_info),
+            vers_ : TVersion::new_with_info(txn_info),
         }
     }
 
     pub fn get_ref(&self) -> &Entry {
         unsafe { self.data_.get().as_ref().unwrap() }
+    }
+
+    pub fn get_mut(&self) -> &mut Entry {
+        unsafe { self.data_.get().as_mut().unwrap() }
+    }
+
+
+    #[inline(always)]
+    pub fn lock(&self, tid: Tid) -> bool {
+        self.vers_.lock(tid)
+    }
+
+    #[inline(always)]
+    pub fn check(&self, cur_ver: u32) -> bool {
+        self.vers_.check_version(cur_ver)
+    }
+
+    //FIXME: how to not Clone
+    #[inline]
+    pub fn install(&self, val: &Entry, tid: Tid) {
+        unsafe {ptr::write(self.data_.get(), val.clone())};
+        self.vers_.set_version(tid);
+    }
+
+    #[inline(always)]
+    pub fn unlock(&self) {
+        self.vers_.unlock();
+    }
+
+    
+    #[inline(always)]
+    pub fn get_version(&self) -> u32 {
+        self.vers_.get_version()
+    }
+
+    #[inline(always)]
+    pub fn get_ptr(&self) -> *mut Entry {
+        self.data_.get()
+    }
+
+   // pub fn get_addr(&self) -> Unique<T> {
+   //     let tvalue = self.tvalue_.read().unwrap();
+   //     tvalue.get_addr()
+   // }
+
+    pub fn get_layout(&self) -> Layout {
+        Layout::new::<Entry>()
+    }
+
+    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_writer_info()
+    }
+
+    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_writer_info(info)
     }
 }
 

@@ -245,7 +245,12 @@ mod tests {
         table.push(warehouse1);
         let wh2 = table.retrieve(&1).expect("non empty").get_ref();
         assert_eq!(wh2.w_name, "Singapore".to_string());
+
+        let mut wh2 = table.retrieve(&1).expect("non empty").get_mut();
+        (*wh2).w_name = "China".to_string(); 
         
+        let wh3 = table.retrieve(&1).expect("non empty").get_ref();
+        assert_eq!(wh3.w_name, "China".to_string());
     }
 
     //#[test]
