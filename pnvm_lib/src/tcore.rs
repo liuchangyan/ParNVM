@@ -134,15 +134,20 @@ pub struct ObjectId(u32);
 pub struct TVersion {
     pub last_writer_ : AtomicU32,
     //lock_:        Arc<Mutex<bool>>,
-    pub lock_owner_: AtomicU32, //lock_owner_:  Option<Tid>
-    pub txn_info_ : ArcCell<TxnInfo>,
+    pub lock_owner_: AtomicU32, 
+    pub txn_info_ : ArcCell<TxnInfo>, /* Info of the last writer's txn_ info */
 }
 
-//TTag is attached with each logical segment (identified by key)
-//for a TObject.
-//TTag is a local object to the thread.
 
 impl TVersion {
+    pub fn new_with_info(txn_info: TxnInfo) -> TVersion {
+        TVersion {
+            last_writer_ : AtomicU32::new(txn_info.id().into()),
+            lock_owner_ : AtomicU32::new(0),
+            txn_info_: ArcCell::new(Arc::new(txn_info)), 
+        }
+    }
+
     #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool{
         let tid : u32 = tid.into();
@@ -199,6 +204,17 @@ impl TVersion {
     #[inline(always)]
     pub fn set_writer_info(&self, txn_info : Arc<TxnInfo>) {
         self.txn_info_.set(txn_info);
+    }
+}
+
+
+impl Default for TVersion {
+    fn default() -> Self {
+        TVersion{
+            last_writer_ : AtomicU32::new(0),
+            lock_owner_ : AtomicU32::new(0),
+            txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),
+        }
     }
 }
 

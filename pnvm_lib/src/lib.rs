@@ -5,9 +5,12 @@
 #![feature(test)]
 #![feature(ptr_internals)]
 #![feature(integer_atomics)]
+#![feature(alloc)]
+#![feature(raw_vec_internals)]
 #![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
 #![cfg_attr(feature = "profile", plugin(flamer))]
 extern crate pnvm_sys;
+extern crate alloc;
 
 extern crate core;
 #[cfg(feature = "profile")]
@@ -37,6 +40,9 @@ pub mod txn;
 pub mod occ;
 pub mod parnvm;
 
+pub mod table;
+pub mod entry;
+
 #[cfg(test)]
 mod tests {
     extern crate crossbeam;
@@ -47,7 +53,6 @@ mod tests {
     use super::tbox::TBox;
     use super::tcore::TObject;
     use super::txn;
-    use super::txn::{Tid, Transaction};
 
     // #[test]
     // fn test_single_read() {
@@ -228,78 +233,93 @@ mod tests {
         thread,
     };
 
-
+    use super::table::*;
+    use super::entry::*;
     #[test]
-    fn test_single_piece_run() {
+    fn test_table_new() {
+        let table = Table::<Warehouse, i32>::new(); 
+        let warehouse1 = Warehouse {
+            w_id: 1,
+            w_name: "Singapore".to_string(),
+        };
+        table.push(warehouse1);
+        let wh2 = table.retrieve(&1).expect("non empty").get_ref();
+        assert_eq!(wh2.w_name, "Singapore".to_string());
         
-        let data_map = Arc::new(PMap::new());
-        let barrier = Arc::new(Barrier::new(1));
-        
-        let piece = Piece::new(
-            Pid::new(1),
-            "TXN_1".to_string(),
-            Arc::new(Box::new(move|tx : &mut TransactionPar| {
-                let val = PValue::new(1 as u32, tx);
-                data_map.insert(1,val);
-
-                let g = data_map.get(&1).unwrap();
-                let g1 = data_map.get(&1).unwrap();
-                println!("Read {}", (*g.read(tx).as_ref().unwrap()));
-
-                let id :u32 = tx.id().into(); 
-                let mut write_g = g1.write(tx);
-                let mut i = 0;
-                *write_g.as_mut().unwrap() = id * 100;
-
-                println!("Read {}", (*g.read(tx).as_ref().unwrap()));
-                1
-            })),
-            "insert-read",
-            1);
-        
-        let txn_base = TransactionParBase::new(vec![piece], "TXN_1".to_string()); 
-
-        let tx = TransactionPar::new_from_base(&txn_base, Tid::new(1));
-        
-        
-        crossbeam::scope(|scope| {
-            //Prepare TXN1
-            let txn_base = txn_base.clone();
-            let c = barrier.clone();
-
-            let handler = scope.spawn(move|| {
-                c.wait();
-                let tx = TransactionPar::new_from_base(&txn_base, Tid::new(2));
-                TransactionPar::register(tx);
-                TransactionPar::execute();
-            });
-            
-            barrier.wait();
-            TransactionPar::register(tx);
-            TransactionPar::execute();
-
-            handler.join();
-        });
-
-        // Dump the report to disk
     }
+
+    //#[test]
+    //fn test_single_piece_run() {
+    //    
+    //    let data_map = Arc::new(PMap::new());
+    //    let barrier = Arc::new(Barrier::new(1));
+    //    
+    //    let piece = Piece::new(
+    //        Pid::new(1),
+    //        "TXN_1".to_string(),
+    //        Arc::new(Box::new(move|tx : &mut TransactionPar| {
+    //            let val = PValue::new(1 as u32, tx);
+    //            data_map.insert(1,val);
+
+    //            let g = data_map.get(&1).unwrap();
+    //            let g1 = data_map.get(&1).unwrap();
+    //            println!("Read {}", (*g.read(tx).as_ref().unwrap()));
+
+    //            let id :u32 = tx.id().into(); 
+    //            let mut write_g = g1.write(tx);
+    //            let mut i = 0;
+    //            *write_g.as_mut().unwrap() = id * 100;
+
+    //            println!("Read {}", (*g.read(tx).as_ref().unwrap()));
+    //            1
+    //        })),
+    //        "insert-read",
+    //        1);
+    //    
+    //    let txn_base = TransactionParBase::new(vec![piece], "TXN_1".to_string()); 
+
+    //    let tx = TransactionPar::new_from_base(&txn_base, Tid::new(1));
+    //    
+    //    
+    //    crossbeam::scope(|scope| {
+    //        //Prepare TXN1
+    //        let txn_base = txn_base.clone();
+    //        let c = barrier.clone();
+
+    //        let handler = scope.spawn(move|| {
+    //            c.wait();
+    //            let tx = TransactionPar::new_from_base(&txn_base, Tid::new(2));
+    //            TransactionPar::register(tx);
+    //            TransactionPar::execute();
+    //        });
+    //        
+    //        barrier.wait();
+    //        TransactionPar::register(tx);
+    //        TransactionPar::execute();
+
+    //        handler.join();
+    //    });
+
+    //    // Dump the report to disk
+    //}
+
 
     use test::Bencher;
 
-    #[bench]
-    fn bench_map_get(b: &mut Bencher) {
-        let map : Arc<TMap<u32, u32>> = Arc::new(TMap::new());
-        for key in 0..10000 {
-            map.insert(key as u32,TBox::new(key as u32));
-        }
+    //#[bench]
+    //fn bench_map_get(b: &mut Bencher) {
+    //    let map : Arc<TMap<u32, u32>> = Arc::new(TMap::new());
+    //    for key in 0..10000 {
+    //        map.insert(key as u32,TBox::new(key as u32));
+    //    }
 
-        let mut tx = TransactionOCC::new(Tid::new(1));
-        
-        b.iter(|| {
-            let g = map.get(&1).unwrap();
-            let tag = tx.retrieve_tag(g.get_id(), g.clone());
-        });
+    //    let mut tx = TransactionOCC::new(Tid::new(1));
+    //    
+    //    b.iter(|| {
+    //        let g = map.get(&1).unwrap();
+    //        let tag = tx.retrieve_tag(g.get_id(), g.clone());
+    //    });
 
-    }
+    //}
 
 }
