@@ -40,8 +40,8 @@ pub mod txn;
 pub mod occ;
 pub mod parnvm;
 
-pub mod table;
-pub mod entry;
+//pub mod table;
+//pub mod entry;
 
 #[cfg(test)]
 mod tests {
@@ -233,25 +233,25 @@ mod tests {
         thread,
     };
 
-    use super::table::*;
-    use super::entry::*;
-    #[test]
-    fn test_table_new() {
-        let table = Table::<Warehouse, i32>::new(); 
-        let warehouse1 = Warehouse {
-            w_id: 1,
-            w_name: "Singapore".to_string(),
-        };
-        table.push(warehouse1);
-        let wh2 = table.retrieve(&1).expect("non empty").get_ref();
-        assert_eq!(wh2.w_name, "Singapore".to_string());
+   // use super::table::*;
+   // use super::entry::*;
+   // #[test]
+   // fn test_table_new() {
+   //     let table = Table::<Warehouse, i32>::new(); 
+   //     let warehouse1 = Warehouse {
+   //         w_id: 1,
+   //         w_name: "Singapore".to_string(),
+   //     };
+   //     table.push(warehouse1);
+   //     let wh2 = table.retrieve(&1).expect("non empty").get_ref();
+   //     assert_eq!(wh2.w_name, "Singapore".to_string());
 
-        let mut wh2 = table.retrieve(&1).expect("non empty").get_mut();
-        (*wh2).w_name = "China".to_string(); 
-        
-        let wh3 = table.retrieve(&1).expect("non empty").get_ref();
-        assert_eq!(wh3.w_name, "China".to_string());
-    }
+   //     let mut wh2 = table.retrieve(&1).expect("non empty").get_mut();
+   //     (*wh2).w_name = "China".to_string(); 
+   //     
+   //     let wh3 = table.retrieve(&1).expect("non empty").get_ref();
+   //     assert_eq!(wh3.w_name, "China".to_string());
+   // }
 
     //#[test]
     //fn test_single_piece_run() {

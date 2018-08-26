@@ -15,8 +15,8 @@ use std::{
 
 };
 
-use tcore::{TVersion};
-use txn::{Tid,TxnInfo};
+use pnvm_lib::tcore::{TVersion};
+use pnvm_lib::txn::{Tid,TxnInfo};
 
 
 pub trait Key<T> {

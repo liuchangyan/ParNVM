@@ -1,4 +1,6 @@
 #![feature(duration_extras, global_allocator)]
+#![feature(alloc, raw_vec_internals)]
+
 extern crate pnvm_lib;
 
 #[cfg(feature = "profile")]
@@ -14,8 +16,14 @@ extern crate env_logger;
 
 extern crate parking_lot;
 
-mod util;
+extern crate alloc;
+extern crate num;
 
+mod util;
+mod tpcc;
+
+
+use tpcc::*;
 use util::*;
 
 use std::{
