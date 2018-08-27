@@ -156,7 +156,11 @@ where Entry: Key<Index> + Clone,
         let rows = self.rows.read().unwrap();
         rows.ptr()
     }
+
+
+
 }
+
 
 
 pub struct Row<Entry> 
@@ -242,6 +246,9 @@ where Entry: Clone
     pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
         self.vers_.set_writer_info(info)
     }
+
+
+    /* Transaction Methods */
 }
 
 
