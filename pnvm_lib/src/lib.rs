@@ -32,13 +32,13 @@ extern crate evmap;
 extern crate parking_lot;
 
 pub mod conf;
-pub mod plog;
+//pub mod plog;
 pub mod tbox;
 pub mod tcore;
 pub mod txn;
 
 pub mod occ;
-pub mod parnvm;
+//pub mod parnvm;
 
 //pub mod table;
 //pub mod entry;

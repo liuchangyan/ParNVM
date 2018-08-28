@@ -4,31 +4,27 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use txn::{self, AbortReason, Tid, Transaction, TxState};
+use txn::{self, AbortReason, Tid,  TxState};
 
-use plog;
-use tcore::{self, ObjectId, TObject, TTag};
+//use plog;
+use tcore::{self, ObjectId, TTag, TRef};
 
 #[cfg(feature = "profile")]
 use flame;
 
-pub struct TransactionOCC<T>
-where
-    T: Clone,
+pub struct TransactionOCC
 {
     tid_:   Tid,
     state_: TxState,
-    deps_:  HashMap<ObjectId, TTag<T>>,
-    locks_ : Vec<*const TTag<T>>,
+    deps_:  HashMap<ObjectId, TTag>,
+    locks_ : Vec<*const TTag>,
 }
 
-impl<T> Transaction<T> for TransactionOCC<T>
-where
-    T: Clone,
+impl TransactionOCC
 {
 
     #[cfg_attr(feature = "profile", flame)]
-    fn try_commit(&mut self) -> bool {
+    pub fn try_commit(&mut self) -> bool {
         debug!("Tx[{:?}] is commiting", self.tid_);
         self.state_ = TxState::COMMITTED;
 
@@ -49,40 +45,33 @@ where
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    fn read<'b>(&'b mut self, tobj: &'b TObject<T>) -> &'b T {
-        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
+    pub fn read<'b, T:'static>(&'b mut self, tobj: &'b dyn TRef) -> &'b T {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
         tag.add_version(tobj.get_version());
-
-        if tag.has_write() {
-            tag.write_value()
-        } else {
-            tobj.get_data()
-        }
+        tag.get_data()
     }
 
 
     #[cfg_attr(feature = "profile", flame)]
-    fn write(&mut self, tobj: &TObject<T>, val: T) {
-        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
-        tag.write(val);
+    pub fn write<T:'static + Clone>(&mut self, tobj: &dyn TRef, val: T) {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
+        tag.write::<T>(val);
     }
     /*Non TransactionOCC Functions*/
-    fn notrans_read(tobj: &TObject<T>) -> T {
-        //let tobj = Arc::clone(tobj);
-        tobj.raw_read()
-    }
+   // fn notrans_read(tobj: &TObject<T>) -> T {
+   //     //let tobj = Arc::clone(tobj);
+   //     tobj.raw_read()
+   // }
 
-    fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool {
-        let tobj = Arc::clone(tobj);
-        tobj.lock(tid)
-    }
+    //fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool {
+    //    let tobj = Arc::clone(tobj);
+    //    tobj.lock(tid)
+    //}
 }
 
-impl<T> TransactionOCC<T>
-where
-    T: Clone,
+impl TransactionOCC
 {
-    pub fn new(tid_: Tid) -> TransactionOCC<T> {
+    pub fn new(tid_: Tid) -> TransactionOCC {
         //txn::mark_start(tid_);
         TransactionOCC {
             tid_,
@@ -112,15 +101,14 @@ where
             if !tag.has_write() {
                 continue;
             }
-            let _tobj = Arc::clone(&tag.tobj_ref_);
-            if !_tobj.lock(self.commit_id()) {
+            if !tag.lock(self.commit_id()) {
                 while let Some(_tag) = self.locks_.pop() {
-                    unsafe{ _tag.as_ref().unwrap().tobj_ref_.unlock()};
+                    unsafe{ _tag.as_ref().unwrap().unlock()};
                 }
                 debug!("{:#?} failed to locked!", tag);
                 return false;
             } else {
-                self.locks_.push(tag as *const TTag<T>);
+                self.locks_.push(tag as *const TTag);
             }
             debug!("{:#?} locked!", tag);
         }
@@ -134,7 +122,7 @@ where
             if !tag.has_read() {
                 continue;
             }
-            if !tag.tobj_ref_.check(tag.vers_)  {
+            if !tag.check(tag.vers_)  {
                 return false;
             }
         }
@@ -173,41 +161,40 @@ where
         true
     }
 
-    #[cfg(feature = "pmem")]
-    #[cfg_attr(feature = "profile", flame)]
-    fn persist_commit(&self) {
-        //FIXME:: Can it be async?
-        plog::persist_txn(self.commit_id().into());
-    }
+   // #[cfg(feature = "pmem")]
+   // #[cfg_attr(feature = "profile", flame)]
+   // fn persist_commit(&self) {
+   //     //FIXME:: Can it be async?
+   //     plog::persist_txn(self.commit_id().into());
+   // }
 
-    #[cfg(feature = "pmem")]
-    #[cfg_attr(feature = "profile", flame)]
-    fn persist_log(&self) {
-        let mut logs = vec![];
-        let id = self.commit_id();
-        for tag in self.deps_.values() {
-            if tag.has_write() {
-                logs.push(tag.make_log(id));
-            }
-        }
+   // #[cfg(feature = "pmem")]
+   // #[cfg_attr(feature = "profile", flame)]
+   // fn persist_log(&self) {
+   //     let mut logs = vec![];
+   //     let id = self.commit_id();
+   //     for tag in self.deps_.values() {
+   //         if tag.has_write() {
+   //             logs.push(tag.make_log(id));
+   //         }
+   //     }
 
-        plog::persist_log(logs);
-    }
+   //     plog::persist_log(logs);
+   // }
 
-    #[cfg(feature = "pmem")]
-    #[cfg_attr(feature = "profile", flame)]
-    fn persist_data(&self) {
-        for tag in self.deps_.values() {
-            tag.persist_data(self.commit_id());
-        }
-    }
+   // #[cfg(feature = "pmem")]
+   // #[cfg_attr(feature = "profile", flame)]
+   // fn persist_data(&self) {
+   //     for tag in self.deps_.values() {
+   //         tag.persist_data(self.commit_id());
+   //     }
+   // }
 
     #[cfg_attr(feature = "profile", flame)]
     fn install_data(&mut self) {
         let id = self.commit_id();
         for tag in self.deps_.values_mut() {
             tag.commit_data(id);
-            //FIXME: delegating to tag for commiting?
         }
     }
 
@@ -222,7 +209,11 @@ where
 
     #[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
-    pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref: TObject<T>) -> &mut TTag<T> {
-        self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
-    }
+    fn retrieve_tag(&mut self,
+                        id: &ObjectId, 
+                        tobj_ref: Box<dyn TRef>) 
+        -> &mut TTag
+        {
+            self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
+        }
 }

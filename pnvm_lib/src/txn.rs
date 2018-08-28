@@ -1,4 +1,3 @@
-use plog;
 #[allow(unused_imports)]
 use std::{
     collections::HashMap,
@@ -7,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
-use tcore::{self, ObjectId, TObject, TTag};
+use tcore::{self, ObjectId, TTag};
 
 //lazy_static! {
 //    static ref TXN_RUNNING: Arc<RwLock<HashMap<Tid, bool>>> =
@@ -30,16 +29,17 @@ thread_local! {
 //    TXN_RUNNING.write().unwrap().insert(tid, true).is_none();
 //}
 //
-pub trait Transaction<T>
-where
-    T: Clone,
-{
-    fn try_commit(&mut self) -> bool;
-    fn write(&mut self, tobj: &TObject<T>, val: T);
-    fn read<'b>(&'b mut self, tobj: &'b TObject<T>) -> &'b T;
-    fn notrans_read(tobj: &TObject<T>) -> T;
-    fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool;
-}
+//pub trait Transaction<T>
+//where
+//    T: Clone,
+//{
+//    fn try_commit(&mut self) -> bool;
+//    fn write(&mut self, tobj: &TObject<T>, val: T);
+//    fn read<'b>(&'b mut self, tobj: &'b TObject<T>) -> &'b T;
+//    fn notrans_read(tobj: &TObject<T>) -> T;
+//    fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool;
+//}
+
 
 #[derive(PartialEq, Copy, Clone, Debug, Eq, Hash)]
 pub struct Tid(u32);

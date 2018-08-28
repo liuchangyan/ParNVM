@@ -72,8 +72,8 @@ where
     }
 
     #[inline(always)]
-    pub fn get_ptr(&self) -> *mut T {
-        self.tvalue_.get_ptr()
+    pub fn get_ptr(&self) -> *mut u8 {
+        self.tvalue_.get_ptr() as *mut u8
     }
 
    // pub fn get_addr(&self) -> Unique<T> {

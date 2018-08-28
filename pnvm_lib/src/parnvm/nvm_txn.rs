@@ -48,17 +48,15 @@ impl TransactionParBase {
 }
 
 #[derive(Clone, Debug)]
-pub struct TransactionParBaseOCC<T>
-where T: Clone
+pub struct TransactionParBaseOCC
 {
-    all_ps_:    Vec<PieceOCC<T>>,
+    all_ps_:    Vec<Piece>,
     name_:      String,
 }
 
-impl<T> TransactionParBaseOCC<T> 
-where T: Clone
+impl<T> TransactionParBaseOCC
 {
-    pub fn new(all_ps: Vec<PieceOCC<T>>, name: String) -> TransactionParBaseOCC<T> {
+    pub fn new(all_ps: Vec<Piece>, name: String) -> TransactionParBaseOCC {
         TransactionParBaseOCC {
             all_ps_:    all_ps,
             name_:      name,
@@ -82,30 +80,28 @@ pub struct TransactionPar
 }
 
 #[derive(Default)]
-pub struct TransactionParOCC<T>
-where T: Clone, 
+pub struct TransactionParOCC
 {
-    all_ps_:    Vec<PieceOCC<T>>,
+    all_ps_:    Vec<Piece>,
     deps_:      HashMap<u32, Arc<TxnInfo>>,
     id_:        Tid,
     name_:      String,
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
-    wait_:      Option<PieceOCC<T>>,
+    wait_:      Option<Piece>,
 
     #[cfg(feature="pmem")]
-
     records_ :     Vec<(Option<*mut u8>, Layout)>,
-    tags_ : HashMap<ObjectId, TTag<T>>,
-    locks_ : Vec<*const TTag<T>>,
+    
+    tags_ : HashMap<ObjectId, TTag>,
+    locks_ : Vec<*const TTag>,
     
 }
 
 
-impl<T> TransactionParOCC<T>
-where T: Clone, 
+impl TransactionParOCC
 {
-    pub fn new(pieces : Vec<PieceOCC<T>>, id : Tid, name: String) -> TransactionParOCC<T> {
+    pub fn new(pieces : Vec<Piece>, id : Tid, name: String) -> TransactionParOCC {
         TransactionParOCC {
             all_ps_:    pieces,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
@@ -122,7 +118,7 @@ where T: Clone,
         }
     }
 
-    pub fn new_from_base(txn_base: &TransactionParBaseOCC<T>, tid: Tid) -> TransactionParOCC<T> 
+    pub fn new_from_base(txn_base: &TransactionParBaseOCC, tid: Tid) -> TransactionParOCC
     {
         let txn_base = txn_base.clone();
         TransactionParOCC {
@@ -145,7 +141,7 @@ where T: Clone,
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn execute_piece(&mut self, mut piece: PieceOCC<T>) {
+    pub fn execute_piece(&mut self, mut piece: Piece) {
         info!(
             "execute_piece::[{:?}] Running piece - {:?}",
             self.id(),
@@ -161,20 +157,15 @@ where T: Clone,
     }
 
     /* Implement OCC interface */
-    pub fn read<'a>(&'a mut self, tobj: &'a TObject<T>) -> &'a T {
-        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
+    pub fn read<'a, T:'static>(&'a mut self, tobj: &'a dyn TRef) -> &'a T {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
         tag.add_version(tobj.get_version());
-
-        if tag.has_write() {
-            tag.write_value()
-        } else {
-            tobj.get_data()
-        }
+        tag.get_data()
     }
 
-    pub fn write(&mut self, tobj: &TObject<T>, val : T) {
-        let tag = self.retrieve_tag(tobj.get_id(), Arc::clone(tobj));
-        tag.write(val);
+    pub fn write<T: 'static + Clone>(&mut self, tobj: &dyn TRef, val : T) {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
+        tag.write::<T>(val);
     }
 
     #[inline(always)]

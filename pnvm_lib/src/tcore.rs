@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, Mutex, RwLock,
         atomic::{AtomicU32, Ordering}
     },
+    ops::Deref,
+    any::Any,
 };
 
 use crossbeam::sync::ArcCell;
@@ -104,7 +106,87 @@ impl BenchmarkCounter {
     }
 }
 
-pub type TObject<T> = Arc<TBox<T>>;
+//pub type TObject<T> = Arc<TBox<T>>;
+
+pub struct TInt {
+    inner_: Arc<TBox<u32>>
+}
+
+
+pub trait TRef{
+    fn get_ptr(&self) -> *mut u8;
+    fn get_layout(&self) -> Layout;
+    fn install(&self, val : &Box<Any>, id: Tid);
+    fn box_clone(&self) -> Box<dyn TRef>;
+    fn get_id(&self) -> &ObjectId;
+    fn get_version(&self) -> u32;
+    fn read(&self) -> &Any;
+    fn lock(&self, Tid) -> bool;
+    fn unlock(&self);
+    fn check(&self, u32) -> bool;
+
+}
+
+impl TRef for TInt {
+    fn install(&self, val: &Box<Any>, id: Tid) {
+        match (**val).downcast_ref::<u32>() {
+            Some(as_u32) => {
+                self.inner_.install(as_u32, id)
+            },
+            None => {
+                panic!("failed to convert to u32")
+            }
+        }
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(TInt {
+            inner_: self.inner_.clone()
+        })
+    }
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+}
+
+impl TInt {
+    pub fn new(inner : Arc<TBox<u32>>) -> Self {
+        TInt{
+            inner_ : inner
+        }
+    }
+}
+
+
 //Base trait for all the data structure
 //Using trait object cannot be derefed
 //when wrapped with Arc
@@ -276,23 +358,21 @@ where
 //    }
 //}
 
+
 //#[derive(PartialEq, Eq, Hash)]
-pub struct TTag<T>
-where
-    T: Clone,
+pub struct TTag
 {
-    pub tobj_ref_: TObject<T>,
+    //pub tobj_ref_: TObject<T>,
+    pub tobj_ref_: Box<dyn TRef>,
     pub oid_:      ObjectId,
-    write_val_:    Option<T>,
+    write_val_:    Option<Box<Any>>,
     pub has_write_: bool,
     pub vers_:     u32, /* 0 means empty */
 }
 
-impl<T> TTag<T>
-where
-    T: Clone,
+impl TTag
 {
-    pub fn new(oid: ObjectId, tobj_ref: TObject<T>) -> Self {
+    pub fn new(oid: ObjectId, tobj_ref: Box<dyn TRef>) -> Self {
         TTag {
             oid_:       oid,
             tobj_ref_:  tobj_ref,
@@ -305,21 +385,59 @@ where
     /* Only called after has_write() true arm */
     #[inline(always)]
     #[cfg_attr(feature = "profile", flame)]
-    pub fn write_value(&self) -> &T {
+    pub fn write_value<T: 'static>(&self) -> &T {
        // match self.write_val_ {
        //     Some(ref t) => t,
        //     None => panic!("Write Tag Should Have Write Value"),
        // }
-       self.write_val_.as_ref().unwrap()
+       match self.write_val_
+           .as_ref()
+           .expect("write non null")
+           .downcast_ref::<T>() {
+               Some(t_ref) => {
+                    t_ref
+               }, 
+               None => panic!("wrong type at write_value")
+       }
     }
+
+    pub fn write_value_any(&self) -> &Box<Any> {
+        self.write_val_.as_ref().expect("write non null")
+    }
+
 
     pub fn commit_data(&mut self, id: Tid) {
         if !self.has_write() {
             return;
         }
 
-        let val = self.write_value();
-        (*self.tobj_ref_).install(val, id);
+        let val = self.write_value_any();
+        self.tobj_ref_.install(val, id);
+    }
+
+    pub fn get_data<T:'static>(&self) -> &T {
+        if self.has_write() {
+            self.write_value()
+        } else {
+            match self.tobj_ref_.read().downcast_ref::<T>() {
+                Some(t_ref) => t_ref, 
+                None => panic!("inconsistent data")
+            }
+        }
+
+    }
+
+    pub fn lock(&self, tid: Tid) -> bool {
+        self.tobj_ref_.lock(tid)
+    }
+
+
+    pub fn unlock(&self) {
+        self.tobj_ref_.unlock()
+    }
+
+    pub fn check(&self, vers: u32) -> bool {
+        self.tobj_ref_.check(vers)
     }
 
     // pub fn consume_value(&mut self) -> T {
@@ -346,8 +464,13 @@ where
         self.vers_ = vers;
     }
 
+    pub fn get_version(&self) -> u32 {
+        self.tobj_ref_.get_version()
+    }
+
     #[inline(always)]
-    pub fn write(&mut self, val: T) {
+    pub fn write<T: 'static>(&mut self, val: T) {
+        let val = Box::new(val); 
         self.write_val_ = Some(val);
         self.has_write_ = true; 
     }
@@ -357,22 +480,20 @@ where
         if !self.has_write() {
             return;
         }
-        pnvm_sys::flush((*self.tobj_ref_).get_ptr() as *mut u8, Layout::new::<T>());
+        pnvm_sys::flush(self.tobj_ref_.get().get_ptr() as *mut u8, Layout::new::<T>());
     }
 
     #[cfg(feature = "pmem")]
     pub fn make_log(&self, id: Tid) -> PLog {
         PLog::new(
-            self.tobj_ref_.get_ptr() as *mut u8,
-            self.tobj_ref_.get_layout(),
+            self.tobj_ref_.get().get_ptr() as *mut u8,
+            self.tobj_ref_.get().get_layout(),
             id,
         )
     }
 }
 
-impl<T> fmt::Debug for TTag<T>
-where
-    T: Clone,
+impl fmt::Debug for TTag
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
