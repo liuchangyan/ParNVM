@@ -124,7 +124,8 @@ pub trait TRef{
     fn lock(&self, Tid) -> bool;
     fn unlock(&self);
     fn check(&self, u32) -> bool;
-
+    fn get_writer_info(&self) -> Arc<TxnInfo>;
+    fn set_writer_info(&mut self, Arc<TxnInfo>);
 }
 
 impl TRef for TInt {
@@ -175,6 +176,14 @@ impl TRef for TInt {
 
     fn check(&self, vers: u32) -> bool {
         self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
     }
 }
 
@@ -440,12 +449,6 @@ impl TTag
         self.tobj_ref_.check(vers)
     }
 
-    // pub fn consume_value(&mut self) -> T {
-    //     match self.write_val_ {
-    //         Some(t) => Rc::try_unwrap(t).ok().unwrap(),
-    //         None => panic!("Write Tag Should Have Write Value")
-    //     }
-    // }
 
     #[cfg_attr(feature = "profile", flame)]
     #[inline(always)]

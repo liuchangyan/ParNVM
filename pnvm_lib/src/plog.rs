@@ -4,7 +4,6 @@ use std::{
     mem::{self, size_of},
     ptr::{self, Unique},
 };
-use tcore::TObject;
 use txn::Tid;
 
 //This is the nightly api. Waiting for alloc::allocator::Layout to be stable

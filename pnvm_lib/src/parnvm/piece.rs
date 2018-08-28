@@ -20,8 +20,8 @@ impl Pid {
 }
 
 type FnPtr = Arc<Box<Fn(&mut TransactionPar) -> i32 + Send + Sync>>;
+type FnPtrOCC = Arc<Box<Fn(&mut TransactionParOCC) -> i32 + Send + Sync>>;
 
-type FnPtrOCC<T> = Arc<Box<Fn(&mut TransactionParOCC<T>) -> i32 + Send + Sync>>;
 
 #[derive(Clone)]
 pub struct Piece {
@@ -34,10 +34,9 @@ pub struct Piece {
 }
 
 #[derive(Clone)]
-pub struct PieceOCC<T>
-where T: Clone
+pub struct PieceOCC
 {
-    callback_: FnPtrOCC<T>,
+    callback_: FnPtrOCC,
     pid_:      Pid,
     tname_:    String,
     title_:    &'static str,
@@ -55,8 +54,7 @@ impl Debug for Piece {
     }
 }
 
-impl<T> Debug for PieceOCC<T> 
-where T : Clone
+impl Debug for PieceOCC
 {
     fn fmt(&self, f: &mut Formatter) -> Result {
         write!(
@@ -98,16 +96,15 @@ impl Piece {
     }
 }
 
-impl<T> PieceOCC<T>
-where T: Clone
+impl PieceOCC
 {
     pub fn new(
         pid: Pid,
         tname: String,
-        cb: FnPtrOCC<T>,
+        cb: FnPtrOCC,
         title: &'static str,
         rank: usize
-    ) -> PieceOCC<T> {
+    ) -> PieceOCC {
         PieceOCC {
             callback_: cb,
             pid_:      pid,
@@ -118,7 +115,7 @@ where T: Clone
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&mut self, tx : &mut TransactionParOCC<T>) -> i32 {
+    pub fn run(&mut self, tx : &mut TransactionParOCC) -> i32 {
         (self.callback_)(tx)
     }
 

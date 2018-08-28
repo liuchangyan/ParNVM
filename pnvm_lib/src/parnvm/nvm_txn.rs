@@ -1,5 +1,5 @@
-use txn::{self, Tid, AbortReason, Transaction, TxState, TxnInfo};
-use tcore::{self, ObjectId, TObject, TTag};
+use txn::{self, Tid, AbortReason, TxState, TxnInfo};
+use tcore::{self, ObjectId, TRef, TTag};
 
 use super::dep::*;
 use super::piece::*;
@@ -50,13 +50,13 @@ impl TransactionParBase {
 #[derive(Clone, Debug)]
 pub struct TransactionParBaseOCC
 {
-    all_ps_:    Vec<Piece>,
+    all_ps_:    Vec<PieceOCC>,
     name_:      String,
 }
 
-impl<T> TransactionParBaseOCC
+impl TransactionParBaseOCC
 {
-    pub fn new(all_ps: Vec<Piece>, name: String) -> TransactionParBaseOCC {
+    pub fn new(all_ps: Vec<PieceOCC>, name: String) -> TransactionParBaseOCC {
         TransactionParBaseOCC {
             all_ps_:    all_ps,
             name_:      name,
@@ -82,13 +82,13 @@ pub struct TransactionPar
 #[derive(Default)]
 pub struct TransactionParOCC
 {
-    all_ps_:    Vec<Piece>,
+    all_ps_:    Vec<PieceOCC>,
     deps_:      HashMap<u32, Arc<TxnInfo>>,
     id_:        Tid,
     name_:      String,
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
-    wait_:      Option<Piece>,
+    wait_:      Option<PieceOCC>,
 
     #[cfg(feature="pmem")]
     records_ :     Vec<(Option<*mut u8>, Layout)>,
@@ -101,7 +101,7 @@ pub struct TransactionParOCC
 
 impl TransactionParOCC
 {
-    pub fn new(pieces : Vec<Piece>, id : Tid, name: String) -> TransactionParOCC {
+    pub fn new(pieces : Vec<PieceOCC>, id : Tid, name: String) -> TransactionParOCC {
         TransactionParOCC {
             all_ps_:    pieces,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
@@ -141,7 +141,7 @@ impl TransactionParOCC
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn execute_piece(&mut self, mut piece: Piece) {
+    pub fn execute_piece(&mut self, mut piece: PieceOCC) {
         info!(
             "execute_piece::[{:?}] Running piece - {:?}",
             self.id(),
@@ -169,9 +169,8 @@ impl TransactionParOCC
     }
 
     #[inline(always)]
-    fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : TObject<T>) -> &mut TTag<T> {
+    fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>) -> &mut TTag {
         self.tags_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
-
     }
 
     
@@ -256,15 +255,15 @@ impl TransactionParOCC
             if !tag.has_write() {
                 continue;
             }
-            let _tobj = Arc::clone(&tag.tobj_ref_);
-            if !_tobj.lock(me) {
+
+            if !tag.lock(me) {
                 while let Some(_tag) = self.locks_.pop() {
                     //FIXME: Hacky way use raw pointer to eschew lifetime checker
-                    unsafe{ _tag.as_ref().unwrap().tobj_ref_.unlock()};
+                    unsafe{ _tag.as_ref().unwrap().unlock()};
                 } debug!("{:#?} failed to locked!", tag);
                 return false;
             } else {
-                self.locks_.push(tag as *const TTag<T>);
+                self.locks_.push(tag as *const TTag);
             }
             debug!("{:#?} locked!", tag);
         }
@@ -278,7 +277,7 @@ impl TransactionParOCC
                 continue;
             }
 
-            if !tag.tobj_ref_.check(tag.vers_) {
+            if !tag.check(tag.vers_) {
                 return false;
             }
         }
@@ -371,7 +370,7 @@ impl TransactionParOCC
         &self.txn_info_
     }
 
-    pub fn get_next_piece(&mut self) -> Option<PieceOCC<T>> {
+    pub fn get_next_piece(&mut self) -> Option<PieceOCC> {
         self.wait_.take().or_else(|| self.all_ps_.pop())
     }
 
@@ -380,7 +379,7 @@ impl TransactionParOCC
         !self.all_ps_.is_empty()
     }
 
-    pub fn add_wait(&mut self, p: PieceOCC<T>) {
+    pub fn add_wait(&mut self, p: PieceOCC) {
         self.wait_ = Some(p)
     }
 
@@ -400,7 +399,7 @@ impl TransactionParOCC
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn add_piece(&mut self, piece: PieceOCC<T>) {
+    pub fn add_piece(&mut self, piece: PieceOCC) {
         self.all_ps_.push(piece)
     }
 
@@ -458,7 +457,7 @@ thread_local!{
     pub static CUR_TXN : Rc<RefCell<TransactionPar>> = Rc::new(RefCell::new(Default::default()));
 
     //Generic default type 
-    pub static CUR_TXN_OCC_PTR: Rc<RefCell<NonNull<TransactionParOCC<u32>>>> = Rc::new(RefCell::new(NonNull::dangling()));
+    //pub static CUR_TXN_OCC_PTR: Rc<RefCell<NonNull<TransactionParOCC<u32>>>> = Rc::new(RefCell::new(NonNull::dangling()));
 }
 
 const DEP_DEFAULT_SIZE : usize = 128;
