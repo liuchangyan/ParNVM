@@ -19,6 +19,8 @@ extern crate parking_lot;
 extern crate alloc;
 extern crate num;
 
+extern crate core;
+
 mod util;
 mod tpcc;
 

@@ -1,6 +1,7 @@
 
 use table::{Key, Table};
 use numeric::Numeric;
+use pnvm_lib::tcore::*;
 
 pub type WarehouseTable = Table<Warehouse, i32>;
 pub type DistrictTable = Table<District, (i32, i32)>;
@@ -32,6 +33,7 @@ impl Key<i32> for Warehouse {
     }
 }
 
+#[derive(Clone)]
 pub struct District {
     d_id: i32,
     d_w_id: i32,
@@ -54,6 +56,7 @@ impl Key<(i32, i32)> for District {
 }
 
 
+#[derive(Clone)]
 pub struct Customer {
     c_id: i32,
     c_d_id: i32,
@@ -89,6 +92,7 @@ impl Key<(i32, i32, i32)> for Customer {
 
 
 
+#[derive(Clone)]
 pub struct NewOrder {
     pub no_o_id: i32,
     pub no_d_id: i32,
@@ -104,6 +108,7 @@ impl Key<(i32, i32, i32)> for NewOrder {
 }
 
 
+#[derive(Clone)]
 pub struct Order {
     pub o_id: i32,
     pub o_d_id: i32,
@@ -123,6 +128,7 @@ impl Key<(i32, i32, i32)> for Order {
     }
 }
 
+#[derive(Clone)]
 pub struct OrderLine {
     pub ol_o_id: i32,
     pub ol_d_id: i32,
@@ -144,6 +150,7 @@ impl Key<(i32, i32, i32, i32)> for OrderLine {
 }
 
 
+#[derive(Clone)]
 pub struct Item {
     i_id: i32,
     i_im_id: i32,
@@ -161,6 +168,7 @@ impl Key<i32> for Item {
 
 
 
+#[derive(Clone)]
 pub struct Stock {
     pub s_i_id: i32,
     pub s_w_id: i32,
