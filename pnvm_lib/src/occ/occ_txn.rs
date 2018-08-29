@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use txn::{self, AbortReason, Tid,  TxState};
+use txn::{self, AbortReason, Tid,  TxState, TxnInfo};
 
 //use plog;
 use tcore::{self, ObjectId, TTag, TRef};
@@ -14,10 +14,13 @@ use flame;
 
 pub struct TransactionOCC
 {
+
     tid_:   Tid,
     state_: TxState,
     deps_:  HashMap<ObjectId, TTag>,
     locks_ : Vec<*const TTag>,
+    txn_info_ : Arc<TxnInfo>,
+
 }
 
 impl TransactionOCC
@@ -78,11 +81,16 @@ impl TransactionOCC
             state_: TxState::EMBRYO,
             deps_: HashMap::with_capacity(32),
             locks_: Vec::with_capacity(32),
+            txn_info_: Arc::new(TxnInfo::new(tid_)),
         }
     }
 
     pub fn commit_id(&self) -> Tid {
         self.tid_
+    }
+
+    pub fn txn_info(&self) -> &Arc<TxnInfo>  {
+        &self.txn_info_
     }
 
     pub fn abort(&mut self, _: AbortReason) -> bool {
@@ -207,9 +215,10 @@ impl TransactionOCC
         }
     }
 
+
     #[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
-    fn retrieve_tag(&mut self,
+    pub fn retrieve_tag(&mut self,
                         id: &ObjectId, 
                         tobj_ref: Box<dyn TRef>) 
         -> &mut TTag

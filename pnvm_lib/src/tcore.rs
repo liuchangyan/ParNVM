@@ -128,6 +128,10 @@ pub trait TRef{
     fn set_writer_info(&mut self, Arc<TxnInfo>);
 }
 
+pub trait TWrapRef {
+
+}
+
 impl TRef for TInt {
     fn install(&self, val: &Box<Any>, id: Tid) {
         match (**val).downcast_ref::<u32>() {
@@ -507,11 +511,52 @@ impl fmt::Debug for TTag
     }
 }
 
+
+/* Object ID factory */
 static mut OBJECTID: u32 = 1;
 pub unsafe fn next_id() -> ObjectId {
     let ret = OBJECTID;
     OBJECTID += 1;
     ObjectId(ret)
+}
+
+thread_local! {
+    pub static OID_FAC : Rc<RefCell<OidFac>> = Rc::new(RefCell::new(OidFac::new()));
+}
+
+pub struct OidFac {
+    mask_ : u32,
+    next_id_ : u32,
+}
+
+impl OidFac {
+
+    /* Thread Local methods */
+    pub fn set_obj_mask(mask: u32) {
+        OID_FAC.with(|fac| fac.borrow_mut().set_mask(mask))
+    }
+
+    /* Thread Local methods */
+    pub fn get_obj_next() -> ObjectId {
+        OID_FAC.with(|fac| fac.borrow_mut().get_next())
+    }
+
+    pub fn new() -> OidFac {
+        OidFac {
+            mask_ : 0,
+            next_id_ : 1,
+        }
+    }
+
+    fn set_mask(&mut self, mask : u32) {
+        self.mask_ = mask;
+    }
+
+    fn get_next(&mut self) -> ObjectId {
+        let ret = self.next_id_ | ((self.mask_ ) << 16);
+        self.next_id_ +=1;
+        ObjectId(ret)
+    }
 }
 
 /*
@@ -549,3 +594,6 @@ unsafe impl GlobalAlloc for GPMem {
         pmem.dealloc(ptr, layout)
     }
 }
+
+
+

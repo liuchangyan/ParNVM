@@ -15,27 +15,38 @@ use std::{
 
 };
 
-use pnvm_lib::tcore::{TVersion};
+use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo};
+
+use pnvm_lib::occ::occ_txn::TransactionOCC;
 
 
 pub trait Key<T> {
     fn primary_key(&self) -> T;
 }
 
+pub trait TableRef{
+    fn make_table_ref(self, usize, &Arc<TxnInfo>) -> Box<dyn TRef>;
+}
+
 
 pub struct Table<Entry, Index, S = RandomState> 
-where Entry: Key<Index> + Clone,
+where Entry: Key<Index> + Clone + TableRef,
       Index: Eq+Hash 
 {
     buckets : Vec<Bucket<Entry, Index>>,
     bucket_num: usize,
-    hash_builder: S
+    
+    //len :usize,
+    hash_builder: S,
+    
+     //id_ : ObjectId,
+    //vers_ : TVersion,
 }
 
 
 impl<Entry, Index, S> Table<Entry, Index, S> 
-where Entry: Key<Index> + Clone,
+where Entry: Key<Index> + Clone + TableRef,
       Index: Eq+Hash,
       S: BuildHasher
 {
@@ -56,10 +67,18 @@ where Entry: Key<Index> + Clone,
         }
     }
 
-    pub fn push(&self, entry: Entry) {
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Entry) {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
-        self.buckets[bucket_idx].push(entry)
+
+        //Make into row and then make into a RowRef
+        let table_ref = entry.make_table_ref(bucket_idx, tx.txn_info());
+        let _  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
     }
+
+    //pub fn push(&self, entry: Entry) {
+    //    let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
+    //    self.buckets[bucket_idx].push(entry)
+    //}
 
     pub fn retrieve(&self, index: &Index) -> Option<&Row<Entry>> {
         let bucket_idx = self.make_hash(&index) % self.bucket_num;
@@ -76,7 +95,7 @@ where Entry: Key<Index> + Clone,
 }
 
 impl<Entry, Index> Default for Table<Entry, Index> 
-where Entry: Key<Index> + Clone,
+where Entry: Key<Index> + Clone + TableRef,
       Index: Eq+Hash 
 {
     fn default() -> Self {
@@ -89,8 +108,7 @@ where Entry: Key<Index> + Clone,
         Table {
             buckets,
             bucket_num: 16,
-            hash_builder : Default::default(),
-        }
+            hash_builder : Default::default(), }
     }
 }
 
@@ -101,6 +119,9 @@ where Entry: Key<Index> + Clone,
     rows: RwLock<RawVec<Row<Entry>>>,
     index: RwLock<HashMap<Index, usize>>,
     len : AtomicUsize,
+
+    id_ : ObjectId,
+    vers_ : TVersion,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
@@ -112,10 +133,13 @@ where Entry: Key<Index> + Clone,
             rows: RwLock::new(RawVec::new()),
             len: AtomicUsize::new(0),
             index: RwLock::new(HashMap::new()),
+
+            id_ : OidFac::get_obj_next(),
+            vers_ : TVersion::default(),
         }
     }
 
-    pub fn push(&self, entry : Entry) {
+    pub fn push(&self, row : Row<Entry>) {
         let prev_len = self.len.fetch_add(1, Ordering::Acquire);
         if prev_len == self.cap() {
             let mut rw = self.rows.write().unwrap();
@@ -124,9 +148,9 @@ where Entry: Key<Index> + Clone,
             //FIXME: busy wait here maybe
             panic!("hmmm, someone else should have been doubling");
         }
-        let idx_elem = entry.primary_key();
+        let idx_elem = row.get_data().primary_key();
         unsafe {
-            ptr::write(self.ptr().offset(prev_len as isize), Row::new(entry));
+            ptr::write(self.ptr().offset(prev_len as isize), row);
         }
         
         let mut idx_map = self.index.write().unwrap();
@@ -168,8 +192,11 @@ where Entry : Clone
 {
     data_: UnsafeCell<Entry>,
     vers_: TVersion,
+    id_ : ObjectId,
 }
 
+unsafe impl<Entry: Clone> Sync for Row<Entry>{}
+unsafe impl<Entry: Clone> Send for Row<Entry>{}
 
 impl<Entry>  Row<Entry> 
 where Entry: Clone
@@ -178,6 +205,7 @@ where Entry: Clone
         Row{
             data_: UnsafeCell::new(entry),
             vers_: TVersion::default(), /* FIXME: this can carry txn info */
+            id_ : OidFac::get_obj_next(),
         }
     }
 
@@ -185,15 +213,19 @@ where Entry: Clone
         Row {
             data_ : UnsafeCell::new(entry),
             vers_ : TVersion::new_with_info(txn_info),
+            id_ : OidFac::get_obj_next(),
         }
     }
 
-    pub fn get_ref(&self) -> &Entry {
+
+    #[inline(always)]
+    pub fn get_data(&self) -> &Entry {
         unsafe { self.data_.get().as_ref().unwrap() }
     }
 
-    pub fn get_mut(&self) -> &mut Entry {
-        unsafe { self.data_.get().as_mut().unwrap() }
+    #[inline(always)]
+    pub fn get_ptr(&self) -> *mut u8 {
+        unsafe {self.data_.get() as *mut u8}
     }
 
 
@@ -224,10 +256,10 @@ where Entry: Clone
     pub fn get_version(&self) -> u32 {
         self.vers_.get_version()
     }
-
+    
     #[inline(always)]
-    pub fn get_ptr(&self) -> *mut Entry {
-        self.data_.get()
+    pub fn get_id(&self) -> &ObjectId {
+        &self.id_    
     }
 
    // pub fn get_addr(&self) -> Unique<T> {
@@ -250,6 +282,8 @@ where Entry: Clone
 
     /* Transaction Methods */
 }
+
+
 
 
 

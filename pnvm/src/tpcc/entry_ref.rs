@@ -2,6 +2,7 @@
 /* FIXME: this should not be needed with GAT implemented */
 
 use super::entry::*;
+use super::table::*;
 use pnvm_lib:: {
     tcore::*,
     tbox::*,
@@ -23,36 +24,36 @@ use pnvm_sys::{
 
 
 pub struct WarehouseRef {
-    inner_ : Arc<TBox<Warehouse>>,
+    inner_ : Arc<Row<Warehouse>>,
 }
 
 pub struct DistrictRef {
-    inner_ : Arc<TBox<District>>,
+    inner_ : Arc<Row<District>>,
 }
 
 pub struct CustomerRef {
-    inner_ : Arc<TBox<Customer>>,
+    inner_ : Arc<Row<Customer>>,
 }
 
 pub struct NewOrderRef {
-    inner_ : Arc<TBox<NewOrder>>,
+    inner_ : Arc<Row<NewOrder>>,
 }
 
 pub struct OrderRef {
-    inner_ : Arc<TBox<Order>>,
+    inner_ : Arc<Row<Order>>,
 }
 
 pub struct OrderLineRef {
-    inner_ : Arc<TBox<OrderLine>>,
+    inner_ : Arc<Row<OrderLine>>,
 }
 
 
 pub struct ItemRef {
-    inner_ : Arc<TBox<Item>>,
+    inner_ : Arc<Row<Item>>,
 }
 
 pub struct StockRef {
-    inner_ : Arc<TBox<Stock>>,
+    inner_ : Arc<Row<Stock>>,
 }
 
 
