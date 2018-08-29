@@ -108,8 +108,9 @@ impl BenchmarkCounter {
 
 //pub type TObject<T> = Arc<TBox<T>>;
 
-pub struct TInt {
-    inner_: Arc<TBox<u32>>
+
+pub trait BoxRef<T> {
+    fn into_box_ref(self) -> Box<dyn TRef>;
 }
 
 
@@ -128,76 +129,6 @@ pub trait TRef{
     fn set_writer_info(&mut self, Arc<TxnInfo>);
 }
 
-pub trait TWrapRef {
-
-}
-
-impl TRef for TInt {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<u32>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
-            },
-            None => {
-                panic!("failed to convert to u32")
-            }
-        }
-    }
-
-    fn get_ptr(&self) -> *mut u8 {
-        self.inner_.get_ptr()
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.inner_.get_layout()
-    }
-
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(TInt {
-            inner_: self.inner_.clone()
-        })
-    }
-
-    fn get_id(&self) -> &ObjectId {
-        self.inner_.get_id()
-    }
-
-    fn get_version(&self) -> u32 {
-        self.inner_.get_version()
-    }
-
-    fn read(&self) -> &Any {
-        self.inner_.get_data()
-    }
-
-    fn lock(&self, tid: Tid) -> bool {
-        self.inner_.lock(tid)
-    }
-
-    fn unlock(&self) {
-        self.inner_.unlock()
-    }
-
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
-    }
-
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
-    }
-
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
-    }
-}
-
-impl TInt {
-    pub fn new(inner : Arc<TBox<u32>>) -> Self {
-        TInt{
-            inner_ : inner
-        }
-    }
-}
 
 
 //Base trait for all the data structure

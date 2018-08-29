@@ -7,7 +7,8 @@ use std::{
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo};
 
 //use plog;
-use tcore::{self, ObjectId, TTag, TRef};
+use tcore::{self, ObjectId, TTag, TRef, BoxRef};
+use tbox::TBox;
 
 #[cfg(feature = "profile")]
 use flame;
@@ -48,17 +49,32 @@ impl TransactionOCC
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn read<'b, T:'static>(&'b mut self, tobj: &'b dyn TRef) -> &'b T {
-        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
-        tag.add_version(tobj.get_version());
+    //pub fn read<'b, T:'static>(&'b mut self, tobj: &'b dyn TRef) -> &'b T {
+    //    let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
+    //    tag.add_version(tobj.get_version());
+    //    tag.get_data()
+    //}
+    pub fn read<'b, T:'static + Clone>(&'b mut self, tobj: &'b Arc<TBox<T>>) -> &'b T 
+    where Arc<TBox<T>> : BoxRef<T>
+    {
+        let tref = tobj.clone().into_box_ref();
+        let id = *tref.get_id();
+        let vers = tref.get_version();
+        let tag = self.retrieve_tag(&id, tref);
+        tag.add_version(vers);
         tag.get_data()
     }
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn write<T:'static + Clone>(&mut self, tobj: &dyn TRef, val: T) {
-        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
-        tag.write::<T>(val);
+    pub fn write<T:'static + Clone>(&mut self, tobj: &Arc<TBox<T>>, val: T) 
+    where (T, Arc<TBox<T>>) : BoxRef<T>
+    {
+        let tref = (val, tobj.clone()).into_box_ref();
+        let id = *tref.get_id();
+        let vers = tref.get_version();
+        let tag = self.retrieve_tag(&id,tref);
+        //tag.write::<T>(val);
     }
     /*Non TransactionOCC Functions*/
    // fn notrans_read(tobj: &TObject<T>) -> T {

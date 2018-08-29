@@ -4,6 +4,7 @@ use std::{
     ptr::Unique,
     //rc::Rc,
     sync::{Arc, RwLock, atomic::AtomicU32},
+    any::Any,
 };
 
 //nightly
@@ -13,7 +14,7 @@ use core::alloc::Layout;
 use flame;
 
 use tcore;
-use tcore::{ObjectId, TValue, TVersion,  TRef, TInt};
+use tcore::{ObjectId, TValue, TVersion,  TRef, BoxRef};
 use crossbeam::sync::ArcCell;
 
 #[derive(Debug)]
@@ -103,9 +104,9 @@ where
         self.tvalue_.store(val);
     }
 
-    pub fn read<'a>(&self, txn : &mut TransactionOCC) -> &'a T {
-
-    }
+//    pub fn read<'a>(&self, txn : &mut TransactionOCC) -> &'a T {
+//
+//    }
 }
 
 impl<T> TBox<T>
@@ -152,4 +153,97 @@ unsafe impl<T: Clone> Send for TBox<T>{}
 
 
 /* Concrete Types Instances */
+impl BoxRef<u32> for Arc<TBox<u32>> {
+    fn into_box_ref(self) -> Box<dyn TRef> {
+        Box::new(TInt{
+            inner_ : self,
+            data_ : None,
+        })
+    }
+}
+
+
+impl BoxRef<u32> for (u32, Arc<TBox<u32>>) {
+    fn into_box_ref(self) -> Box<dyn TRef> {
+        let (val, tbox) = self;
+        Box::new(TInt {
+            inner_ : tbox,
+            data_ : Some(val)
+        })
+    }
+}
+
+
+pub struct TInt {
+    inner_: Arc<TBox<u32>>,
+    data_ : Option<u32>,
+}
+impl TRef for TInt {
+    fn install(&self, val: &Box<Any>, id: Tid) {
+        match (**val).downcast_ref::<u32>() {
+            Some(as_u32) => {
+                self.inner_.install(as_u32, id)
+            },
+            None => {
+                panic!("failed to convert to u32")
+            }
+        }
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(TInt {
+            inner_: self.inner_.clone(),
+            data_ : self.data_.clone(),
+        })
+    }
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
+    }
+}
+
+impl TInt {
+    pub fn new(inner : Arc<TBox<u32>>) -> Self {
+        TInt{
+            inner_ : inner,
+            data_ : None
+        }
+    }
+}
 
