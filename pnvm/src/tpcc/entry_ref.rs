@@ -23,48 +23,65 @@ use pnvm_sys::{
 
 
 
-pub struct WarehouseRef {
+pub struct WarehouseRef<'a> {
     inner_ : Arc<Row<Warehouse>>,
+    bucket_idx_: usize,
+    table_ref_: Option<&'a WarehouseTable>,
+    txn_info_ : Arc<TxnInfo>,
+    entry_ : Warehouse,
 }
 
 pub struct DistrictRef {
     inner_ : Arc<Row<District>>,
+    bucket_idx_: usize,
 }
 
 pub struct CustomerRef {
     inner_ : Arc<Row<Customer>>,
+    bucket_idx_: usize,
+    on_table_: bool
 }
 
 pub struct NewOrderRef {
     inner_ : Arc<Row<NewOrder>>,
+    bucket_idx_: usize,
+    on_table_: bool
 }
 
 pub struct OrderRef {
     inner_ : Arc<Row<Order>>,
+    bucket_idx_: usize,
+    on_table_: bool
 }
 
 pub struct OrderLineRef {
     inner_ : Arc<Row<OrderLine>>,
+    bucket_idx_: usize,
+    on_table_: bool
 }
 
 
 pub struct ItemRef {
     inner_ : Arc<Row<Item>>,
+    bucket_idx_: usize,
+    on_table_: bool
 }
 
 pub struct StockRef {
     inner_ : Arc<Row<Stock>>,
+    bucket_idx_: usize,
+    on_table_: bool
 }
 
 
-impl TRef for WarehouseRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<Warehouse>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
+impl<'a> TRef for WarehouseRef<'a> {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(as_val));
             },
             None => {
-                panic!("failed to convert to warehouse")
+                self.inner_.install(as_wh, id);
             }
         }
     }
@@ -79,7 +96,8 @@ impl TRef for WarehouseRef {
 
     fn box_clone(&self) -> Box<dyn TRef> {
         Box::new(WarehouseRef {
-            inner_: self.inner_.clone()
+            inner_: self.inner_.clone(),
+
         })
     }
 
@@ -538,4 +556,30 @@ impl TRef for StockRef {
         self.inner_.get_writer_info()
     }
 }
+
+
+impl TableRef<Warehouse, i32> for Warehouse {
+    type Table = WarehouseTable;
+
+    fn into_table_ref(
+        self,
+        bucket_idx: usize,
+        txn_info : &Arc<TxnInfo>,
+        table_ref : &WarehouseTable
+    ) 
+        -> Box<dyn TRef> 
+        {
+            Box::new(
+                WarehouseRef {
+                    inner_ : Arc::new(row),
+                    bucket_idx_: bucket_idx,
+                    table_ref_ : Some(table_ref),
+                    txn_info_ : txn_info.clone(),
+                    entry_ : self
+                })
+        }
+}
+
+
+
 

@@ -13,7 +13,7 @@ use core::alloc::Layout;
 use flame;
 
 use tcore;
-use tcore::{ObjectId, TValue, TVersion};
+use tcore::{ObjectId, TValue, TVersion,  TRef, TInt};
 use crossbeam::sync::ArcCell;
 
 #[derive(Debug)]
@@ -102,6 +102,10 @@ where
     pub fn raw_write(&mut self, val: T) {
         self.tvalue_.store(val);
     }
+
+    pub fn read<'a>(&self, txn : &mut TransactionOCC) -> &'a T {
+
+    }
 }
 
 impl<T> TBox<T>
@@ -145,3 +149,7 @@ where
 
 unsafe impl<T: Clone> Sync for TBox<T>{}
 unsafe impl<T: Clone> Send for TBox<T>{}
+
+
+/* Concrete Types Instances */
+

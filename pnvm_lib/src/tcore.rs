@@ -235,11 +235,11 @@ pub struct TVersion {
 
 
 impl TVersion {
-    pub fn new_with_info(txn_info: TxnInfo) -> TVersion {
+    pub fn new_with_info(txn_info: Arc<TxnInfo>) -> TVersion {
         TVersion {
             last_writer_ : AtomicU32::new(txn_info.id().into()),
             lock_owner_ : AtomicU32::new(0),
-            txn_info_: ArcCell::new(Arc::new(txn_info)), 
+            txn_info_: ArcCell::new(txn_info),
         }
     }
 

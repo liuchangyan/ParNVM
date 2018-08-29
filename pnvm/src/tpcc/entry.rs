@@ -1,7 +1,16 @@
 
 use table::{Key, Table};
 use numeric::Numeric;
-use pnvm_lib::tcore::*;
+use std::{
+    sync::Arc,
+    hash::Hash,
+};
+
+
+use pnvm_lib::{
+    tcore::*,
+    txn::TxnInfo,
+};
 
 pub type WarehouseTable = Table<Warehouse, i32>;
 pub type DistrictTable = Table<District, (i32, i32)>;
@@ -11,6 +20,15 @@ pub type  OrderTable = Table<Order, (i32, i32, i32)>;
 pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
 pub type  ItemTable = Table<Item, i32>;
 pub type  StockTable = Table<Stock, (i32, i32)>;
+
+
+pub trait TableRef<Entry, Index>
+where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
+      Index: Eq+Hash 
+{
+    type Table<Entry,Index>;
+    fn into_table_ref(self, usize, &Arc<TxnInfo>, &Table<Entry, Index>) -> Box<dyn TRef>;
+}
 
 
 #[derive(Clone)]
@@ -32,6 +50,8 @@ impl Key<i32> for Warehouse {
         self.w_id
     }
 }
+
+
 
 #[derive(Clone)]
 pub struct District {

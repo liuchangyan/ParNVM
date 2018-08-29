@@ -1,5 +1,6 @@
 #![feature(duration_extras, global_allocator)]
 #![feature(alloc, raw_vec_internals)]
+#![feature(generic_associated_types)]
 
 extern crate pnvm_lib;
 

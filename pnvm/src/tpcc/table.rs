@@ -17,38 +17,35 @@ use std::{
 
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo};
-
 use pnvm_lib::occ::occ_txn::TransactionOCC;
+use super::entry::TableRef;
+
 
 
 pub trait Key<T> {
     fn primary_key(&self) -> T;
 }
 
-pub trait TableRef{
-    fn make_table_ref(self, usize, &Arc<TxnInfo>) -> Box<dyn TRef>;
-}
 
 
-pub struct Table<Entry, Index, S = RandomState> 
-where Entry: Key<Index> + Clone + TableRef,
+pub struct Table<Entry, Index> 
+where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
       Index: Eq+Hash 
 {
     buckets : Vec<Bucket<Entry, Index>>,
     bucket_num: usize,
     
     //len :usize,
-    hash_builder: S,
+    hash_builder: RandomState,
     
      //id_ : ObjectId,
     //vers_ : TVersion,
 }
 
 
-impl<Entry, Index, S> Table<Entry, Index, S> 
-where Entry: Key<Index> + Clone + TableRef,
+impl<Entry, Index> Table<Entry, Index> 
+where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
       Index: Eq+Hash,
-      S: BuildHasher
 {
     pub fn new() -> Table<Entry, Index> {
        Default::default() 
@@ -71,7 +68,7 @@ where Entry: Key<Index> + Clone + TableRef,
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
 
         //Make into row and then make into a RowRef
-        let table_ref = entry.make_table_ref(bucket_idx, tx.txn_info());
+        let table_ref = entry.into_table_ref(bucket_idx, tx.txn_info(), self);
         let _  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
     }
 
@@ -95,7 +92,7 @@ where Entry: Key<Index> + Clone + TableRef,
 }
 
 impl<Entry, Index> Default for Table<Entry, Index> 
-where Entry: Key<Index> + Clone + TableRef,
+where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
       Index: Eq+Hash 
 {
     fn default() -> Self {
@@ -112,6 +109,7 @@ where Entry: Key<Index> + Clone + TableRef,
     }
 }
 
+/* FIXME: can we avoid the copy */
 pub struct Bucket<Entry, Index> 
 where Entry: Key<Index> + Clone,
       Index: Eq+Hash 
@@ -186,13 +184,24 @@ where Entry: Key<Index> + Clone,
 }
 
 
-
 pub struct Row<Entry> 
 where Entry : Clone
 {
     data_: UnsafeCell<Entry>,
     vers_: TVersion,
     id_ : ObjectId,
+}
+
+impl<Entry> Clone for Row<Entry>
+where Entry: Clone
+{
+    fn clone(&self) -> Self {
+        Row {
+            data_ : unsafe {UnsafeCell::new(self.data_.get().as_ref().unwrap().clone())},
+            vers_ : self.vers_.clone(),
+            id_: self.id_,
+        }
+    }
 }
 
 unsafe impl<Entry: Clone> Sync for Row<Entry>{}
@@ -209,7 +218,7 @@ where Entry: Clone
         }
     }
 
-    pub fn new_from_txn(entry : Entry, txn_info: TxnInfo) -> Row<Entry> {
+    pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry> {
         Row {
             data_ : UnsafeCell::new(entry),
             vers_ : TVersion::new_with_info(txn_info),
@@ -279,9 +288,12 @@ where Entry: Clone
         self.vers_.set_writer_info(info)
     }
 
+    pub fn read(&self, 
+
 
     /* Transaction Methods */
 }
+
 
 
 
