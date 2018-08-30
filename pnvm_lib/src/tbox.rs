@@ -168,7 +168,7 @@ impl BoxRef<u32> for (u32, Arc<TBox<u32>>) {
         let (val, tbox) = self;
         Box::new(TInt {
             inner_ : tbox,
-            data_ : Some(val)
+            data_ : Some(Box::new(val))
         })
     }
 }
@@ -176,16 +176,16 @@ impl BoxRef<u32> for (u32, Arc<TBox<u32>>) {
 
 pub struct TInt {
     inner_: Arc<TBox<u32>>,
-    data_ : Option<u32>,
+    data_ : Option<Box<u32>>,
 }
 impl TRef for TInt {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<u32>() {
-            Some(as_u32) => {
+    fn install(&self,id: Tid) {
+        match self.data_ {
+            Some(ref as_u32) => {
                 self.inner_.install(as_u32, id)
             },
             None => {
-                panic!("failed to convert to u32")
+                panic!("only write should get installed");
             }
         }
     }
@@ -215,6 +215,13 @@ impl TRef for TInt {
 
     fn read(&self) -> &Any {
         self.inner_.get_data()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<u32>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("runtime value should be u32")
+        }
     }
 
     fn lock(&self, tid: Tid) -> bool {

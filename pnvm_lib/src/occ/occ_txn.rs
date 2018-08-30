@@ -68,13 +68,12 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn write<T:'static + Clone>(&mut self, tobj: &Arc<TBox<T>>, val: T) 
-    where (T, Arc<TBox<T>>) : BoxRef<T>
+    where Arc<TBox<T>> : BoxRef<T>
     {
-        let tref = (val, tobj.clone()).into_box_ref();
+        let tref = tobj.clone().into_box_ref();
         let id = *tref.get_id();
-        let vers = tref.get_version();
-        let tag = self.retrieve_tag(&id,tref);
-        //tag.write::<T>(val);
+        let mut tag = self.retrieve_tag(&id,tref);
+        tag.write::<T>(val);
     }
     /*Non TransactionOCC Functions*/
    // fn notrans_read(tobj: &TObject<T>) -> T {

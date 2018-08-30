@@ -117,11 +117,12 @@ pub trait BoxRef<T> {
 pub trait TRef{
     fn get_ptr(&self) -> *mut u8;
     fn get_layout(&self) -> Layout;
-    fn install(&self, val : &Box<Any>, id: Tid);
+    fn install(&self, id: Tid);
     fn box_clone(&self) -> Box<dyn TRef>;
     fn get_id(&self) -> &ObjectId;
     fn get_version(&self) -> u32;
     fn read(&self) -> &Any;
+    fn write(&mut self, Box<Any>);
     fn lock(&self, Tid) -> bool;
     fn unlock(&self);
     fn check(&self, u32) -> bool;
@@ -309,7 +310,7 @@ pub struct TTag
     //pub tobj_ref_: TObject<T>,
     pub tobj_ref_: Box<dyn TRef>,
     pub oid_:      ObjectId,
-    write_val_:    Option<Box<Any>>,
+    //write_val_:    Option<Box<Any>>,
     pub has_write_: bool,
     pub vers_:     u32, /* 0 means empty */
 }
@@ -320,34 +321,35 @@ impl TTag
         TTag {
             oid_:       oid,
             tobj_ref_:  tobj_ref,
-            write_val_: None,
+            //write_val_: None,
             vers_:      0,
             has_write_: false,
         }
     }
     
     /* Only called after has_write() true arm */
-    #[inline(always)]
-    #[cfg_attr(feature = "profile", flame)]
-    pub fn write_value<T: 'static>(&self) -> &T {
-       // match self.write_val_ {
-       //     Some(ref t) => t,
-       //     None => panic!("Write Tag Should Have Write Value"),
-       // }
-       match self.write_val_
-           .as_ref()
-           .expect("write non null")
-           .downcast_ref::<T>() {
-               Some(t_ref) => {
-                    t_ref
-               }, 
-               None => panic!("wrong type at write_value")
-       }
-    }
+   // #[inline(always)]
+   // #[cfg_attr(feature = "profile", flame)]
+   // pub fn write_value(&self) -> &Any {
+   //    // match self.write_val_ {
+   //    //     Some(ref t) => t,
+   //    //     None => panic!("Write Tag Should Have Write Value"),
+   //    // }
+   //   // match self.write_val_
+   //   //     .as_ref()
+   //   //     .expect("write non null")
+   //   //     .downcast_ref::<T>() {
+   //   //         Some(t_ref) => {
+   //   //              t_ref
+   //   //         }, 
+   //   //         None => panic!("wrong type at write_value")
+   //   // }
+   //     self.tobj_ref_.read()
+   // }
 
-    pub fn write_value_any(&self) -> &Box<Any> {
-        self.write_val_.as_ref().expect("write non null")
-    }
+   // pub fn write_value_any(&self) -> &Box<Any> {
+   //     self.write_val_.as_ref().expect("write non null")
+   // }
 
 
     pub fn commit_data(&mut self, id: Tid) {
@@ -355,18 +357,13 @@ impl TTag
             return;
         }
 
-        let val = self.write_value_any();
-        self.tobj_ref_.install(val, id);
+        self.tobj_ref_.install(id);
     }
 
     pub fn get_data<T:'static>(&self) -> &T {
-        if self.has_write() {
-            self.write_value()
-        } else {
-            match self.tobj_ref_.read().downcast_ref::<T>() {
-                Some(t_ref) => t_ref, 
-                None => panic!("inconsistent data")
-            }
+        match self.tobj_ref_.read().downcast_ref::<T>() {
+            Some(t_ref) => t_ref, 
+            None => panic!("inconsistent data")
         }
 
     }
@@ -409,7 +406,7 @@ impl TTag
     #[inline(always)]
     pub fn write<T: 'static>(&mut self, val: T) {
         let val = Box::new(val); 
-        self.write_val_ = Some(val);
+        self.tobj_ref_.write(val);
         self.has_write_ = true; 
     }
 
