@@ -29,8 +29,8 @@ pub trait Key<T> {
 
 
 pub struct Table<Entry, Index> 
-where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
-      Index: Eq+Hash 
+where Entry: 'static + Key<Index> + Clone ,
+      Index: Eq+Hash + Clone,
 {
     buckets : Vec<Bucket<Entry, Index>>,
     bucket_num: usize,
@@ -44,8 +44,8 @@ where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
 
 
 impl<Entry, Index> Table<Entry, Index> 
-where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
-      Index: Eq+Hash,
+where Entry: 'static + Key<Index> + Clone ,
+      Index: Eq+Hash+Clone,
 {
     pub fn new() -> Table<Entry, Index> {
        Default::default() 
@@ -64,11 +64,14 @@ where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
         }
     }
 
-    pub fn push(&self, tx: &mut TransactionOCC, entry: Entry) {
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Entry)
+    where Arc<Row<Entry, Index>> : TableRef<Entry, Index>
+    {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
 
         //Make into row and then make into a RowRef
-        let table_ref = entry.into_table_ref(bucket_idx, tx.txn_info(), self);
+        let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
+        let table_ref = row.into_table_ref(Some(bucket_idx), tx.txn_info(), Some(self));
         let _  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
     }
 
@@ -77,7 +80,7 @@ where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
     //    self.buckets[bucket_idx].push(entry)
     //}
 
-    pub fn retrieve(&self, index: &Index) -> Option<&Row<Entry>> {
+    pub fn retrieve(&self, index: &Index) -> Option<&Row<Entry, Index>> {
         let bucket_idx = self.make_hash(&index) % self.bucket_num;
         self.buckets[bucket_idx].retrieve(index)
     }
@@ -92,8 +95,8 @@ where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
 }
 
 impl<Entry, Index> Default for Table<Entry, Index> 
-where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
-      Index: Eq+Hash 
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash  + Clone,
 {
     fn default() -> Self {
         let mut buckets = Vec::with_capacity(16);
@@ -111,10 +114,10 @@ where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
 
 /* FIXME: can we avoid the copy */
 pub struct Bucket<Entry, Index> 
-where Entry: Key<Index> + Clone,
-      Index: Eq+Hash 
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash + Clone,
 {
-    rows: RwLock<RawVec<Row<Entry>>>,
+    rows: RwLock<RawVec<Row<Entry, Index>>>,
     index: RwLock<HashMap<Index, usize>>,
     len : AtomicUsize,
 
@@ -123,8 +126,8 @@ where Entry: Key<Index> + Clone,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
-where Entry: Key<Index> + Clone,
-      Index: Eq+Hash
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash+ Clone,
 {
     pub fn new() -> Bucket<Entry, Index> {
         Bucket {
@@ -137,7 +140,7 @@ where Entry: Key<Index> + Clone,
         }
     }
 
-    pub fn push(&self, row : Row<Entry>) {
+    pub fn push(&self, row : Row<Entry, Index>) {
         let prev_len = self.len.fetch_add(1, Ordering::Acquire);
         if prev_len == self.cap() {
             let mut rw = self.rows.write().unwrap();
@@ -155,7 +158,7 @@ where Entry: Key<Index> + Clone,
         idx_map.insert(idx_elem, prev_len);
     }
 
-    pub fn retrieve(&self, index_elem: &Index) -> Option<&Row<Entry>> {
+    pub fn retrieve(&self, index_elem: &Index) -> Option<&Row<Entry, Index>> {
         //Check out of bound
         let index = self.index.read().unwrap();
         match index.get(index_elem) {
@@ -174,7 +177,7 @@ where Entry: Key<Index> + Clone,
         rows.cap()
     }
 
-    fn ptr(&self) -> *mut Row<Entry> {
+    fn ptr(&self) -> *mut Row<Entry, Index> {
         let rows = self.rows.read().unwrap();
         rows.ptr()
     }
@@ -184,45 +187,60 @@ where Entry: Key<Index> + Clone,
 }
 
 
-pub struct Row<Entry> 
-where Entry : Clone
+pub struct Row<Entry, Index> 
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash + Clone
 {
     data_: UnsafeCell<Entry>,
     vers_: TVersion,
     id_ : ObjectId,
+    index_ : Index,
 }
 
-impl<Entry> Clone for Row<Entry>
-where Entry: Clone
+impl<Entry, Index> Clone for Row<Entry, Index>
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash  + Clone
 {
     fn clone(&self) -> Self {
         Row {
             data_ : unsafe {UnsafeCell::new(self.data_.get().as_ref().unwrap().clone())},
             vers_ : self.vers_.clone(),
             id_: self.id_,
+            index_ : self.index_.clone()
         }
     }
 }
 
-unsafe impl<Entry: Clone> Sync for Row<Entry>{}
-unsafe impl<Entry: Clone> Send for Row<Entry>{}
+unsafe impl<Entry: Clone, Index> Sync for Row<Entry, Index>
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash  + Clone
+{}
+unsafe impl<Entry: Clone, Index> Send for Row<Entry, Index>
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash  + Clone
+{}
 
-impl<Entry>  Row<Entry> 
-where Entry: Clone
+impl<Entry, Index>  Row<Entry, Index> 
+where Entry: 'static + Key<Index> + Clone,
+      Index: Eq+Hash  + Clone
 {
-    pub fn new(entry: Entry) -> Row<Entry>{
+    pub fn new(entry: Entry) -> Row<Entry, Index>{
+        let key = entry.primary_key();
         Row{
             data_: UnsafeCell::new(entry),
             vers_: TVersion::default(), /* FIXME: this can carry txn info */
             id_ : OidFac::get_obj_next(),
+            index_ : key, 
         }
     }
 
-    pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry> {
+    pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry, Index> {
+        let key = entry.primary_key();
         Row {
             data_ : UnsafeCell::new(entry),
             vers_ : TVersion::new_with_info(txn_info),
             id_ : OidFac::get_obj_next(),
+            index_ : key,
         }
     }
 
@@ -288,8 +306,26 @@ where Entry: Clone
         self.vers_.set_writer_info(info)
     }
 
-    pub fn read(&self, 
+    pub fn read(tx : &mut TransactionOCC, self_arc: Arc<Row<Entry, Index>>) -> &Entry
+        where Arc<Row<Entry, Index>> : TableRef<Entry, Index>
+    {
+        let tref = self_arc.into_table_ref(None, tx.txn_info(), None);
+        let id = *tref.get_id();
+        let old_vers = tref.get_version();
 
+        let tag = tx.retrieve_tag(&id, tref);
+        tag.add_version(old_vers);
+        tag.get_data()
+    }
+
+    pub fn write(tx: &mut TransactionOCC, self_arc: Arc<Row<Entry, Index>>, val: Entry)
+        where Arc<Row<Entry, Index>> : TableRef<Entry, Index>
+    {
+        let tref = self_arc.into_table_ref(None, tx.txn_info(), None);
+        let id = *tref.get_id();
+        let mut tag = tx.retrieve_tag(&id, tref);
+        tag.write(val);
+    }
 
     /* Transaction Methods */
 }

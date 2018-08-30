@@ -23,10 +23,10 @@ extern crate num;
 extern crate core;
 
 mod util;
-//mod tpcc;
+mod tpcc;
 
 
-//use tpcc::*;
+use tpcc::*;
 use util::*;
 
 use std::{

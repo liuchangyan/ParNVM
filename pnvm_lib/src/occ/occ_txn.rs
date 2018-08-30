@@ -75,6 +75,8 @@ impl TransactionOCC
         let mut tag = self.retrieve_tag(&id,tref);
         tag.write::<T>(val);
     }
+
+
     /*Non TransactionOCC Functions*/
    // fn notrans_read(tobj: &TObject<T>) -> T {
    //     //let tobj = Arc::clone(tobj);

@@ -23,65 +23,87 @@ use pnvm_sys::{
 
 
 
-pub struct WarehouseRef<'a> {
-    inner_ : Arc<Row<Warehouse>>,
-    bucket_idx_: usize,
-    table_ref_: Option<&'a WarehouseTable>,
+#[derive(Clone)]
+pub struct WarehouseRef  {
+    inner_ : Arc<Row<Warehouse, i32>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static WarehouseTable>,
     txn_info_ : Arc<TxnInfo>,
-    entry_ : Warehouse,
+    data_ : Option<Box<Warehouse>>,
+}
+#[derive(Clone)]
+pub struct DistrictRef  {
+    inner_ : Arc<Row<District, (i32, i32)>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static DistrictTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<District>>,
 }
 
-pub struct DistrictRef {
-    inner_ : Arc<Row<District>>,
-    bucket_idx_: usize,
+#[derive(Clone)]
+pub struct CustomerRef  {
+    inner_ : Arc<Row<Customer, (i32, i32, i32)>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static CustomerTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<Customer>>,
 }
 
-pub struct CustomerRef {
-    inner_ : Arc<Row<Customer>>,
-    bucket_idx_: usize,
-    on_table_: bool
+#[derive(Clone)]
+pub struct NewOrderRef  {
+    inner_ : Arc<Row<NewOrder, (i32, i32, i32)>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static NewOrderTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<NewOrder>>,
 }
 
-pub struct NewOrderRef {
-    inner_ : Arc<Row<NewOrder>>,
-    bucket_idx_: usize,
-    on_table_: bool
+#[derive(Clone)]
+pub struct OrderRef  {
+    inner_ : Arc<Row<Order, (i32, i32, i32)>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static OrderTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<Order>>,
 }
 
-pub struct OrderRef {
-    inner_ : Arc<Row<Order>>,
-    bucket_idx_: usize,
-    on_table_: bool
-}
-
-pub struct OrderLineRef {
-    inner_ : Arc<Row<OrderLine>>,
-    bucket_idx_: usize,
-    on_table_: bool
-}
-
-
-pub struct ItemRef {
-    inner_ : Arc<Row<Item>>,
-    bucket_idx_: usize,
-    on_table_: bool
-}
-
-pub struct StockRef {
-    inner_ : Arc<Row<Stock>>,
-    bucket_idx_: usize,
-    on_table_: bool
+#[derive(Clone)]
+pub struct OrderLineRef  {
+    inner_ : Arc<Row<OrderLine, (i32, i32, i32, i32)>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static OrderLineTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<OrderLine>>,
 }
 
 
-impl<'a> TRef for WarehouseRef<'a> {
+#[derive(Clone)]
+pub struct ItemRef  {
+    inner_ : Arc<Row<Item, i32>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static ItemTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<Item>>,
+}
+
+#[derive(Clone)]
+pub struct StockRef  {
+    inner_ : Arc<Row<Stock, (i32, i32)>>,
+    bucket_idx_: Option<usize>,
+    table_ref_: Option<&'static StockTable>,
+    txn_info_ : Arc<TxnInfo>,
+    data_ : Option<Box<Stock>>,
+}
+
+
+impl  TRef for WarehouseRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(table) => {
-                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(as_val));
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
             },
             None => {
-                self.inner_.install(as_wh, id);
+                self.inner_.install(&self.data_.unwrap(), id);
             }
         }
     }
@@ -95,10 +117,7 @@ impl<'a> TRef for WarehouseRef<'a> {
     }
 
     fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(WarehouseRef {
-            inner_: self.inner_.clone(),
-
-        })
+        Box::new(self.clone())
     }
 
     fn get_id(&self) -> &ObjectId {
@@ -107,6 +126,276 @@ impl<'a> TRef for WarehouseRef<'a> {
 
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<Warehouse>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("warehosuref::write value should be Box<Warehouse>")
+        }
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
+    }
+}
+
+
+
+impl  TRef for DistrictRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
+            },
+            None => {
+                self.inner_.install(&self.data_.unwrap(), id);
+            }
+        }
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
+    }
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<District>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
+        }
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
+    }
+}
+
+
+
+impl  TRef for CustomerRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
+            },
+            None => {
+                self.inner_.install(&self.data_.unwrap(), id);
+            }
+        }
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
+    }
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+    
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<Customer>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
+        }
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
+    }
+}
+
+
+impl  TRef for NewOrderRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
+            },
+            None => {
+                self.inner_.install(&self.data_.unwrap(), id);
+            }
+        }
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<NewOrder>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
+        }
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
+    }
+}
+
+impl  TRef for OrderRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
+            },
+            None => {
+                self.inner_.install(&self.data_.unwrap(), id);
+            }
+        }
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+    
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<Order>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
+        }
     }
 
     fn read(&self) -> &Any {
@@ -134,18 +423,20 @@ impl<'a> TRef for WarehouseRef<'a> {
     }
 }
 
-
-
-impl TRef for DistrictRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<District>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
+impl  TRef for OrderLineRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
             },
             None => {
-                panic!("failed to convert to district")
+                self.inner_.install(&self.data_.unwrap(), id);
             }
         }
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
     }
 
     fn get_ptr(&self) -> *mut u8 {
@@ -156,11 +447,6 @@ impl TRef for DistrictRef {
         self.inner_.get_layout()
     }
 
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(DistrictRef {
-            inner_: self.inner_.clone()
-        })
-    }
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
@@ -168,6 +454,78 @@ impl TRef for DistrictRef {
 
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
+    }
+
+    fn read(&self) -> &Any {
+        self.inner_.get_data()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<OrderLine>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
+        }
+    }
+
+    fn lock(&self, tid: Tid) -> bool {
+        self.inner_.lock(tid)
+    }
+
+    fn unlock(&self) {
+        self.inner_.unlock()
+    }
+
+    fn check(&self, vers: u32) -> bool {
+        self.inner_.check(vers)
+    }
+
+    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_writer_info(txn_info);
+    }
+
+    fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_writer_info()
+    }
+}
+
+impl  TRef for ItemRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
+            },
+            None => {
+                self.inner_.install(&self.data_.unwrap(), id);
+            }
+        }
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
+    }
+
+    fn get_ptr(&self) -> *mut u8 {
+        self.inner_.get_ptr()
+    }
+
+    fn get_layout(&self) -> Layout {
+        self.inner_.get_layout()
+    }
+
+
+    fn get_id(&self) -> &ObjectId {
+        self.inner_.get_id()
+    }
+
+    fn get_version(&self) -> u32 {
+        self.inner_.get_version()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<Item>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("ItemRef::write value should be Box<Warehouse>")
+        }
     }
 
     fn read(&self) -> &Any {
@@ -195,18 +553,20 @@ impl TRef for DistrictRef {
     }
 }
 
-
-
-impl TRef for CustomerRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<Customer>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
+impl  TRef for StockRef  {
+    fn install(&self, id: Tid) {
+        match self.table_ref_ {
+            Some(table) => {
+                table.get_bucket(self.bucket_idx_).push(Row::new_from_txn(*self.data_.unwrap().clone(), self.txn_info_.clone()));
             },
             None => {
-                panic!("failed to convert to customer")
+                self.inner_.install(&self.data_.unwrap(), id);
             }
         }
+    }
+
+    fn box_clone(&self) -> Box<dyn TRef> {
+        Box::new(self.clone())
     }
 
     fn get_ptr(&self) -> *mut u8 {
@@ -217,11 +577,6 @@ impl TRef for CustomerRef {
         self.inner_.get_layout()
     }
 
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(CustomerRef {
-            inner_: self.inner_.clone()
-        })
-    }
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
@@ -233,6 +588,13 @@ impl TRef for CustomerRef {
 
     fn read(&self) -> &Any {
         self.inner_.get_data()
+    }
+
+    fn write(&mut self, val: Box<Any>) {
+        match val.downcast::<Stock>() {
+            Ok(val) => self.data_ = Some(val),
+            Err(_) => panic!("Stock::write value should be Box<Warehouse>")
+        }
     }
 
     fn lock(&self, tid: Tid) -> bool {
@@ -257,325 +619,23 @@ impl TRef for CustomerRef {
 }
 
 
-impl TRef for NewOrderRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<NewOrder>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
-            },
-            None => {
-                panic!("failed to convert to new order")
-            }
-        }
-    }
-
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(NewOrderRef {
-            inner_: self.inner_.clone()
-        })
-    }
-
-    fn get_ptr(&self) -> *mut u8 {
-        self.inner_.get_ptr()
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.inner_.get_layout()
-    }
-
-
-    fn get_id(&self) -> &ObjectId {
-        self.inner_.get_id()
-    }
-
-    fn get_version(&self) -> u32 {
-        self.inner_.get_version()
-    }
-
-    fn read(&self) -> &Any {
-        self.inner_.get_data()
-    }
-
-    fn lock(&self, tid: Tid) -> bool {
-        self.inner_.lock(tid)
-    }
-
-    fn unlock(&self) {
-        self.inner_.unlock()
-    }
-
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
-    }
-
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
-    }
-
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
-    }
-}
-
-impl TRef for OrderRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<Order>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
-            },
-            None => {
-                panic!("failed to convert to order")
-            }
-        }
-    }
-
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(OrderRef {
-            inner_: self.inner_.clone()
-        })
-    }
-
-    fn get_ptr(&self) -> *mut u8 {
-        self.inner_.get_ptr()
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.inner_.get_layout()
-    }
-
-
-    fn get_id(&self) -> &ObjectId {
-        self.inner_.get_id()
-    }
-
-    fn get_version(&self) -> u32 {
-        self.inner_.get_version()
-    }
-
-    fn read(&self) -> &Any {
-        self.inner_.get_data()
-    }
-
-    fn lock(&self, tid: Tid) -> bool {
-        self.inner_.lock(tid)
-    }
-
-    fn unlock(&self) {
-        self.inner_.unlock()
-    }
-
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
-    }
-
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
-    }
-
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
-    }
-}
-
-impl TRef for OrderLineRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<OrderLine>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
-            },
-            None => {
-                panic!("failed to convert to order line")
-            }
-        }
-    }
-
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(OrderLineRef {
-            inner_: self.inner_.clone()
-        })
-    }
-
-    fn get_ptr(&self) -> *mut u8 {
-        self.inner_.get_ptr()
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.inner_.get_layout()
-    }
-
-
-    fn get_id(&self) -> &ObjectId {
-        self.inner_.get_id()
-    }
-
-    fn get_version(&self) -> u32 {
-        self.inner_.get_version()
-    }
-
-    fn read(&self) -> &Any {
-        self.inner_.get_data()
-    }
-
-    fn lock(&self, tid: Tid) -> bool {
-        self.inner_.lock(tid)
-    }
-
-    fn unlock(&self) {
-        self.inner_.unlock()
-    }
-
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
-    }
-
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
-    }
-
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
-    }
-}
-
-impl TRef for ItemRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<Item>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
-            },
-            None => {
-                panic!("failed to convert to item")
-            }
-        }
-    }
-
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(ItemRef {
-            inner_: self.inner_.clone()
-        })
-    }
-
-    fn get_ptr(&self) -> *mut u8 {
-        self.inner_.get_ptr()
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.inner_.get_layout()
-    }
-
-
-    fn get_id(&self) -> &ObjectId {
-        self.inner_.get_id()
-    }
-
-    fn get_version(&self) -> u32 {
-        self.inner_.get_version()
-    }
-
-    fn read(&self) -> &Any {
-        self.inner_.get_data()
-    }
-
-    fn lock(&self, tid: Tid) -> bool {
-        self.inner_.lock(tid)
-    }
-
-    fn unlock(&self) {
-        self.inner_.unlock()
-    }
-
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
-    }
-
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
-    }
-
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
-    }
-}
-
-impl TRef for StockRef {
-    fn install(&self, val: &Box<Any>, id: Tid) {
-        match (**val).downcast_ref::<Stock>() {
-            Some(as_u32) => {
-                self.inner_.install(as_u32, id)
-            },
-            None => {
-                panic!("failed to convert to stock")
-            }
-        }
-    }
-
-    fn box_clone(&self) -> Box<dyn TRef> {
-        Box::new(StockRef {
-            inner_: self.inner_.clone()
-        })
-    }
-
-    fn get_ptr(&self) -> *mut u8 {
-        self.inner_.get_ptr()
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.inner_.get_layout()
-    }
-
-
-    fn get_id(&self) -> &ObjectId {
-        self.inner_.get_id()
-    }
-
-    fn get_version(&self) -> u32 {
-        self.inner_.get_version()
-    }
-
-    fn read(&self) -> &Any {
-        self.inner_.get_data()
-    }
-
-    fn lock(&self, tid: Tid) -> bool {
-        self.inner_.lock(tid)
-    }
-
-    fn unlock(&self) {
-        self.inner_.unlock()
-    }
-
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
-    }
-
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
-    }
-
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
-    }
-}
-
-
-impl TableRef<Warehouse, i32> for Warehouse {
+impl TableRef<Warehouse, i32> for Arc<Row<Warehouse, i32>> {
     type Table = WarehouseTable;
-
     fn into_table_ref(
         self,
-        bucket_idx: usize,
+        bucket_idx: Option<usize>,
         txn_info : &Arc<TxnInfo>,
-        table_ref : &WarehouseTable
+        table_ref : Option<&'static WarehouseTable>
     ) 
         -> Box<dyn TRef> 
         {
             Box::new(
                 WarehouseRef {
-                    inner_ : Arc::new(row),
+                    inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : Some(table_ref),
+                    table_ref_ : table_ref,
                     txn_info_ : txn_info.clone(),
-                    entry_ : self
+                    data_ : None 
                 })
         }
 }

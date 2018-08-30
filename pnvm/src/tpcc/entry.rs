@@ -23,11 +23,11 @@ pub type  StockTable = Table<Stock, (i32, i32)>;
 
 
 pub trait TableRef<Entry, Index>
-where Entry: Key<Index> + Clone + TableRef<Entry, Index>,
-      Index: Eq+Hash 
+where Entry: Key<Index> + Clone,
+      Index: Eq+Hash +Clone,
 {
     type Table<Entry,Index>;
-    fn into_table_ref(self, usize, &Arc<TxnInfo>, &Table<Entry, Index>) -> Box<dyn TRef>;
+    fn into_table_ref(self, Option<usize>, &Arc<TxnInfo>, Option<*const Table<Entry, Index>>) -> Box<dyn TRef>;
 }
 
 
