@@ -21,13 +21,23 @@ pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
 pub type  ItemTable = Table<Item, i32>;
 pub type  StockTable = Table<Stock, (i32, i32)>;
 
+pub struct Tables {
+   pub warehouse: WarehouseTable,
+   pub district: DistrictTable,
+   pub customer: CustomerTable,
+   pub neworder: NewOrderTable,
+   pub order: OrderTable,
+   pub orderline: OrderLineTable,
+   pub item: ItemTable,
+   pub stock: StockTable,
+}
 
-pub trait TableRef<Entry, Index>
-where Entry: Key<Index> + Clone,
-      Index: Eq+Hash +Clone,
+pub type TablesRef = Arc<Tables>;
+
+
+pub trait TableRef
 {
-    type Table<Entry,Index>;
-    fn into_table_ref(self, Option<usize>, &Arc<TxnInfo>, Option<*const Table<Entry, Index>>) -> Box<dyn TRef>;
+    fn into_table_ref(self, Option<usize>, &Arc<TxnInfo>, Option<Arc<Tables>>) -> Box<dyn TRef>;
 }
 
 

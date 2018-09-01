@@ -18,7 +18,7 @@ use std::{
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
-use super::entry::TableRef;
+use super::entry::{Tables, TableRef};
 
 
 
@@ -64,14 +64,14 @@ where Entry: 'static + Key<Index> + Clone ,
         }
     }
 
-    pub fn push(&self, tx: &mut TransactionOCC, entry: Entry)
-    where Arc<Row<Entry, Index>> : TableRef<Entry, Index>
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Entry, tables: &Arc<Tables>)
+    where Arc<Row<Entry, Index>> : TableRef
     {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
 
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
-        let table_ref = row.into_table_ref(Some(bucket_idx), tx.txn_info(), Some(self));
+        let table_ref = row.into_table_ref(Some(bucket_idx), tx.txn_info(), Some(tables.clone()));
         let _  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
     }
 
@@ -91,7 +91,9 @@ where Entry: 'static + Key<Index> + Clone ,
         s.finish() as usize
     }
 
-
+    pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<Entry, Index>{
+        &self.buckets[bkt_idx]
+    }
 }
 
 impl<Entry, Index> Default for Table<Entry, Index> 
@@ -184,6 +186,7 @@ where Entry: 'static + Key<Index> + Clone,
 
 
 
+
 }
 
 
@@ -197,19 +200,19 @@ where Entry: 'static + Key<Index> + Clone,
     index_ : Index,
 }
 
-impl<Entry, Index> Clone for Row<Entry, Index>
-where Entry: 'static + Key<Index> + Clone,
-      Index: Eq+Hash  + Clone
-{
-    fn clone(&self) -> Self {
-        Row {
-            data_ : unsafe {UnsafeCell::new(self.data_.get().as_ref().unwrap().clone())},
-            vers_ : self.vers_.clone(),
-            id_: self.id_,
-            index_ : self.index_.clone()
-        }
-    }
-}
+//impl<Entry, Index> Clone for Row<Entry, Index>
+//where Entry: 'static + Key<Index> + Clone,
+//      Index: Eq+Hash  + Clone
+//{
+//    fn clone(&self) -> Self {
+//        Row {
+//            data_ : unsafe {UnsafeCell::new(self.data_.get().as_ref().unwrap().clone())},
+//            vers_ : self.vers_.clone(),
+//            id_: self.id_,
+//            index_ : self.index_.clone()
+//        }
+//    }
+//}
 
 unsafe impl<Entry: Clone, Index> Sync for Row<Entry, Index>
 where Entry: 'static + Key<Index> + Clone,
@@ -307,7 +310,7 @@ where Entry: 'static + Key<Index> + Clone,
     }
 
     pub fn read(tx : &mut TransactionOCC, self_arc: Arc<Row<Entry, Index>>) -> &Entry
-        where Arc<Row<Entry, Index>> : TableRef<Entry, Index>
+        where Arc<Row<Entry, Index>> : TableRef
     {
         let tref = self_arc.into_table_ref(None, tx.txn_info(), None);
         let id = *tref.get_id();
@@ -319,7 +322,7 @@ where Entry: 'static + Key<Index> + Clone,
     }
 
     pub fn write(tx: &mut TransactionOCC, self_arc: Arc<Row<Entry, Index>>, val: Entry)
-        where Arc<Row<Entry, Index>> : TableRef<Entry, Index>
+        where Arc<Row<Entry, Index>> : TableRef
     {
         let tref = self_arc.into_table_ref(None, tx.txn_info(), None);
         let id = *tref.get_id();
