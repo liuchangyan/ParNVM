@@ -24,9 +24,9 @@ extern crate core;
 
 mod util;
 mod tpcc;
-
-
 use tpcc::*;
+
+
 use util::*;
 
 use std::{
@@ -256,7 +256,7 @@ fn run_occ(conf: Config) {
                                 let id = tx.commit_id();
                                 let tref = map.get(&read).unwrap().get();
                                 //let val = tx.read(&tobj);
-                                let val = tx.read::<u32>(tref);
+                                let val = tx.read::<u32>(tref.clone().into_box_ref());
                                 debug!("[{:?}] Read {:?}", id , val);
                             }
 
@@ -264,7 +264,7 @@ fn run_occ(conf: Config) {
                                 let tref = map.get(&write).unwrap().get();
                                 let val :u32 = tx.commit_id().into();
                                 debug!("[{:?}] Write {:?}", tx.commit_id(), val);
-                                tx.write(tref, val);
+                                tx.write(tref.clone().into_box_ref(), val);
                             }
                         }
                         #[cfg(feature = "profile")]

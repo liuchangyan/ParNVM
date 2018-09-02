@@ -2,7 +2,7 @@ use std::cmp::{Ordering,max};
 use num::pow::pow;
 use std::ops::{Sub, Mul, Add};
 
-#[derive(PartialOrd, Clone, Debug, Eq)]
+#[derive(PartialOrd, Clone, Debug, Eq, Copy)]
 pub struct Numeric {
     value: i64,
     len: usize,

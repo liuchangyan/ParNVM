@@ -1,5 +1,4 @@
 
-use alloc::raw_vec::RawVec;
 use alloc::alloc::Layout;
 
 use std::{
@@ -71,7 +70,7 @@ where Entry: 'static + Key<Index> + Clone ,
 
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
-        let table_ref = row.into_table_ref(Some(bucket_idx), tx.txn_info(), Some(tables.clone()));
+        let table_ref = row.into_table_ref(Some(bucket_idx), Some(tx.txn_info().clone()), Some(tables.clone()));
         let _  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
     }
 
@@ -80,7 +79,7 @@ where Entry: 'static + Key<Index> + Clone ,
     //    self.buckets[bucket_idx].push(entry)
     //}
 
-    pub fn retrieve(&self, index: &Index) -> Option<&Row<Entry, Index>> {
+    pub fn retrieve(&self, index: &Index) -> Option<Arc<Row<Entry, Index>>> {
         let bucket_idx = self.make_hash(&index) % self.bucket_num;
         self.buckets[bucket_idx].retrieve(index)
     }
@@ -119,7 +118,7 @@ pub struct Bucket<Entry, Index>
 where Entry: 'static + Key<Index> + Clone,
       Index: Eq+Hash + Clone,
 {
-    rows: RwLock<RawVec<Row<Entry, Index>>>,
+    rows: RwLock<Vec<Arc<Row<Entry, Index>>>>,
     index: RwLock<HashMap<Index, usize>>,
     len : AtomicUsize,
 
@@ -133,7 +132,7 @@ where Entry: 'static + Key<Index> + Clone,
 {
     pub fn new() -> Bucket<Entry, Index> {
         Bucket {
-            rows: RwLock::new(RawVec::new()),
+            rows: RwLock::new(Vec::new()),
             len: AtomicUsize::new(0),
             index: RwLock::new(HashMap::new()),
 
@@ -144,48 +143,59 @@ where Entry: 'static + Key<Index> + Clone,
 
     pub fn push(&self, row : Row<Entry, Index>) {
         let prev_len = self.len.fetch_add(1, Ordering::Acquire);
-        if prev_len == self.cap() {
-            let mut rw = self.rows.write().unwrap();
-            rw.double(); /* This may OOM */
-        } else if prev_len > self.cap() {
-            //FIXME: busy wait here maybe
-            panic!("hmmm, someone else should have been doubling");
-        }
+       // if prev_len == self.cap() {
+       //     let mut rw = self.rows.write().unwrap();
+       //     rw.double(); /* This may OOM */
+       // } else if prev_len > self.cap() {
+       //     //FIXME: busy wait here maybe
+       //     panic!("hmmm, someone else should have been doubling");
+       // }
         let idx_elem = row.get_data().primary_key();
-        unsafe {
-            ptr::write(self.ptr().offset(prev_len as isize), row);
+        let row_arc = Arc::new(row);
+        {
+            let mut rows = self.rows.write().unwrap();
+            rows.push(row_arc);
         }
-        
+
+       // unsafe {
+       //     //ptr::write(self.ptr().offset(prev_len as isize), row);
+       //     ptr::write(self.ptr().offset(prev_len as isize), row_arc);
+       // }
         let mut idx_map = self.index.write().unwrap();
-        idx_map.insert(idx_elem, prev_len);
+        idx_map.insert(idx_elem, self.len());
+        
     }
 
-    pub fn retrieve(&self, index_elem: &Index) -> Option<&Row<Entry, Index>> {
+    pub fn retrieve(&self, index_elem: &Index) -> Option<Arc<Row<Entry, Index>>> { 
         //Check out of bound
         let index = self.index.read().unwrap();
         match index.get(index_elem) {
             None => None,
             Some(idx) => {
                 let rows = self.rows.read().unwrap();
-                unsafe {
-                    rows.ptr().offset(*idx as isize).as_ref()
-                }
+                Some(rows.get(*idx).expect("row should not be empty. inconsistent with index").clone())
+                //unsafe {
+                //    rows.ptr().offset(*idx as isize).as_ref()
+                //}
             }
         }
     }
 
-    fn cap(&self) -> usize {
+   fn cap(&self) -> usize {
+       let rows = self.rows.read().unwrap();
+       rows.capacity()
+   }
+
+   // fn ptr(&self) -> *mut Arc<Row<Entry, Index>> {
+   //     let rows = self.rows.read().unwrap();
+   //     rows.ptr()
+   // }
+
+
+    fn len(&self) -> usize {
         let rows = self.rows.read().unwrap();
-        rows.cap()
+        rows.len()
     }
-
-    fn ptr(&self) -> *mut Row<Entry, Index> {
-        let rows = self.rows.read().unwrap();
-        rows.ptr()
-    }
-
-
-
 
 }
 
@@ -309,26 +319,26 @@ where Entry: 'static + Key<Index> + Clone,
         self.vers_.set_writer_info(info)
     }
 
-    pub fn read(tx : &mut TransactionOCC, self_arc: Arc<Row<Entry, Index>>) -> &Entry
-        where Arc<Row<Entry, Index>> : TableRef
-    {
-        let tref = self_arc.into_table_ref(None, tx.txn_info(), None);
-        let id = *tref.get_id();
-        let old_vers = tref.get_version();
+   // pub fn read(&self, tx : &mut TransactionOCC) -> &Entry
+   //     where Arc<Row<Entry, Index>> : TableRef
+   // {
+   //     let tref = self.clone().into_table_ref(None, tx.txn_info(), None);
+   //     let id = *tref.get_id();
+   //     let old_vers = tref.get_version();
 
-        let tag = tx.retrieve_tag(&id, tref);
-        tag.add_version(old_vers);
-        tag.get_data()
-    }
+   //     let tag = tx.retrieve_tag(&id, tref);
+   //     tag.add_version(old_vers);
+   //     tag.get_data()
+   // }
 
-    pub fn write(tx: &mut TransactionOCC, self_arc: Arc<Row<Entry, Index>>, val: Entry)
-        where Arc<Row<Entry, Index>> : TableRef
-    {
-        let tref = self_arc.into_table_ref(None, tx.txn_info(), None);
-        let id = *tref.get_id();
-        let mut tag = tx.retrieve_tag(&id, tref);
-        tag.write(val);
-    }
+   // pub fn write(&self, tx: &mut TransactionOCC, val: Entry)
+   //     where Arc<Row<Entry, Index>> : TableRef
+   // {
+   //     let tref = self.clone().into_table_ref(None, tx.txn_info(), None);
+   //     let id = *tref.get_id();
+   //     let mut tag = tx.retrieve_tag(&id, tref);
+   //     tag.write(val);
+   // }
 
     /* Transaction Methods */
 }

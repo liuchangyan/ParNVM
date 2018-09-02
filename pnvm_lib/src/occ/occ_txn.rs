@@ -54,10 +54,9 @@ impl TransactionOCC
     //    tag.add_version(tobj.get_version());
     //    tag.get_data()
     //}
-    pub fn read<'b, T:'static + Clone>(&'b mut self, tobj: &'b Arc<TBox<T>>) -> &'b T 
-    where Arc<TBox<T>> : BoxRef<T>
+    pub fn read<'b, T:'static + Clone>(&'b mut self, tref: Box<dyn TRef>) -> &'b T 
     {
-        let tref = tobj.clone().into_box_ref();
+        //let tref = tobj.clone().into_box_ref();
         let id = *tref.get_id();
         let vers = tref.get_version();
         let tag = self.retrieve_tag(&id, tref);
@@ -67,10 +66,9 @@ impl TransactionOCC
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn write<T:'static + Clone>(&mut self, tobj: &Arc<TBox<T>>, val: T) 
-    where Arc<TBox<T>> : BoxRef<T>
+    pub fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
     {
-        let tref = tobj.clone().into_box_ref();
+        //let tref = tobj.clone().into_box_ref();
         let id = *tref.get_id();
         let mut tag = self.retrieve_tag(&id,tref);
         tag.write::<T>(val);

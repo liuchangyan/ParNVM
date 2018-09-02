@@ -37,7 +37,7 @@ pub type TablesRef = Arc<Tables>;
 
 pub trait TableRef
 {
-    fn into_table_ref(self, Option<usize>, &Arc<TxnInfo>, Option<Arc<Tables>>) -> Box<dyn TRef>;
+    fn into_table_ref(self, Option<usize>, Option<Arc<TxnInfo>>, Option<Arc<Tables>>) -> Box<dyn TRef>;
 }
 
 

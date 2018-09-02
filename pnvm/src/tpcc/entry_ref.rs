@@ -28,15 +28,17 @@ pub struct WarehouseRef  {
     inner_ : Arc<Row<Warehouse, i32>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Warehouse>>,
 }
+
+
 #[derive(Clone)]
 pub struct DistrictRef  {
     inner_ : Arc<Row<District, (i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<District>>,
 }
 
@@ -45,7 +47,7 @@ pub struct CustomerRef  {
     inner_ : Arc<Row<Customer, (i32, i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Customer>>,
 }
 
@@ -54,7 +56,7 @@ pub struct NewOrderRef  {
     inner_ : Arc<Row<NewOrder, (i32, i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<NewOrder>>,
 }
 
@@ -63,7 +65,7 @@ pub struct OrderRef  {
     inner_ : Arc<Row<Order, (i32, i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Order>>,
 }
 
@@ -72,7 +74,7 @@ pub struct OrderLineRef  {
     inner_ : Arc<Row<OrderLine, (i32, i32, i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<OrderLine>>,
 }
 
@@ -82,7 +84,7 @@ pub struct ItemRef  {
     inner_ : Arc<Row<Item, i32>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Item>>,
 }
 
@@ -91,16 +93,16 @@ pub struct StockRef  {
     inner_ : Arc<Row<Stock, (i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
-    txn_info_ : Arc<TxnInfo>,
+    txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Stock>>,
 }
 
 
-impl  TRef for WarehouseRef  {
+impl  TRef for WarehouseRef {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.warehouse.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.warehouse.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -166,7 +168,7 @@ impl  TRef for DistrictRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.district.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.district.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -232,7 +234,7 @@ impl  TRef for CustomerRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.customer.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.customer.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -263,7 +265,7 @@ impl  TRef for CustomerRef  {
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
-    
+
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Customer>() {
             Ok(val) => self.data_ = Some(val),
@@ -297,7 +299,7 @@ impl  TRef for NewOrderRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.neworder.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.neworder.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -362,7 +364,7 @@ impl  TRef for OrderRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.order.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.order.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -390,7 +392,7 @@ impl  TRef for OrderRef  {
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
     }
-    
+
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Order>() {
             Ok(val) => self.data_ = Some(val),
@@ -427,7 +429,7 @@ impl  TRef for OrderLineRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.orderline.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.orderline.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -492,7 +494,7 @@ impl  TRef for ItemRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.item.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.item.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -557,7 +559,7 @@ impl  TRef for StockRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                table.stock.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.clone()));
+                table.stock.get_bucket(self.bucket_idx_.unwrap()).push(Row::new_from_txn(*self.data_.as_ref().unwrap().clone(), self.txn_info_.as_ref().unwrap().clone()));
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -623,7 +625,7 @@ impl TableRef for Arc<Row<Warehouse, i32>> {
     fn into_table_ref(
         self,
         bucket_idx: Option<usize>,
-        txn_info : &Arc<TxnInfo>,
+        txn_info : Option<Arc<TxnInfo>>,
         table_ref : Option<Arc<Tables>>
     ) 
         -> Box<dyn TRef> 
@@ -633,7 +635,27 @@ impl TableRef for Arc<Row<Warehouse, i32>> {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
                     table_ref_ : table_ref,
-                    txn_info_ : txn_info.clone(),
+                    txn_info_ : txn_info,
+                    data_ : None 
+                })
+        }
+}
+
+impl TableRef for Arc<Row<Customer, (i32, i32, i32)>> {
+    fn into_table_ref(
+        self,
+        bucket_idx: Option<usize>,
+        txn_info : Option<Arc<TxnInfo>>,
+        table_ref : Option<Arc<Tables>>
+    )
+        -> Box<dyn TRef> 
+        {
+            Box::new(
+                CustomerRef {
+                    inner_ : self,
+                    bucket_idx_: bucket_idx,
+                    table_ref_ : table_ref,
+                    txn_info_ : txn_info,
                     data_ : None 
                 })
         }
@@ -641,4 +663,23 @@ impl TableRef for Arc<Row<Warehouse, i32>> {
 
 
 
+impl TableRef for Arc<Row<District, (i32, i32)>> {
+    fn into_table_ref(
+        self,
+        bucket_idx: Option<usize>,
+        txn_info : Option<Arc<TxnInfo>>,
+        table_ref : Option<Arc<Tables>>
+    )
+        -> Box<dyn TRef> 
+        {
+            Box::new(
+                DistrictRef {
+                    inner_ : self,
+                    bucket_idx_: bucket_idx,
+                    table_ref_ : table_ref,
+                    txn_info_ : txn_info,
+                    data_ : None 
+                })
+        }
+}
 
