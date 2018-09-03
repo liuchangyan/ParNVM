@@ -29,6 +29,12 @@ use tpcc::*;
 
 use util::*;
 
+use rand::{
+    rngs::SmallRng,
+    thread_rng,
+    SeedableRng,
+};
+
 use std::{
     fs::File,
     sync::{
@@ -272,6 +278,71 @@ fn run_occ(conf: Config) {
                             flame::end("data");
                         }
 
+                        let res = tx.try_commit();
+                        !res
+                    } {}
+
+                    info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
+
+                    #[cfg(feature = "profile")]
+                    {
+                        flame::end(format!("start_txn - {:?}", tid));
+                    }
+                }
+
+                BenchmarkCounter::copy()
+            })
+        .unwrap();
+
+        handles.push(handle);
+    }
+
+    let thd_num :usize = conf.thread_num;
+    report_stat(handles, conf);
+
+    #[cfg(feature = "profile")]
+    {
+        flame::end("benchmark_start");
+        let mut f = File::create(format!("profile/occ.profile.{}", thd_num).as_str()).unwrap();
+        flame::dump_text_to_writer(f);
+    }
+}
+
+
+fn run_occ_tpcc(conf: Config) {
+    let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
+    let tables = tpcc::workload::prepare_workload_occ(&conf, &mut rng);
+
+    let atomic_cnt = Arc::new(AtomicUsize::new(1));
+    let mut handles = vec![];
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
+
+    #[cfg(feature = "profile")]
+    flame::start("benchmark_start");
+
+    for i in 0..conf.thread_num {
+        let conf = conf.clone();
+        let atomic_clone = atomic_cnt.clone();
+        let barrier = barrier.clone();
+        let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
+        let tables = tables.clone();
+
+        let handle = builder
+            .spawn(move || {
+                TidFac::set_thd_mask(i as u32);
+                barrier.wait();
+                BenchmarkCounter::start();
+                let rng = &mut SmallRng::from_rng(&mut thread_rng()).unwrap();
+
+                for _ in 0..conf.round_num {
+                    let mut rng = rng.clone();
+                    let tid = TidFac::get_thd_next();
+
+                    let tx = &mut occ_txn::TransactionOCC::new(tid);
+                    let tid = tid.clone();
+
+                    while {
+                        tpcc::workload::new_order_random(tx, &tables, &mut rng);
                         let res = tx.try_commit();
                         !res
                     } {}

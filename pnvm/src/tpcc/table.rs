@@ -78,6 +78,12 @@ where Entry: 'static + Key<Index> + Clone ,
     //    let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
     //    self.buckets[bucket_idx].push(entry)
     //}
+    //
+    pub fn push_raw(&self, entry: Entry) 
+    {
+        let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
+        self.buckets[bucket_idx].push_raw(entry);
+    }
 
     pub fn retrieve(&self, index: &Index) -> Option<Arc<Row<Entry, Index>>> {
         let bucket_idx = self.make_hash(&index) % self.bucket_num;
@@ -142,14 +148,14 @@ where Entry: 'static + Key<Index> + Clone,
     }
 
     pub fn push(&self, row : Row<Entry, Index>) {
-        let prev_len = self.len.fetch_add(1, Ordering::Acquire);
-       // if prev_len == self.cap() {
-       //     let mut rw = self.rows.write().unwrap();
-       //     rw.double(); /* This may OOM */
-       // } else if prev_len > self.cap() {
-       //     //FIXME: busy wait here maybe
-       //     panic!("hmmm, someone else should have been doubling");
-       // }
+        //let prev_len = self.len.fetch_add(1, Ordering::Acquire);
+        // if prev_len == self.cap() {
+        //     let mut rw = self.rows.write().unwrap();
+        //     rw.double(); /* This may OOM */
+        // } else if prev_len > self.cap() {
+        //     //FIXME: busy wait here maybe
+        //     panic!("hmmm, someone else should have been doubling");
+        // }
         let idx_elem = row.get_data().primary_key();
         let row_arc = Arc::new(row);
         {
@@ -164,6 +170,17 @@ where Entry: 'static + Key<Index> + Clone,
         let mut idx_map = self.index.write().unwrap();
         idx_map.insert(idx_elem, self.len());
         
+    }
+
+    fn push_raw(&self, entry: Entry) {
+        let idx_elem = entry.primary_key();
+        {
+            let mut rows = self.rows.write().unwrap();
+            rows.push(Arc::new(Row::new(entry)));
+        }
+
+        let mut idx_map = self.index.write().unwrap();
+        idx_map.insert(idx_elem, self.len());
     }
 
     pub fn retrieve(&self, index_elem: &Index) -> Option<Arc<Row<Entry, Index>>> { 

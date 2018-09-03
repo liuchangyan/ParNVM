@@ -21,6 +21,10 @@ pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
 pub type  ItemTable = Table<Item, i32>;
 pub type  StockTable = Table<Stock, (i32, i32)>;
 
+//FIXME: 
+//pub type HistoryTable = NonIndexTable<History>;
+pub type HistoryTable = Table<History, (i32)>; /* No primary key in fact */
+
 pub struct Tables {
    pub warehouse: WarehouseTable,
    pub district: DistrictTable,
@@ -30,6 +34,7 @@ pub struct Tables {
    pub orderline: OrderLineTable,
    pub item: ItemTable,
    pub stock: StockTable,
+   pub history: HistoryTable,
 }
 
 pub type TablesRef = Arc<Tables>;
@@ -43,15 +48,15 @@ pub trait TableRef
 
 #[derive(Clone)]
 pub struct Warehouse {
-    w_id: i32,
-    w_name: String,
-    w_street_1: String,
-    w_street_2: String,
-    w_city: String,
-    w_state: String,
-    w_zip: String,
-    pub w_tax: Numeric, // numeric(4, 4)
-    w_ytd: Numeric, // numeric(12, 2)
+   pub w_id: i32,
+   pub w_name: String,
+   pub w_street_1: String,
+   pub w_street_2: String,
+   pub w_city: String,
+   pub w_state: String,
+   pub w_zip: String,
+   pub w_tax: Numeric, // numeric(4, 4)
+   pub w_ytd: Numeric, // numeric(12, 2)
 }
 
 impl Key<i32> for Warehouse {
@@ -65,17 +70,17 @@ impl Key<i32> for Warehouse {
 
 #[derive(Clone)]
 pub struct District {
-    d_id: i32,
-    d_w_id: i32,
-    d_name: String,
-    d_street_1: String,
-    d_street_2: String,
-    d_city: String,
-    d_state: String,
-    d_zip: String,
-    pub d_tax: Numeric, // numeric(4, 4)
-    d_ytd: Numeric, // numeric(12,2)
-    pub d_next_o_id: i32,
+   pub  d_id: i32,
+   pub  d_w_id: i32,
+   pub  d_name: String,
+   pub  d_street_1: String,
+   pub  d_street_2: String,
+   pub  d_city: String,
+   pub  d_state: String,
+   pub  d_zip: String,
+   pub  d_tax: Numeric, // numeric(4, 4)
+   pub  d_ytd: Numeric, // numeric(12,2)
+   pub  d_next_o_id: i32,
 }
 
 impl Key<(i32, i32)> for District {
@@ -88,27 +93,27 @@ impl Key<(i32, i32)> for District {
 
 #[derive(Clone)]
 pub struct Customer {
-    c_id: i32,
-    c_d_id: i32,
-    c_w_id: i32,
-    c_first: String,
-    c_middle: String,
-    c_last: String,
-    c_street_1: String,
-    c_street_2: String,
-    c_city: String,
-    c_state: String,
-    c_zip: String,
-    c_phone: String,
-    c_since: i32, // Timestamp
-    c_credit: String,
-    c_credit_lim: Numeric, // numeric(12,2)
-    pub c_discount: Numeric, // numeric(4, 4)
-    c_balance: Numeric, // numeric(12,2)
-    c_ytd_paymenr: Numeric, // numeric(12,2)
-    c_payment_cnt: Numeric, // numeric(4,0)
-    c_delivery_cnt: Numeric, // numeric(4,0)
-    c_data: String,
+   pub c_id: i32,
+   pub c_d_id: i32,
+   pub c_w_id: i32,
+   pub c_first: String,
+   pub c_middle: String,
+   pub c_last: String,
+   pub c_street_1: String,
+   pub c_street_2: String,
+   pub c_city: String,
+   pub c_state: String,
+   pub c_zip: String,
+   pub c_phone: String,
+   pub c_since: i32, // Timestamp
+   pub c_credit: String,
+   pub c_credit_lim: Numeric, // numeric(12,2)
+   pub c_discount: Numeric, // numeric(4, 4)
+   pub c_balance: Numeric, // numeric(12,2)
+   pub c_ytd_payment: Numeric, // numeric(12,2)
+   pub c_payment_cnt: Numeric, // numeric(4,0)
+   pub c_delivery_cnt: Numeric, // numeric(4,0)
+   pub c_data: String,
 }
 
 impl Key<(i32, i32, i32)> for Customer {
@@ -144,7 +149,7 @@ pub struct Order {
     pub o_d_id: i32,
     pub o_w_id: i32,
     pub o_c_id: i32,
-    pub o_entry_d: i64, // Timestamp
+    pub o_entry_d: i32, // Timestamp
     pub o_carrier_id: i32,
     pub o_ol_cnt: Numeric, // numeric(2,0)
     pub o_all_local: Numeric, // numeric(1, 0)
@@ -182,11 +187,11 @@ impl Key<(i32, i32, i32, i32)> for OrderLine {
 
 #[derive(Clone)]
 pub struct Item {
-    i_id: i32,
-    i_im_id: i32,
-    i_name: String,
+    pub i_id: i32,
+    pub i_im_id: i32,
+    pub i_name: String,
     pub i_price: Numeric, // numeric(5,2)
-    i_data: String,
+    pub i_data: String,
 }
 
 impl Key<i32> for Item {
@@ -226,5 +231,24 @@ impl Key<(i32, i32)> for Stock {
     }
 }
 
+
+#[derive(Clone)]
+pub struct History {
+   pub h_c_id : i32,
+   pub h_c_d_id : i32,
+   pub h_c_w_id : i32,
+   pub h_d_id : i32,
+   pub h_w_id : i32,
+   pub h_date : i32 , //timestamp
+   pub h_amount : Numeric, //numeric(6,2)
+   pub h_data : String,
+}
+
+impl Key<i32> for History {
+    #[inline(always)]
+    fn primary_key(&self) -> i32 {
+        0
+    }
+}
 
 
