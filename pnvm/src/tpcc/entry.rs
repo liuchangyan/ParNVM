@@ -25,6 +25,7 @@ pub type  StockTable = Table<Stock, (i32, i32)>;
 //pub type HistoryTable = NonIndexTable<History>;
 pub type HistoryTable = Table<History, (i32)>; /* No primary key in fact */
 
+#[derive(Debug)]
 pub struct Tables {
    pub warehouse: WarehouseTable,
    pub district: DistrictTable,
@@ -46,7 +47,7 @@ pub trait TableRef
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Warehouse {
    pub w_id: i32,
    pub w_name: String,
@@ -68,7 +69,7 @@ impl Key<i32> for Warehouse {
 
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct District {
    pub  d_id: i32,
    pub  d_w_id: i32,
@@ -91,7 +92,7 @@ impl Key<(i32, i32)> for District {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Customer {
    pub c_id: i32,
    pub c_d_id: i32,
@@ -127,7 +128,7 @@ impl Key<(i32, i32, i32)> for Customer {
 
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewOrder {
     pub no_o_id: i32,
     pub no_d_id: i32,
@@ -143,7 +144,7 @@ impl Key<(i32, i32, i32)> for NewOrder {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Order {
     pub o_id: i32,
     pub o_d_id: i32,
@@ -163,7 +164,7 @@ impl Key<(i32, i32, i32)> for Order {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OrderLine {
     pub ol_o_id: i32,
     pub ol_d_id: i32,
@@ -185,7 +186,7 @@ impl Key<(i32, i32, i32, i32)> for OrderLine {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Item {
     pub i_id: i32,
     pub i_im_id: i32,
@@ -203,7 +204,7 @@ impl Key<i32> for Item {
 
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Stock {
     pub s_i_id: i32,
     pub s_w_id: i32,
@@ -232,7 +233,7 @@ impl Key<(i32, i32)> for Stock {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct History {
    pub h_c_id : i32,
    pub h_c_d_id : i32,

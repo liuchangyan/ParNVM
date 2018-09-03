@@ -11,7 +11,7 @@ use std::{
     cell::UnsafeCell,
     ptr,
     hash::{self,Hash, BuildHasher, Hasher},
-
+    fmt::{self, Debug},
 };
 
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
@@ -26,9 +26,9 @@ pub trait Key<T> {
 }
 
 
-
+#[derive(Debug)]
 pub struct Table<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone ,
+where Entry: 'static + Key<Index> + Clone + Debug,
       Index: Eq+Hash + Clone,
 {
     buckets : Vec<Bucket<Entry, Index>>,
@@ -41,9 +41,21 @@ where Entry: 'static + Key<Index> + Clone ,
     //vers_ : TVersion,
 }
 
+//impl<Entry, Index> Debug for Table <Entry, Index>
+//where Entry: 'static + Key<Index> + Clone ,
+//      Index: Eq+Hash+Clone,
+//{
+//    fn fmt(&self, f : &mut Formatter) -> Result {
+//            write!(f, 
+//
+//    }
+//
+//}
+
+
 
 impl<Entry, Index> Table<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone ,
+where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash+Clone,
 {
     pub fn new() -> Table<Entry, Index> {
@@ -102,7 +114,7 @@ where Entry: 'static + Key<Index> + Clone ,
 }
 
 impl<Entry, Index> Default for Table<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone +Debug,
       Index: Eq+Hash  + Clone,
 {
     fn default() -> Self {
@@ -120,8 +132,9 @@ where Entry: 'static + Key<Index> + Clone,
 }
 
 /* FIXME: can we avoid the copy */
+#[derive(Debug)]
 pub struct Bucket<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone,
 {
     rows: RwLock<Vec<Arc<Row<Entry, Index>>>>,
@@ -133,7 +146,7 @@ where Entry: 'static + Key<Index> + Clone,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash+ Clone,
 {
     pub fn new() -> Bucket<Entry, Index> {
@@ -168,8 +181,7 @@ where Entry: 'static + Key<Index> + Clone,
        //     ptr::write(self.ptr().offset(prev_len as isize), row_arc);
        // }
         let mut idx_map = self.index.write().unwrap();
-        idx_map.insert(idx_elem, self.len());
-        
+        idx_map.insert(idx_elem, self.len() -1);
     }
 
     fn push_raw(&self, entry: Entry) {
@@ -180,7 +192,7 @@ where Entry: 'static + Key<Index> + Clone,
         }
 
         let mut idx_map = self.index.write().unwrap();
-        idx_map.insert(idx_elem, self.len());
+        idx_map.insert(idx_elem, self.len()-1);
     }
 
     pub fn retrieve(&self, index_elem: &Index) -> Option<Arc<Row<Entry, Index>>> { 
@@ -216,9 +228,8 @@ where Entry: 'static + Key<Index> + Clone,
 
 }
 
-
 pub struct Row<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone
 {
     data_: UnsafeCell<Entry>,
@@ -226,6 +237,16 @@ where Entry: 'static + Key<Index> + Clone,
     id_ : ObjectId,
     index_ : Index,
 }
+
+impl<Entry, Index> Debug for Row<Entry, Index> 
+where Entry: 'static + Key<Index> + Clone+Debug,
+      Index: Eq+Hash + Clone
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {write!(f, "{:?}", self.data_.get().as_ref().unwrap())}
+    }
+}
+
 
 //impl<Entry, Index> Clone for Row<Entry, Index>
 //where Entry: 'static + Key<Index> + Clone,
@@ -242,16 +263,16 @@ where Entry: 'static + Key<Index> + Clone,
 //}
 
 unsafe impl<Entry: Clone, Index> Sync for Row<Entry, Index>
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone + Debug,
       Index: Eq+Hash  + Clone
 {}
 unsafe impl<Entry: Clone, Index> Send for Row<Entry, Index>
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone + Debug,
       Index: Eq+Hash  + Clone
 {}
 
 impl<Entry, Index>  Row<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone,
+where Entry: 'static + Key<Index> + Clone + Debug,
       Index: Eq+Hash  + Clone
 {
     pub fn new(entry: Entry) -> Row<Entry, Index>{

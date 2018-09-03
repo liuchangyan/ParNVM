@@ -32,7 +32,9 @@ use num::{
 
 const NUM_WAREHOUSES : i32 = 5;
 const NUM_INIT_ORDER: i32 = 3000;
+const NUM_INIT_NEXT_ORDER : i32 = 3001;
 const NUM_INIT_ITEM: i32 = 100_000;
+const NUM_INIT_CUSTOMER : i32 = 3000;
 
 pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     
@@ -51,6 +53,7 @@ pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     fill_item(&mut tables, conf, rng);
     fill_warehouse(&mut tables, conf, rng);
 
+    //println!("{:?}", tables);
     Arc::new(tables)
 }
 
@@ -84,7 +87,7 @@ fn fill_warehouse(tables: &mut Tables, _config : &Config, rng: &mut SmallRng) {
            w_city : rand_a_string(10, 20, rng),
            w_state: rand_a_string(2, 2, rng),
            w_zip : rand_zip(rng),
-           w_tax : rand_numeric(0.0, 0.2, 4, 4, rng),
+           w_tax : rand_numeric(0.0, 0.2, 5, 4, rng),
            w_ytd : Numeric::new(300000, 12, 2),
        };
 
@@ -95,9 +98,10 @@ fn fill_warehouse(tables: &mut Tables, _config : &Config, rng: &mut SmallRng) {
     }
 }
 
+const NUM_INIT_STOCK: i32 = 100_000;
 fn fill_stock(tables: &mut Tables, _config: &Config, w_id : i32, rng: &mut SmallRng) 
 {
-    for s_id in 1..=100_000 {
+    for s_id in 1..=NUM_INIT_STOCK {
         let stock = Stock {
             s_i_id : s_id,
             s_w_id : w_id,
@@ -122,9 +126,10 @@ fn fill_stock(tables: &mut Tables, _config: &Config, w_id : i32, rng: &mut Small
     }
 }
 
+const NUM_INIT_DISTRICT :i32 = 10;
 fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut SmallRng) 
 {
-    for d_id in 1..=10 {
+    for d_id in 1..=NUM_INIT_DISTRICT {
         let district = District {
             d_id : d_id, 
             d_w_id : w_id,
@@ -134,9 +139,9 @@ fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut 
             d_city : rand_a_string(10, 20, rng),
             d_state : rand_a_string(2, 2, rng),
             d_zip : rand_zip(rng),
-            d_tax : rand_numeric(0.0, 0.20, 4, 4, rng),
+            d_tax : rand_numeric(0.0, 0.20, 5, 4, rng),
             d_ytd : Numeric::new(30_000, 12, 2),
-            d_next_o_id : 3001,
+            d_next_o_id : NUM_INIT_NEXT_ORDER,
         };
 
         tables.district.push_raw(district);
@@ -147,6 +152,9 @@ fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut 
     }
 }
 
+const NUM_INI_NEW_ORDER_START : i32  = 2101;
+const NUM_INI_NEW_ORDER_END : i32  = 3000;
+
 fn fill_neworder(
     tables: &mut Tables,
     _config :&Config,
@@ -155,7 +163,7 @@ fn fill_neworder(
     rng: &mut SmallRng
     ) 
 {
-    for o_id in 2101..=3000 {
+    for o_id in NUM_INI_NEW_ORDER_START..=NUM_INI_NEW_ORDER_END{
         let neworder = NewOrder {
             no_o_id : o_id,
             no_d_id : d_id,
@@ -172,7 +180,7 @@ fn fill_order(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32, r
     rng.shuffle(&mut c_ids);
 
     for o_id in 1..=NUM_INIT_ORDER {
-        let o_carrier_id = if o_id < 2101 {
+        let o_carrier_id = if o_id < NUM_INI_NEW_ORDER_START {
             urand(1, 10, rng)
         } else {
             0
@@ -201,13 +209,13 @@ fn fill_order(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32, r
 fn fill_orderline(tables: &mut Tables, _config : &Config, w_id : i32, d_id: i32, o_id : i32, o_ol_cnt: i32, o_entry_d : i32, rng: &mut SmallRng) 
 {
     for ol_number in 1..=o_ol_cnt {
-        let ol_delivery_d = if o_id < 2101 {
+        let ol_delivery_d = if o_id < NUM_INI_NEW_ORDER_START {
             o_entry_d
         } else {
             0
         };
 
-        let ol_amount = if o_id < 2101 {
+        let ol_amount = if o_id < NUM_INI_NEW_ORDER_START {
             Numeric::new(0, 6,2)
         } else {
             rand_numeric(0.01, 9999.99, 6, 2, rng)
@@ -231,9 +239,10 @@ fn fill_orderline(tables: &mut Tables, _config : &Config, w_id : i32, d_id: i32,
 }
 
 
+
 fn fill_customer(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32, rng: &mut SmallRng) 
 {
-    for c_id in 1..=3000 {
+    for c_id in 1..= NUM_INIT_CUSTOMER {
         let timestamp = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;
         let credit = if urand(1, 10, rng) == 1 {
             String::from("BC")
@@ -257,7 +266,7 @@ fn fill_customer(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32
             c_since : timestamp,
             c_credit : credit,
             c_credit_lim : Numeric::new(50_000, 12, 2),
-            c_discount : rand_numeric(0.0, 0.5, 4, 4, rng),
+            c_discount : rand_numeric(0.0, 0.5, 5, 4, rng),
             c_balance : Numeric::from_str("-10.00", 12, 2).expect("invalid c_balance"),
             c_ytd_payment : Numeric::from_str("10.00", 12, 2).expect("invliad c_ytd_payment"),
             c_payment_cnt : Numeric::new(1, 4, 0),
@@ -456,8 +465,14 @@ fn rand_numeric(low : f64,
                 rng : &mut SmallRng
                 ) -> Numeric 
 {
-    Numeric::from_str(&format!("{}",rng.gen_range(low, high)), len, precision).unwrap()
+    let num = Numeric::from_str(&format!("{:.*}",precision, rng.gen_range(low, high)), len, precision);
+
+    match num {
+        Some(num) => num,
+        None => panic!("{}, {}, {}, {}", low, high, len ,precision)
+    }
 }
+
 
 
 fn rand_data(low : i32, high : i32, rng : &mut SmallRng ) -> String {

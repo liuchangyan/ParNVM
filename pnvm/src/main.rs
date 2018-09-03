@@ -66,6 +66,7 @@ fn main() {
 //        "PNVM" => run_nvm(conf),
         "SINGLE" => run_single(conf),
         "PNVM_OCC" => run_nvm_occ(conf),
+        "TPCC_OCC" => run_occ_tpcc(conf),
         _ => panic!("unknown test name"),
     }
 }
@@ -330,14 +331,13 @@ fn run_occ_tpcc(conf: Config) {
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
+                let rng = &mut SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
                 BenchmarkCounter::start();
-                let rng = &mut SmallRng::from_rng(&mut thread_rng()).unwrap();
 
                 for _ in 0..conf.round_num {
                     let mut rng = rng.clone();
                     let tid = TidFac::get_thd_next();
-
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();
 
@@ -348,11 +348,6 @@ fn run_occ_tpcc(conf: Config) {
                     } {}
 
                     info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
-
-                    #[cfg(feature = "profile")]
-                    {
-                        flame::end(format!("start_txn - {:?}", tid));
-                    }
                 }
 
                 BenchmarkCounter::copy()
