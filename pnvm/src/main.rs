@@ -321,7 +321,7 @@ fn run_occ_tpcc(conf: Config) {
     #[cfg(feature = "profile")]
     flame::start("benchmark_start");
 
-    for i in 0..conf.thread_num {
+    for i in 1..=conf.thread_num {
         let conf = conf.clone();
         let atomic_clone = atomic_cnt.clone();
         let barrier = barrier.clone();
@@ -331,12 +331,13 @@ fn run_occ_tpcc(conf: Config) {
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
-                let rng = &mut SmallRng::from_rng(&mut thread_rng()).unwrap();
+                OidFac::set_obj_mask(i as u32);
+
+                let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
                 BenchmarkCounter::start();
 
                 for _ in 0..conf.round_num {
-                    let mut rng = rng.clone();
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();

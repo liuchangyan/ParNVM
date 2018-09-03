@@ -57,6 +57,7 @@ impl TransactionOCC
     pub fn read<'b, T:'static + Clone>(&'b mut self, tref: Box<dyn TRef>) -> &'b T 
     {
         //let tref = tobj.clone().into_box_ref();
+        
         let id = *tref.get_id();
         let vers = tref.get_version();
         let tag = self.retrieve_tag(&id, tref);

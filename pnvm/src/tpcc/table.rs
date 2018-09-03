@@ -79,11 +79,13 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     where Arc<Row<Entry, Index>> : TableRef
     {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
-
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
-        let table_ref = row.into_table_ref(Some(bucket_idx), Some(tx.txn_info().clone()), Some(tables.clone()));
-        let _  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        let table_ref = row.into_table_ref(Some(bucket_idx), Some(tables.clone()));
+//        println!("PUSH : T : {:?}", table_ref.get_id());
+
+        let tag  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        //println!("{:#?", tag);
     }
 
     //pub fn push(&self, entry: Entry) {
@@ -160,7 +162,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         }
     }
 
-    pub fn push(&self, row : Row<Entry, Index>) {
+    pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
         //let prev_len = self.len.fetch_add(1, Ordering::Acquire);
         // if prev_len == self.cap() {
         //     let mut rw = self.rows.write().unwrap();
@@ -169,8 +171,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         //     //FIXME: busy wait here maybe
         //     panic!("hmmm, someone else should have been doubling");
         // }
-        let idx_elem = row.get_data().primary_key();
-        let row_arc = Arc::new(row);
+        let idx_elem = row_arc.get_data().primary_key();
         {
             let mut rows = self.rows.write().unwrap();
             rows.push(row_arc);

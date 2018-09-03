@@ -114,7 +114,7 @@ pub trait BoxRef<T> {
 }
 
 
-pub trait TRef{
+pub trait TRef : fmt::Debug{
     fn get_ptr(&self) -> *mut u8;
     fn get_layout(&self) -> Layout;
     fn install(&self, id: Tid);
@@ -360,10 +360,10 @@ impl TTag
         self.tobj_ref_.install(id);
     }
 
-    pub fn get_data<T:'static>(&self) -> &T {
+    pub fn get_data<T:'static+ Clone>(&self) -> &T {
         match self.tobj_ref_.read().downcast_ref::<T>() {
             Some(t_ref) => t_ref, 
-            None => panic!("inconsistent data")
+            None => panic!("inconsistent data {:?}", self)
         }
 
     }
@@ -481,7 +481,7 @@ impl OidFac {
     }
 
     fn get_next(&mut self) -> ObjectId {
-        let ret = self.next_id_ | ((self.mask_ ) << 16);
+        let ret = self.next_id_ | ((self.mask_ ) << 24);
         self.next_id_ +=1;
         ObjectId(ret)
     }

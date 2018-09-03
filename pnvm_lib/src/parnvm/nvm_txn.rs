@@ -157,7 +157,7 @@ impl TransactionParOCC
     }
 
     /* Implement OCC interface */
-    pub fn read<'a, T:'static>(&'a mut self, tobj: &'a dyn TRef) -> &'a T {
+    pub fn read<'a, T:'static +Clone>(&'a mut self, tobj: &'a dyn TRef) -> &'a T {
         let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
         tag.add_version(tobj.get_version());
         tag.get_data()

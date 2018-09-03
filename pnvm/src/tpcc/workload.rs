@@ -311,85 +311,98 @@ fn new_order(tx: &mut TransactionOCC,
              src_whs : &[i32],
              item_ids: &[i32],
              qty: &[i32],
-             now: i64)
+             now: i32)
 {
-    let w_tax = tx.read::<Warehouse>(tables.warehouse.retrieve(&w_id).unwrap().into_table_ref(None, None, None)).w_tax;
+    let warehouse_ref = tables.warehouse.retrieve(&w_id).unwrap().into_table_ref(None, None);
+    //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
+    let w_tax = tx.read::<Warehouse>(warehouse_ref).w_tax;
+    
+    let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id)).unwrap().into_table_ref(None, None);
+    let c_discount = tx.read::<Customer>(customer_ref).c_discount;
 
-    let c_discount = tx.read::<Customer>(tables.customer.retrieve(&(w_id, d_id, c_id)).unwrap().into_table_ref(None, None, None)).c_discount;
-    let district_ref = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None, None);
+    let district_ref = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    //println!("READ : DISTRICT : {:?}", district_ref.get_id());
     let mut district = tx.read::<District>(district_ref.box_clone()).clone();
+
     let o_id = district.d_next_o_id;
     let d_tax = district.d_tax;
     district.d_next_o_id = o_id +1;
     tx.write(district_ref, district);
 
-    // let mut all_local :i64 = 1;
-    // for i in 0..ol_cnt as usize {
-    //     if w_id != src_whs[i] {
-    //         all_local = 0;
-    //     }
-    // }
-    //  
-    // tables.order.push(tx,
-    //                         Order {
-    //                             o_id: o_id, o_d_id: d_id, o_w_id: w_id, o_c_id: c_id, o_entry_d: now,
-    //                             o_carrier_id: 0, o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
-    //                             o_all_local: Numeric::new(all_local, 1, 0)
-    //                         });
-    // tables.neworder.push(tx,
-    //                            NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id });
+     let mut all_local :i64 = 1;
+     for i in 0..ol_cnt as usize {
+         if w_id != src_whs[i] {
+             all_local = 0;
+         }
+     }
+      
+     tables.order.push(tx,
+                       Order {
+                           o_id: o_id, o_d_id: d_id, o_w_id: w_id, o_c_id: c_id, o_entry_d: now,
+                           o_carrier_id: 0, o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
+                           o_all_local: Numeric::new(all_local, 1, 0)
+                       },
+                       tables);
+     tables.neworder.push(tx,
+                          NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id },
+                          tables);
 
-    // for i in 0..ol_cnt as usize {
-    //     let i_price = tables.item.retrieve(item_ids[i]).unwrap().read(tx).i_price;
+     for i in 0..ol_cnt as usize {
+         //let i_price = tables.item.retrieve(item_ids[i]).unwrap().read(tx).i_price;
+         let item_arc = tables.item.retrieve(&(item_ids[i])).unwrap();
+         let item_ref = item_arc.into_table_ref(None, None);
+         //println!("READ : ITEM : {:?}", item_ref.get_id());
+         let i_price = tx.read::<Item>(item_ref).i_price;
 
-    //     let stock_ref = tables.stock.retrieve((src_whs[i], item_ids[i])).unwrap();
-    //     let stock = stock_ref.read(tx);
-    //     let s_quantity = stock.s_quantity;
-    //     let s_remote_cnt = stock.s_remote_cnt;
-    //     let s_order_cnt = stock.s_order_cnt;
-    //     let s_dist = match d_id {
-    //         1 => &stock.s_dist_01,
-    //         2 => &stock.s_dist_02,
-    //         3 => &stock.s_dist_03,
-    //         4 => &stock.s_dist_04,
-    //         5 => &stock.s_dist_05,
-    //         6 => &stock.s_dist_06,
-    //         7 => &stock.s_dist_07,
-    //         8 => &stock.s_dist_08,
-    //         9 => &stock.s_dist_09,
-    //         10 => &stock.s_dist_10,
-    //         _ => panic!("invalid d_id: {}", d_id)
-    //     };
+         let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i])).unwrap().into_table_ref(None, None);
+         let mut stock = tx.read::<Stock>(stock_ref.box_clone()).clone();
+         let s_quantity = stock.s_quantity;
+         let s_remote_cnt = stock.s_remote_cnt;
+         let s_order_cnt = stock.s_order_cnt;
+         let s_dist = match d_id {
+             1 => stock.s_dist_01.clone(),
+             2 => stock.s_dist_02.clone(),
+             3 => stock.s_dist_03.clone(),
+             4 => stock.s_dist_04.clone(),
+             5 => stock.s_dist_05.clone(),
+             6 => stock.s_dist_06.clone(),
+             7 => stock.s_dist_07.clone(),
+             8 => stock.s_dist_08.clone(),
+             9 => stock.s_dist_09.clone(),
+             10=> stock.s_dist_10.clone(),
+             _ => panic!("invalid d_id: {}", d_id)
+         };
 
-    //     let qty = Numeric::new(qty[i] as i64, 4, 0);
-    //     let mut stock_new = stock.clone();
-    //     stock_new.s_quantity = if s_quantity > qty {
-    //         stock_new.s_quantity - qty
-    //     } else {
-    //         stock_new.s_quantity + Numeric::new(91, 4, 0) - qty
-    //     };
+         let qty = Numeric::new(qty[i] as i64, 4, 0);
+         stock.s_quantity = if s_quantity > qty {
+             stock.s_quantity - qty
+         } else {
+             stock.s_quantity + Numeric::new(91, 4, 0) - qty
+         };
 
-    //     if src_whs[i] != w_id {
-    //         stock_new.s_remote_cnt = stock.s_remote_cnt + s_remote_cnt;
-    //     } else {
-    //         stock_new.s_order_cnt = s_order_cnt + Numeric::new(1, 4, 0);
-    //     }
+         if src_whs[i] != w_id {
+             stock.s_remote_cnt = stock.s_remote_cnt + s_remote_cnt;
+         } else {
+             stock.s_order_cnt = s_order_cnt + Numeric::new(1, 4, 0);
+         }
 
-    //     stock_ref.write(tx, stock_new);
+         tx.write(stock_ref, stock);
 
-    //     let ol_amount = qty * i_price * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
-    //         (Numeric::new(1, 1, 0) - c_discount);
+         let ol_amount = qty * i_price * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
+             (Numeric::new(1, 1, 0) - c_discount);
 
-    //     tables.orderline.push(tx, OrderLine {
-    //         ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, ol_number: i as i32 + 1, ol_i_id: item_ids[i],
-    //         ol_supply_w_id: src_whs[i], ol_delivery_d: 0, ol_quantity: qty, ol_amount: ol_amount,
-    //         ol_dist_info: s_dist.clone()
-    //     })
-    // }
+         tables.orderline.push(tx, 
+                               OrderLine {
+                                   ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, ol_number: i as i32 + 1, ol_i_id: item_ids[i],
+                                   ol_supply_w_id: src_whs[i], ol_delivery_d: 0, ol_quantity: qty, ol_amount: ol_amount,
+                                   ol_dist_info: s_dist
+                               },
+                               tables);
+     }
 }
 
 pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, rng: &mut SmallRng) {
-    let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i64;     
+    let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
     let w_id = urand(1, NUM_WAREHOUSES, rng);
     let d_id = urand(1, 1, rng);
     let c_id = nurand(1023, 1, 3000, rng);

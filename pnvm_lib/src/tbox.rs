@@ -174,6 +174,7 @@ impl BoxRef<u32> for (u32, Arc<TBox<u32>>) {
 }
 
 
+#[derive(Debug)]
 pub struct TInt {
     inner_: Arc<TBox<u32>>,
     data_ : Option<Box<u32>>,
