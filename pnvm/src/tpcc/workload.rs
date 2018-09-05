@@ -273,7 +273,8 @@ fn fill_customer(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32
             c_delivery_cnt : Numeric::new(0, 4, 0),
             c_data : rand_a_string(300, 500, rng),
         };
-
+        
+        //println!("PUSHING CUSTOMER {}, {}, {}, {}", c_id, w_id, d_id, customer.c_last);
         tables.customer.push_raw(customer);
 
         fill_history(tables, _config, w_id, d_id, c_id, timestamp, rng);
@@ -432,7 +433,8 @@ pub fn payment_random(tx: &mut TransactionOCC,
                       rng : &mut SmallRng,
                       ) 
 {
-    let w_id = w_home;
+    //let w_id = w_home;
+    let w_id = urand(1, NUM_WAREHOUSES, rng);
     let d_id = urand(1, 10, rng);
         
     let x = urand(1, 100, rng);
@@ -452,10 +454,11 @@ pub fn payment_random(tx: &mut TransactionOCC,
         c_d_id = urand(1, 10, rng);
     }
 
-    let h_amount = rand_numeric(1.00, 5000.00, 10, 6, rng);
+    let h_amount = rand_numeric(1.00, 5000.00, 10, 2, rng);
     let h_date = gen_now();     
     
-    if y<= 60 {
+    //if y<= 60 {
+    if false {
         let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
         payment(tx, tables, w_id, d_id, c_w_id , c_d_id, Some(c_last), None, h_amount, h_date, rng);
     } else {
@@ -477,7 +480,7 @@ fn payment(tx: &mut TransactionOCC,
            rng : &mut SmallRng)
 {
     /* RW Warehouse */
-    let warehouse_row = tables.warehouse.retrieve(&w_id).unwrap().into_table_ref(None, None);
+    let warehouse_row = tables.warehouse.retrieve(&w_id).expect("warehouse empty").into_table_ref(None, None);
     let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
     let w_name = warehouse.w_name.clone();
    // let _w_street_1 = &warehouse.w_street_1;
@@ -486,10 +489,11 @@ fn payment(tx: &mut TransactionOCC,
    // let _w_state = &warehouse.w_state;
    // let _w_zip = &warehouse.w_zip;
     warehouse.w_ytd = warehouse.w_ytd +  h_amount;
+    debug!("[TXN-PAYMENT] Updateing Warehouse \n\t\t{:?}", warehouse);
     tx.write(warehouse_row, warehouse);
 
     /* RW District */
-    let district_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    let district_row = tables.district.retrieve(&(w_id, d_id)).expect("district empty").into_table_ref(None, None);
     let mut district = tx.read::<District>(district_row.box_clone()).clone();
     let d_name = district.d_name.clone();
    // let _d_street_1 = district.d_street_1;
@@ -498,16 +502,22 @@ fn payment(tx: &mut TransactionOCC,
    // let _d_state = district.d_state;
    // let _d_zip = district.d_zip;
     district.d_ytd = district.d_ytd + h_amount;
+    debug!("[TXN-PAYMENT] Updateing district \n\t\t{:?}", district);
     tx.write(district_row,district);
 
     let c_row = match c_id {
         Some(c_id) => {
             /* Case 1 , by C_ID*/
-            tables.customer.retrieve(&(c_id, w_id, d_id)).unwrap().into_table_ref(None, None)
+            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
         }, 
         None => {
             assert!(c_last.is_some());
-            let rows = tables.customer.find_by_name_id(&(c_last.unwrap(), w_id, d_id));
+            let c_last = c_last.unwrap();
+            let rows = tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id));
+            if rows.len() <= 0 {
+                warn!("NO MATCHING {}, {}, {}", c_last, c_w_id, c_d_id);
+                return;
+            }
             /* n/2 rounded up == (n+1)/2 */
             let i = rows.len()/2; 
             rows[i].clone().into_table_ref(None, None)
@@ -529,6 +539,7 @@ fn payment(tx: &mut TransactionOCC,
         },
         _ => {},
     }
+    debug!("[TXN-PAYMENT] Updating Customer \n\t\t{:?}", c);
     tx.write(c_row, c);
 
     /* I History */
@@ -545,6 +556,7 @@ fn payment(tx: &mut TransactionOCC,
                             h_amount : h_amount,
                         },
                         tables);
+    debug!("[TXN-PAYMENT] Inserting History \n\t\t");
      
 }
 

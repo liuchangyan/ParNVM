@@ -337,13 +337,19 @@ fn run_occ_tpcc(conf: Config) {
                 barrier.wait();
                 BenchmarkCounter::start();
 
-                for _ in 0..conf.round_num {
+                for i in 0..conf.round_num {
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();
 
                     while {
-                        tpcc::workload::new_order_random(tx, &tables, &mut rng);
+                        if i % 2 ==0 {
+                            tpcc::workload::new_order_random(tx, &tables, &mut rng);
+                        }
+                        else {
+                            tpcc::workload::payment_random(tx, &tables, (i as i32 )%5 +1 ,  &mut rng);
+                        }
+
                         let res = tx.try_commit();
                         !res
                     } {}

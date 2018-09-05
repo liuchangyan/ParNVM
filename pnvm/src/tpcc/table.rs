@@ -2,7 +2,7 @@
 use alloc::alloc::Layout;
 
 use std::{
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering, AtomicBool},
     sync::{Arc,RwLock},
     collections::{
         HashMap,
@@ -20,14 +20,18 @@ use pnvm_lib::occ::occ_txn::TransactionOCC;
 use super::entry::*;
 
 
+
 pub type WarehouseTable = Table<Warehouse, i32>;
 pub type DistrictTable = Table<District, (i32, i32)>;
 
 #[derive(Debug)]
 pub struct CustomerTable {
     table_ : Table<Customer, (i32, i32, i32)>,
-    name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,
-    /* Syncrhonization is done by Transaction */
+    
+    //c_last, c_w_id, c_d_id => c_w_id, c_d_id, c_id
+    name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,  
+
+    lock_ : AtomicBool,
 }
 
 
@@ -36,6 +40,7 @@ impl CustomerTable {
         CustomerTable {
             table_ : Table::new(),
             name_index_ : UnsafeCell::new(HashMap::new()),
+            lock_: AtomicBool::new(false),
         }
     }
 
@@ -43,6 +48,7 @@ impl CustomerTable {
         CustomerTable {
             table_ : Table::new_with_buckets(num),
             name_index_ : UnsafeCell::new(HashMap::new()),
+            lock_ : AtomicBool::new(false),
         }
     }
 
@@ -55,12 +61,14 @@ impl CustomerTable {
 
     fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
     {
+        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
         unsafe { self.name_index_.get().as_ref().unwrap() }
     }
 
 
     fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
     {
+        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
         unsafe { self.name_index_.get().as_mut().unwrap() }
     }
 
@@ -75,7 +83,9 @@ impl CustomerTable {
 
         id_vec.push(p_key);
 
+        //println!("PUSHING CUSTOMER {}, {}, {}", entry.c_id, entry.c_w_id, entry.c_d_id);
         self.table_.push_raw(entry);
+        self.lock_.store(false, Ordering::SeqCst);
 
     }
 
@@ -87,6 +97,7 @@ impl CustomerTable {
             .entry((c.c_last.clone(), c.c_w_id, c.c_d_id))
             .or_insert_with(|| Vec::new());
         id_vec.push(c.primary_key());
+        self.lock_.store(false, Ordering::SeqCst);
     }
 
     pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
@@ -103,7 +114,9 @@ impl CustomerTable {
         -> Vec<Arc<Row<Customer, (i32, i32, i32)>>>
         {
         match self.name_index().get(index) {
-            None =>Vec::new(), 
+            None => {
+                Vec::new()
+            },
             Some(vecs) => {
                 let mut ret = vecs.iter()
                     .filter_map(|id| self.table_.retrieve(id))
@@ -214,8 +227,10 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
         let table_ref = row.into_table_ref(Some(bucket_idx), Some(tables.clone()));
-
-        let _tag  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        
+        let tid = tx.commit_id().clone();
+        let tag  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
 
     pub fn push_raw(&self, entry: Entry) 
@@ -288,24 +303,13 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     }
 
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
-        //let prev_len = self.len.fetch_add(1, Ordering::Acquire);
-        // if prev_len == self.cap() {
-        //     let mut rw = self.rows.write().unwrap();
-        //     rw.double(); /* This may OOM */
-        // } else if prev_len > self.cap() {
-        //     //FIXME: busy wait here maybe
-        //     panic!("hmmm, someone else should have been doubling");
-        // }
+        debug!("[PUSH ROW] : {:?}", *row_arc);
         let idx_elem = row_arc.get_data().primary_key();
         {
             let mut rows = self.rows.write().unwrap();
             rows.push(row_arc);
         }
 
-       // unsafe {
-       //     //ptr::write(self.ptr().offset(prev_len as isize), row);
-       //     ptr::write(self.ptr().offset(prev_len as isize), row_arc);
-       // }
         let mut idx_map = self.index.write().unwrap();
         idx_map.insert(idx_elem, self.len() -1);
     }
@@ -369,7 +373,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unsafe {write!(f, "{:?}", self.data_.get().as_ref().unwrap())}
+        unsafe {write!(f, "[OID: {:?}][VERS: {:?}]\n\t[{:?}]", 
+                       self.id_, self.vers_,self.data_.get().as_ref().unwrap())}
     }
 }
 
@@ -446,7 +451,12 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     //FIXME: how to not Clone
     #[inline]
     pub fn install(&self, val: &Entry, tid: Tid) {
-        unsafe {ptr::write(self.data_.get(), val.clone())};
+        unsafe {
+            debug!("\n[TRANSACTION:{:?}]--[INSTALL]\n\t\t[OLD]--{:?}\n\t\t[NEW]--{:?}",
+                   tid, self.data_.get().as_ref().unwrap(), val);
+
+            ptr::write(self.data_.get(), val.clone());
+        }
         self.vers_.set_version(tid);
     }
 
