@@ -267,6 +267,7 @@ impl  TRef for CustomerRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.customer.update_sec_index(&row);
                 table.customer.get_bucket(bucket_idx).push(row);
             },
             None => {

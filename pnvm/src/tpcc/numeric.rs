@@ -1,6 +1,6 @@
 use std::cmp::{Ordering,max};
 use num::pow::pow;
-use std::ops::{Sub, Mul, Add};
+use std::ops::{Sub, Mul, Add, SubAssign,AddAssign};
 
 #[derive(PartialOrd, Clone, Debug, Eq, Copy)]
 pub struct Numeric {
@@ -60,6 +60,10 @@ impl Numeric {
             Some(Numeric::new(value * pow(10, precision - digits_seen_fraction), len, precision))
         }
     }
+
+    pub fn as_string(&self) -> String {
+        format!("{}", self.value / pow(10, self.precision))
+    }
 }
 impl PartialEq for Numeric {
     fn eq(&self, other: &Numeric) -> bool {
@@ -70,9 +74,9 @@ impl PartialEq for Numeric {
 impl Ord for Numeric {
     fn cmp(&self, other: &Numeric) -> Ordering {
         match self.precision.cmp(&other.precision) {
-            equal => self.value.cmp(&other.value),
-            less => (self.value * pow(10, other.precision - self.precision)).cmp(&other.value),
-            greater => (other.value * pow(10, self.precision - other.precision)).cmp(&self.value),
+            Ordering::Equal => self.value.cmp(&other.value),
+            Ordering::Less => (self.value * pow(10, other.precision - self.precision)).cmp(&other.value),
+            Ordering::Greater => (other.value * pow(10, self.precision - other.precision)).cmp(&self.value),
         }
     }
 }
@@ -81,40 +85,77 @@ impl Add for Numeric {
     fn add(self, rhs: Numeric) -> Numeric {
         Numeric {
             value: match self.precision.cmp(&rhs.precision) {
-                equal => self.value + rhs.value,
-                less => self.value * pow(10, rhs.precision - self.precision) + rhs.value,
-                greater => rhs.value * pow(10, self.precision - rhs.precision) + self.value,
+                Ordering::Equal => self.value + rhs.value,
+                Ordering::Less => self.value * pow(10, rhs.precision - self.precision) + rhs.value,
+                Ordering::Greater => rhs.value * pow(10, self.precision - rhs.precision) + self.value,
             },
             precision: max(self.precision, rhs.precision),
             len: max(self.len, rhs.len)
         }
     }
 }
+
+impl AddAssign for Numeric {
+    fn add_assign(&mut self, rhs : Numeric) {
+        *self =  Numeric {
+            value: match self.precision.cmp(&rhs.precision) {
+                Ordering::Equal => self.value + rhs.value,
+                Ordering::Less => self.value * pow(10, rhs.precision - self.precision) + rhs.value,
+                Ordering::Greater => rhs.value * pow(10, self.precision - rhs.precision) + self.value,
+            },
+            precision: max(self.precision, rhs.precision),
+            len: max(self.len, rhs.len)
+        };
+    }
+
+}
+
 impl Sub for Numeric {
     type Output = Numeric;
     fn sub(self, rhs: Numeric) -> Numeric {
         Numeric {
             value: match self.precision.cmp(&rhs.precision) {
-                equal => self.value - rhs.value,
-                less => self.value * pow(10, rhs.precision - self.precision) - rhs.value,
-                greater => self.value - rhs.value * pow(10, self.precision - rhs.precision),
+                Ordering::Equal => self.value - rhs.value,
+                Ordering::Less => self.value * pow(10, rhs.precision - self.precision) - rhs.value,
+                Ordering::Greater => self.value - rhs.value * pow(10, self.precision - rhs.precision),
             },
             precision: max(self.precision, rhs.precision),
             len: max(self.len, rhs.len)
         }
     }
 }
+
+
+impl SubAssign for Numeric {
+    
+    fn sub_assign(&mut self, rhs : Numeric) {
+        *self = Numeric {
+            value: match self.precision.cmp(&rhs.precision) {
+                Ordering::Equal => self.value - rhs.value,
+                Ordering::Less => self.value * pow(10, rhs.precision - self.precision) - rhs.value,
+                Ordering::Greater => self.value - rhs.value * pow(10, self.precision - rhs.precision),
+            },
+            precision: max(self.precision, rhs.precision),
+            len: max(self.len, rhs.len)
+        }
+    }
+
+}
+
+
 impl Mul for Numeric {
     type Output = Numeric;
     fn mul(self, rhs: Numeric) -> Numeric {
         Numeric {
             value: match self.precision.cmp(&rhs.precision) {
-                equal => self.value * rhs.value,
-                less => self.value * pow(10, rhs.precision - self.precision) * rhs.value,
-                greater => self.value * rhs.value * pow(10, self.precision * rhs.precision),
+                Ordering::Equal => self.value * rhs.value,
+                Ordering::Less => self.value * pow(10, rhs.precision - self.precision) * rhs.value,
+                Ordering::Greater => self.value * rhs.value * pow(10, self.precision * rhs.precision),
             },
             precision: max(self.precision, rhs.precision),
             len: max(self.len, rhs.len)
         }
     }
 }
+
+

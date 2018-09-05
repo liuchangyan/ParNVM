@@ -12,40 +12,6 @@ use pnvm_lib::{
     txn::TxnInfo,
 };
 
-pub type WarehouseTable = Table<Warehouse, i32>;
-pub type DistrictTable = Table<District, (i32, i32)>;
-pub type CustomerTable = Table<Customer, (i32, i32, i32)>;
-pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
-pub type  OrderTable = Table<Order, (i32, i32, i32)>;
-pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
-pub type  ItemTable = Table<Item, i32>;
-pub type  StockTable = Table<Stock, (i32, i32)>;
-
-//FIXME: 
-//pub type HistoryTable = NonIndexTable<History>;
-pub type HistoryTable = Table<History, (i32)>; /* No primary key in fact */
-
-#[derive(Debug)]
-pub struct Tables {
-   pub warehouse: WarehouseTable,
-   pub district: DistrictTable,
-   pub customer: CustomerTable,
-   pub neworder: NewOrderTable,
-   pub order: OrderTable,
-   pub orderline: OrderLineTable,
-   pub item: ItemTable,
-   pub stock: StockTable,
-   pub history: HistoryTable,
-}
-
-pub type TablesRef = Arc<Tables>;
-
-
-pub trait TableRef
-{
-    fn into_table_ref(self, Option<usize>,Option<Arc<Tables>>) -> Box<dyn TRef>;
-}
-
 
 #[derive(Clone, Debug)]
 pub struct Warehouse {

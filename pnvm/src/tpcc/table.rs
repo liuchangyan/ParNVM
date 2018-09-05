@@ -17,8 +17,139 @@ use std::{
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
-use super::entry::{Tables, TableRef};
+use super::entry::*;
 
+
+pub type WarehouseTable = Table<Warehouse, i32>;
+pub type DistrictTable = Table<District, (i32, i32)>;
+
+#[derive(Debug)]
+pub struct CustomerTable {
+    table_ : Table<Customer, (i32, i32, i32)>,
+    name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,
+    /* Syncrhonization is done by Transaction */
+}
+
+
+impl CustomerTable {
+    pub fn new() -> CustomerTable {
+        CustomerTable {
+            table_ : Table::new(),
+            name_index_ : UnsafeCell::new(HashMap::new()),
+        }
+    }
+
+    pub fn new_with_buckets(num : usize ) -> CustomerTable {
+        CustomerTable {
+            table_ : Table::new_with_buckets(num),
+            name_index_ : UnsafeCell::new(HashMap::new()),
+        }
+    }
+
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
+        where Arc<Row<Customer, (i32, i32, i32)>> : TableRef 
+        {
+            self.table_.push(tx, entry, tables);
+        }
+
+
+    fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
+    {
+        unsafe { self.name_index_.get().as_ref().unwrap() }
+    }
+
+
+    fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
+    {
+        unsafe { self.name_index_.get().as_mut().unwrap() }
+    }
+
+    pub fn push_raw(&self, entry: Customer) 
+    {
+        /* Indexes Updates */
+        let p_key = entry.primary_key();
+        let name = entry.c_last.clone();
+        let mut id_vec = self.name_index_mut()
+            .entry((name, entry.c_w_id, entry.c_d_id))
+            .or_insert_with(|| Vec::new());
+
+        id_vec.push(p_key);
+
+        self.table_.push_raw(entry);
+
+    }
+
+    //FIXME: deleting an entry needs to be fixed 
+    pub fn update_sec_index(&self, arc: &Arc<Row<Customer, (i32, i32, i32)>>) {
+        let c  = arc.get_data();
+
+        let mut id_vec = self.name_index_mut()
+            .entry((c.c_last.clone(), c.c_w_id, c.c_d_id))
+            .or_insert_with(|| Vec::new());
+        id_vec.push(c.primary_key());
+    }
+
+    pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
+    {
+        self.table_.retrieve(index)
+    }
+
+    pub fn get_bucket(&self, bkt_idx : usize ) -> &Bucket<Customer, (i32, i32, i32)>
+    {
+        self.table_.get_bucket(bkt_idx)
+    }
+
+    pub fn find_by_name_id(&self, index : &(String, i32, i32))
+        -> Vec<Arc<Row<Customer, (i32, i32, i32)>>>
+        {
+        match self.name_index().get(index) {
+            None =>Vec::new(), 
+            Some(vecs) => {
+                let mut ret = vecs.iter()
+                    .filter_map(|id| self.table_.retrieve(id))
+                    .collect::<Vec<_>>();
+                
+                ret.sort_unstable_by(|a, b| a.get_data().c_first.cmp(&b.get_data().c_first));
+                ret
+            }
+        }
+
+    }
+}
+
+unsafe impl Sync for CustomerTable {}
+unsafe impl Send for CustomerTable {}
+
+pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
+pub type  OrderTable = Table<Order, (i32, i32, i32)>;
+pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
+pub type  ItemTable = Table<Item, i32>;
+pub type  StockTable = Table<Stock, (i32, i32)>;
+
+//FIXME: 
+//pub type HistoryTable = NonIndexTable<History>;
+pub type HistoryTable = Table<History, (i32)>; /* No primary key in fact */
+
+#[derive(Debug)]
+pub struct Tables {
+   pub warehouse: WarehouseTable,
+   pub district: DistrictTable,
+   pub customer: CustomerTable,
+   pub neworder: NewOrderTable,
+   pub order: OrderTable,
+   pub orderline: OrderLineTable,
+   pub item: ItemTable,
+   pub stock: StockTable,
+   pub history: HistoryTable,
+}
+
+pub type TablesRef = Arc<Tables>;
+
+
+pub trait TableRef
+{
+    fn into_table_ref(self, Option<usize>,Option<Arc<Tables>>) -> Box<dyn TRef>;
+}
 
 
 pub trait Key<T> {
@@ -355,7 +486,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
    // pub fn read(&self, tx : &mut TransactionOCC) -> &Entry
    //     where Arc<Row<Entry, Index>> : TableRef
    // {
-   //     let tref = self.clone().into_table_ref(None, tx.txn_info(), None);
+   //     let tref = self.clone().intotable__ref(None, tx.txn_info(), None);
    //     let id = *tref.get_id();
    //     let old_vers = tref.get_version();
 
@@ -367,7 +498,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
    // pub fn write(&self, tx: &mut TransactionOCC, val: Entry)
    //     where Arc<Row<Entry, Index>> : TableRef
    // {
-   //     let tref = self.clone().into_table_ref(None, tx.txn_info(), None);
+   //     let tref = self.clone().intotable__ref(None, tx.txn_info(), None);
    //     let id = *tref.get_id();
    //     let mut tag = tx.retrieve_tag(&id, tref);
    //     tag.write(val);

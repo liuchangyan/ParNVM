@@ -41,7 +41,7 @@ pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     let mut tables = Tables {
         warehouse: Table::new_with_buckets(16),
         district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize),
-        customer: Table::new_with_buckets(128),
+        customer: CustomerTable::new_with_buckets(128),
         neworder: Table::new_with_buckets(32),
         order: Table::new_with_buckets(32),
         orderline: Table::new_with_buckets(32),
@@ -478,31 +478,73 @@ fn payment(tx: &mut TransactionOCC,
 {
     /* RW Warehouse */
     let warehouse_row = tables.warehouse.retrieve(&w_id).unwrap().into_table_ref(None, None);
-    let mut warehouse = tx.read::<Warehouse>(warehouse_ref).clone();
-    let w_name = warehouse.w_name;
-    let w_street_1 = warehouse.w_street_1;
-    let w_street_2 = warehouse.w_street_2;
-    let w_city = warehouse.w_city;
-    let w_state = warehouse.w_state;
-    let w_zip = warehouse.zip;
-    warehouse.w_ytd += h_amount;
+    let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
+    let w_name = warehouse.w_name.clone();
+   // let _w_street_1 = &warehouse.w_street_1;
+   // let _w_street_2 = &warehouse.w_street_2;
+   // let _w_city = &warehouse.w_city;
+   // let _w_state = &warehouse.w_state;
+   // let _w_zip = &warehouse.w_zip;
+    warehouse.w_ytd = warehouse.w_ytd +  h_amount;
     tx.write(warehouse_row, warehouse);
 
     /* RW District */
     let district_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
-    let mut district = tx.read::<District>(district_row).clone();
-    let d_name = district.d_name;
-    let d_street_1 = district.d_street_1;
-    let d_street_2 = district.d_street_2;
-    let d_city = district.d_city;
-    let d_state = district.d_state;
-    let d_zip = district.d_zip;
-
-    district.d_ytd += h_amount;
+    let mut district = tx.read::<District>(district_row.box_clone()).clone();
+    let d_name = district.d_name.clone();
+   // let _d_street_1 = district.d_street_1;
+   // let _d_street_2 = district.d_street_2;
+   // let _d_city = district.d_city;
+   // let _d_state = district.d_state;
+   // let _d_zip = district.d_zip;
+    district.d_ytd = district.d_ytd + h_amount;
     tx.write(district_row,district);
 
-    /* Case 1 , by C_ID*/
+    let c_row = match c_id {
+        Some(c_id) => {
+            /* Case 1 , by C_ID*/
+            tables.customer.retrieve(&(c_id, w_id, d_id)).unwrap().into_table_ref(None, None)
+        }, 
+        None => {
+            assert!(c_last.is_some());
+            let rows = tables.customer.find_by_name_id(&(c_last.unwrap(), w_id, d_id));
+            /* n/2 rounded up == (n+1)/2 */
+            let i = rows.len()/2; 
+            rows[i].clone().into_table_ref(None, None)
+        }
+    };
+    
+    let mut c = tx.read::<Customer>(c_row.box_clone()).clone();
+    c.c_balance -= h_amount;
+    c.c_ytd_payment += h_amount;
+    c.c_payment_cnt += Numeric::new(1, 4, 0);
+    let c_id = c.c_id;
 
+    match c.c_credit.as_ref() {
+        "BC" => {
+            c.c_data.insert_str(0, format!("|{},{},{},{},{},{}|",
+                                           c.c_id, c.c_d_id, c.c_w_id, d_id, w_id, h_amount.as_string()).as_str());
+
+            c.c_data.truncate(500);
+        },
+        _ => {},
+    }
+    tx.write(c_row, c);
+
+    /* I History */
+    let h_data = format!("{}    {}", w_name, d_name);
+    tables.history.push(tx,
+                        History {
+                            h_c_id : c_id,
+                            h_c_d_id : c_d_id,
+                            h_c_w_id : c_w_id,
+                            h_d_id : d_id,
+                            h_w_id : w_id,
+                            h_data : h_data,
+                            h_date : h_date,
+                            h_amount : h_amount,
+                        },
+                        tables);
      
 }
 
