@@ -39,15 +39,15 @@ const NUM_INIT_CUSTOMER : i32 = 3000;
 pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     
     let mut tables = Tables {
-        warehouse: Table::new(),
-        district: Table::new(),
-        customer: Table::new(),
-        neworder: Table::new(),
-        order: Table::new(),
-        orderline: Table::new(),
-        item: Table::new(),
-        stock: Table::new(),
-        history: Table::new(),
+        warehouse: Table::new_with_buckets(16),
+        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize),
+        customer: Table::new_with_buckets(128),
+        neworder: Table::new_with_buckets(32),
+        order: Table::new_with_buckets(32),
+        orderline: Table::new_with_buckets(32),
+        item: Table::new_with_buckets(512),
+        stock: Table::new_with_buckets(32),
+        history: Table::new_with_buckets(128),
     };
 
     fill_item(&mut tables, conf, rng);
@@ -404,7 +404,7 @@ fn new_order(tx: &mut TransactionOCC,
 pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, rng: &mut SmallRng) {
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
     let w_id = urand(1, NUM_WAREHOUSES, rng);
-    let d_id = urand(1, 1, rng);
+    let d_id = urand(1, 10, rng);
     let c_id = nurand(1023, 1, 3000, rng);
     let ol_cnt = urand(5, 15, rng);
 
@@ -426,7 +426,88 @@ pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, rng: &mut
 }
 
 
-//TODO: pass rng down to use cached version
+pub fn payment_random(tx: &mut TransactionOCC, 
+                      tables: &Arc<Tables>,
+                      w_home : i32,
+                      rng : &mut SmallRng,
+                      ) 
+{
+    let w_id = w_home;
+    let d_id = urand(1, 10, rng);
+        
+    let x = urand(1, 100, rng);
+    let y = urand(1, 100, rng);
+
+    let c_w_id : i32;
+    let c_d_id : i32;
+    
+    if NUM_WAREHOUSES == 1 || x <= 85 {
+        //85% paying throuhg won house
+        c_w_id = w_id;
+        c_d_id = d_id;
+    } else {
+        //15% paying from remote  warehouse
+        c_w_id =  urandexcept(1, NUM_WAREHOUSES, w_id, rng);
+        assert!(c_w_id != w_id);
+        c_d_id = urand(1, 10, rng);
+    }
+
+    let h_amount = rand_numeric(1.00, 5000.00, 10, 6, rng);
+    let h_date = gen_now();     
+    
+    if y<= 60 {
+        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
+        payment(tx, tables, w_id, d_id, c_w_id , c_d_id, Some(c_last), None, h_amount, h_date, rng);
+    } else {
+        let c_id = nurand(1023, 1, 3000, rng);
+        payment(tx, tables, w_id, d_id, c_w_id , c_d_id, None, Some(c_id), h_amount, h_date, rng);
+    }
+}
+
+fn payment(tx: &mut TransactionOCC,
+           tables : &Arc<Tables>,
+           w_id : i32,
+           d_id : i32,
+           c_w_id : i32,
+           c_d_id : i32,
+           c_last : Option<String>,
+           c_id : Option<i32>,
+           h_amount : Numeric,
+           h_date : i32,
+           rng : &mut SmallRng)
+{
+    /* RW Warehouse */
+    let warehouse_row = tables.warehouse.retrieve(&w_id).unwrap().into_table_ref(None, None);
+    let mut warehouse = tx.read::<Warehouse>(warehouse_ref).clone();
+    let w_name = warehouse.w_name;
+    let w_street_1 = warehouse.w_street_1;
+    let w_street_2 = warehouse.w_street_2;
+    let w_city = warehouse.w_city;
+    let w_state = warehouse.w_state;
+    let w_zip = warehouse.zip;
+    warehouse.w_ytd += h_amount;
+    tx.write(warehouse_row, warehouse);
+
+    /* RW District */
+    let district_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    let mut district = tx.read::<District>(district_row).clone();
+    let d_name = district.d_name;
+    let d_street_1 = district.d_street_1;
+    let d_street_2 = district.d_street_2;
+    let d_city = district.d_city;
+    let d_state = district.d_state;
+    let d_zip = district.d_zip;
+
+    district.d_ytd += h_amount;
+    tx.write(district_row,district);
+
+    /* Case 1 , by C_ID*/
+
+     
+}
+
+
+
 fn urand(min:i32, max: i32, rng : &mut SmallRng) -> i32 {
     abs(rng.gen::<i32>() % (max - min + 1)) + min
 }
@@ -535,4 +616,8 @@ fn last_name_of(idx : i32) -> &'static str {
         9 => "EING",
         _ => panic!("what is your last name???!!")
     }
+}
+
+fn gen_now() -> i32 {
+    time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32
 }

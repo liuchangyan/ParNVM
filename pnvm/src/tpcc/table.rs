@@ -79,20 +79,14 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     where Arc<Row<Entry, Index>> : TableRef
     {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
+        
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
         let table_ref = row.into_table_ref(Some(bucket_idx), Some(tables.clone()));
-//        println!("PUSH : T : {:?}", table_ref.get_id());
 
-        let tag  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
-        //println!("{:#?", tag);
+        let _tag  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
     }
 
-    //pub fn push(&self, entry: Entry) {
-    //    let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
-    //    self.buckets[bucket_idx].push(entry)
-    //}
-    //
     pub fn push_raw(&self, entry: Entry) 
     {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
