@@ -29,7 +29,6 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn try_commit(&mut self) -> bool {
-        debug!("Tx[{:?}] is commiting", self.tid_);
         self.state_ = TxState::COMMITTED;
 
         //Stage 1: lock [TODO: Bounded lock or try_lock syntax]
@@ -121,21 +120,25 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
         let me :u32 = self.commit_id().into();
+        let mut locks_ : Vec<&TTag> =  Vec::new();
         for tag in self.deps_.values() {
             if !tag.has_write() {
                 continue;
             }
             if !tag.lock(self.commit_id()) {
-                while let Some(_tag) = self.locks_.pop() {
-                    unsafe{ _tag.as_ref().unwrap().unlock()};
+                while let Some(_tag) = locks_.pop() {
+                    _tag.unlock();
                 }
                 debug!("{:#?} failed to locked!", tag);
                 return false;
             } else {
-                self.locks_.push(tag as *const TTag);
+                //self.locks_.push(tag as *const TTag);
+                locks_.push(tag);
             }
             debug!("{:#?} locked!", tag);
         }
+
+        debug!("All locked");
 
         true
     }
@@ -157,6 +160,7 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     fn commit(&mut self) -> bool {
         //#[cfg(benchmark)]
+        debug!("Tx[{:?}] is commiting", self.tid_);
         tcore::BenchmarkCounter::success();
 
         //Persist the write set logs
@@ -224,11 +228,13 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     fn clean_up(&mut self) {
-        for tag in self.deps_.values() {
+        for (_, tag) in self.deps_.drain() {
             if tag.has_write() {
                 tag.tobj_ref_.unlock();
             }
         }
+
+        debug!("All cleaned up");
     }
 
 

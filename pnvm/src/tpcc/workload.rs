@@ -402,9 +402,10 @@ fn new_order(tx: &mut TransactionOCC,
      }
 }
 
-pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, rng: &mut SmallRng) {
+pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : i32,rng: &mut SmallRng) {
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
-    let w_id = urand(1, NUM_WAREHOUSES, rng);
+    //let w_id = urand(1, NUM_WAREHOUSES, rng);
+    let w_id = w_home;
     let d_id = urand(1, 10, rng);
     let c_id = nurand(1023, 1, 3000, rng);
     let ol_cnt = urand(5, 15, rng);

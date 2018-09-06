@@ -112,6 +112,7 @@ impl  TRef for WarehouseRef {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.warehouse.get_bucket(bucket_idx).set_version(row.get_version());
                 table.warehouse.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -152,16 +153,20 @@ impl  TRef for WarehouseRef {
     }
 
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.warehouse.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.warehouse.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -190,6 +195,7 @@ impl  TRef for DistrictRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.district.get_bucket(bucket_idx).set_version(row.get_version());
                 table.district.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -228,17 +234,22 @@ impl  TRef for DistrictRef  {
             Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
         }
     }
+
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.district.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.district.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -268,6 +279,7 @@ impl  TRef for CustomerRef  {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
                 table.customer.update_sec_index(&row);
+                table.customer.get_bucket(bucket_idx).set_version(row.get_version());
                 table.customer.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -306,17 +318,22 @@ impl  TRef for CustomerRef  {
             Err(_) => panic!("DistrictRef::write value should be Box<Warehouse>")
         }
     }
+
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.customer.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.customer.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -345,6 +362,7 @@ impl  TRef for NewOrderRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
                 table.neworder.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -353,20 +371,24 @@ impl  TRef for NewOrderRef  {
         }
     }
 
+
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.neworder.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.neworder.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
-
     fn check(&self, vers: u32) -> bool {
         if self.table_ref_.is_none() {
             self.inner_.check(vers)
@@ -422,6 +444,7 @@ impl  TRef for OrderRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.order.get_bucket(bucket_idx).set_version(row.get_version());
                 table.order.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -431,16 +454,20 @@ impl  TRef for OrderRef  {
     }
 
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.order.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.order.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -499,6 +526,7 @@ impl  TRef for OrderLineRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.orderline.get_bucket(bucket_idx).set_version(row.get_version());
                 table.orderline.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -508,16 +536,20 @@ impl  TRef for OrderLineRef  {
     }
 
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.orderline.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.orderline.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -575,6 +607,7 @@ impl  TRef for ItemRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.item.get_bucket(bucket_idx).set_version(row.get_version());
                 table.item.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -582,17 +615,22 @@ impl  TRef for ItemRef  {
             }
         }
     }
+
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.item.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.item.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -652,8 +690,8 @@ impl  TRef for HistoryRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.history.get_bucket(bucket_idx).set_version(row.get_version());
                 table.history.get_bucket(bucket_idx).push(row);
-
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -662,16 +700,20 @@ impl  TRef for HistoryRef  {
     }
 
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.history.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.history.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
 
@@ -728,6 +770,7 @@ impl  TRef for StockRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
+                table.stock.get_bucket(bucket_idx).set_version(row.get_version());
                 table.stock.get_bucket(bucket_idx).push(row);
             },
             None => {
@@ -736,20 +779,24 @@ impl  TRef for StockRef  {
         }
     }
 
+
     fn lock(&self, tid: Tid) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.lock(tid)
-        } else {
-            true
+        match self.table_ref_ {
+            None => self.inner_.lock(tid),
+            Some(ref table) => {
+                table.stock.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+            }
         }
     }
 
     fn unlock(&self) {
-        if self.table_ref_.is_none() {
-            self.inner_.unlock()
+        match self.table_ref_ {
+            None => self.inner_.unlock(),
+            Some(ref table) => {
+                table.stock.get_bucket(self.bucket_idx_.unwrap()).unlock();
+            }
         }
     }
-
     fn check(&self, vers: u32) -> bool {
         if self.table_ref_.is_none() {
             self.inner_.check(vers)

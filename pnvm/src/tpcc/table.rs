@@ -229,7 +229,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let table_ref = row.into_table_ref(Some(bucket_idx), Some(tables.clone()));
         
         let tid = tx.commit_id().clone();
-        let tag  = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
 
@@ -356,6 +357,70 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         rows.len()
     }
 
+
+
+
+    #[inline(always)]
+    pub fn lock(&self, tid: Tid) -> bool {
+        self.vers_.lock(tid)
+    }
+
+    #[inline(always)]
+    pub fn check(&self, cur_ver: u32) -> bool {
+        self.vers_.check_version(cur_ver)
+    }
+
+    //FIXME: how to not Clone
+   // #[inline]
+   // pub fn install(&self, val: &Entry, tid: Tid) {
+   //     unsafe {
+   //         debug!("\n[TRANSACTION:{:?}]--[INSTALL]\n\t\t[OLD]--{:?}\n\t\t[NEW]--{:?}",
+   //                tid, self.data_.get().as_ref().unwrap(), val);
+
+   //         ptr::write(self.data_.get(), val.clone());
+   //     }
+   //     self.vers_.set_version(tid);
+   // }
+
+    #[inline(always)]
+    pub fn unlock(&self) {
+        self.vers_.unlock();
+    }
+
+    
+    #[inline(always)]
+    pub fn get_version(&self) -> u32 {
+        self.vers_.get_version()
+    }
+
+    #[inline(always)]
+    pub fn set_version(&self, vers: u32) {
+        self.vers_.set_version(vers)
+    }
+    
+    #[inline(always)]
+    pub fn get_id(&self) -> &ObjectId {
+        &self.id_    
+    }
+
+   // pub fn get_addr(&self) -> Unique<T> {
+   //     let tvalue = self.tvalue_.read().unwrap();
+   //     tvalue.get_addr()
+   // }
+
+    pub fn get_layout(&self) -> Layout {
+        Layout::new::<Bucket<Entry, Index>>()
+    }
+
+    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_writer_info()
+    }
+
+    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_writer_info(info)
+    }
+
+
 }
 
 pub struct Row<Entry, Index> 
@@ -452,12 +517,14 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     #[inline]
     pub fn install(&self, val: &Entry, tid: Tid) {
         unsafe {
-            debug!("\n[TRANSACTION:{:?}]--[INSTALL]\n\t\t[OLD]--{:?}\n\t\t[NEW]--{:?}",
-                   tid, self.data_.get().as_ref().unwrap(), val);
+            //debug!("\n[TRANSACTION:{:?}]--[INSTALL]\n\t\t[OLD]--{:?}\n\t\t[NEW]--{:?}",
+            //      tid, self.data_.get().as_ref().unwrap(), val);
 
-            ptr::write(self.data_.get(), val.clone());
+            //ptr::write(self.data_.get(), val.clone());
+            let mut data = self.data_.get().as_mut().unwrap() ;
+            *data = val.clone();
         }
-        self.vers_.set_version(tid);
+        self.vers_.set_version(tid.into());
     }
 
     #[inline(always)]

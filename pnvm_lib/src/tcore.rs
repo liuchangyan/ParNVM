@@ -154,7 +154,7 @@ pub trait TRef : fmt::Debug{
 //}
 
 #[derive(PartialEq, Copy, Clone, Debug, Eq, Hash)]
-pub struct ObjectId(u32);
+pub struct ObjectId(u64);
 
 //[TODO:]To be optimized later
 #[derive(Debug)]
@@ -178,7 +178,11 @@ impl TVersion {
     #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool{
         let tid : u32 = tid.into();
-        self.lock_owner_.compare_and_swap(0, tid, Ordering::Acquire) == 0
+        if self.lock_owner_.load(Ordering::Relaxed) == tid {
+            true
+        } else {
+            self.lock_owner_.compare_and_swap(0, tid, Ordering::Acquire) == 0
+        }
     }
 
     //Caution: whoever has access to self can unlock
@@ -219,8 +223,8 @@ impl TVersion {
     }
 
     #[inline(always)]
-    pub fn set_version(&self, tid: Tid) {
-        self.last_writer_.store(tid.into(), Ordering::Release)
+    pub fn set_version(&self, tid: u32) {
+        self.last_writer_.store(tid, Ordering::Release)
     }
 
     #[inline(always)]
@@ -381,6 +385,10 @@ impl TTag
         self.tobj_ref_.check(vers)
     }
 
+    pub fn set_write(&mut self) {
+        self.has_write_ = true;
+    }
+
 
     #[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
@@ -441,7 +449,7 @@ impl fmt::Debug for TTag
 
 
 /* Object ID factory */
-static mut OBJECTID: u32 = 1;
+static mut OBJECTID: u64 = 1;
 pub unsafe fn next_id() -> ObjectId {
     let ret = OBJECTID;
     OBJECTID += 1;
@@ -453,14 +461,14 @@ thread_local! {
 }
 
 pub struct OidFac {
-    mask_ : u32,
-    next_id_ : u32,
+    mask_ : u64,
+    next_id_ : u64,
 }
 
 impl OidFac {
 
     /* Thread Local methods */
-    pub fn set_obj_mask(mask: u32) {
+    pub fn set_obj_mask(mask: u64) {
         OID_FAC.with(|fac| fac.borrow_mut().set_mask(mask))
     }
 
@@ -476,12 +484,12 @@ impl OidFac {
         }
     }
 
-    fn set_mask(&mut self, mask : u32) {
+    fn set_mask(&mut self, mask : u64) {
         self.mask_ = mask;
     }
 
     fn get_next(&mut self) -> ObjectId {
-        let ret = self.next_id_ | ((self.mask_ ) << 24);
+        let ret = self.next_id_ | ((self.mask_ ) << 52);
         self.next_id_ +=1;
         ObjectId(ret)
     }

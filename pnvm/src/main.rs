@@ -331,23 +331,24 @@ fn run_occ_tpcc(conf: Config) {
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
-                OidFac::set_obj_mask(i as u32);
+                OidFac::set_obj_mask(i as u64);
 
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
                 BenchmarkCounter::start();
+                let w_home = (i as i32 )%5 +1;
 
-                for i in 0..conf.round_num {
+                for j in 0..conf.round_num {
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();
 
                     while {
-                        if i % 2 ==0 {
-                            tpcc::workload::new_order_random(tx, &tables, &mut rng);
+                        if j % 2 ==0 {
+                            tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
                         }
                         else {
-                            tpcc::workload::payment_random(tx, &tables, (i as i32 )%5 +1 ,  &mut rng);
+                            tpcc::workload::payment_random(tx, &tables,w_home  ,  &mut rng);
                         }
 
                         let res = tx.try_commit();

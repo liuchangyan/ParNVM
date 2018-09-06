@@ -46,7 +46,7 @@ where
     #[inline]
     pub fn install(&self, val: &T, tid: Tid) {
         self.tvalue_.store(T::clone(val));
-        self.vers_.set_version(tid);
+        self.vers_.set_version(tid.into());
     }
 
     #[inline(always)]
