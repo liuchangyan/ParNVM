@@ -39,15 +39,15 @@ const NUM_INIT_CUSTOMER : i32 = 3000;
 pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     
     let mut tables = Tables {
-        warehouse: Table::new_with_buckets(16),
-        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize),
-        customer: CustomerTable::new_with_buckets(128),
-        neworder: Table::new_with_buckets(32),
-        order: Table::new_with_buckets(32),
-        orderline: Table::new_with_buckets(32),
-        item: Table::new_with_buckets(512),
-        stock: Table::new_with_buckets(32),
-        history: Table::new_with_buckets(128),
+        warehouse: Table::new_with_buckets(16, NUM_WAREHOUSES as usize),
+        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize),
+        customer: CustomerTable::new_with_buckets(128, 64),
+        neworder: Table::new_with_buckets(32, 32768),
+        order: Table::new_with_buckets(32, 32768),
+        orderline: Table::new_with_buckets(32, 32768),
+        item: Table::new_with_buckets(512, 256),
+        stock: Table::new_with_buckets(32, 512 ),
+        history: Table::new_with_buckets(128, 128),
     };
 
     fill_item(&mut tables, conf, rng);

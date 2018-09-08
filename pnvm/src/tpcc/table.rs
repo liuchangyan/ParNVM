@@ -12,6 +12,7 @@ use std::{
     ptr,
     hash::{self,Hash, BuildHasher, Hasher},
     fmt::{self, Debug},
+    mem,
 };
 
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
@@ -44,9 +45,9 @@ impl CustomerTable {
         }
     }
 
-    pub fn new_with_buckets(num : usize ) -> CustomerTable {
+    pub fn new_with_buckets(num : usize , bkt_size : usize) -> CustomerTable {
         CustomerTable {
-            table_ : Table::new_with_buckets(num),
+            table_ : Table::new_with_buckets(num, bkt_size),
             name_index_ : UnsafeCell::new(HashMap::new()),
             lock_ : AtomicBool::new(false),
         }
@@ -206,10 +207,10 @@ where Entry: 'static + Key<Index> + Clone+Debug,
        Default::default() 
     }
 
-    pub fn new_with_buckets(num: usize) -> Table<Entry, Index> {
+    pub fn new_with_buckets(num: usize, bkt_size: usize) -> Table<Entry, Index> {
         let mut buckets = Vec::with_capacity(num);
         for _ in 0..num {
-            buckets.push(Bucket::new());
+            buckets.push(Bucket::with_capacity(bkt_size));
         }
 
         Table {
@@ -301,6 +302,19 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
         }
+    }
+
+    pub fn with_capacity(cap: usize) -> Bucket<Entry, Index> 
+    {
+        Bucket {
+            rows: RwLock::new(Vec::with_capacity(cap)),
+            len: AtomicUsize::new(0),
+            index: RwLock::new(HashMap::new()),
+
+            id_ : OidFac::get_obj_next(),
+            vers_ : TVersion::default(),
+        }
+
     }
 
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
@@ -583,7 +597,6 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
     /* Transaction Methods */
 }
-
 
 
 
