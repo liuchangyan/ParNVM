@@ -391,7 +391,8 @@ fn new_order(tx: &mut TransactionOCC,
 
          let ol_amount = qty * i_price * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
              (Numeric::new(1, 1, 0) - c_discount);
-
+            
+         println!("{}", s_dist);
          tables.orderline.push(tx, 
                                OrderLine {
                                    ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, ol_number: i as i32 + 1, ol_i_id: item_ids[i],
@@ -561,6 +562,142 @@ fn payment(tx: &mut TransactionOCC,
      
 }
 
+
+pub fn orderstatus_random(tx: &mut TransactionOCC, 
+                      tables: &Arc<Tables>,
+                      w_home : i32,
+                      rng : &mut SmallRng,
+                      ) 
+{
+    let d_id = urand(1, 10, rng);
+    let w_id = w_home;
+    
+    let y = urand(1, 100, rng);
+    
+    if false {
+        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
+        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, Some(c_last), None, h_amount, h_date, rng);
+    } else {
+        let c_id = nurand(1023, 1, 3000, rng);
+        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, None, Some(c_id), h_amount, h_date, rng);
+    }
+}
+
+
+fn orderstatus(tx: &mut TransactionOCC
+               tables: &Arc<Tables>,
+               w_id : i32,
+               d_id : i32,
+               c_w_id : i32,
+               c_d_id : i32,
+               c_last : Option<String>,
+               c_id : Option<i32>,
+               )
+{
+
+    let c_row = match c_id {
+        Some(c_id) => {
+            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
+        },
+        
+        None => {
+           panic!("not implemented"); 
+        }
+    };
+
+    let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
+
+    let o_id = tx.read::<Order>(o_row).o_id;
+
+    let ol_arcs = table.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
+
+    for ol_arc in ol_arcs {
+        let ol_row = ol_arc.into_table_ref(None, None);
+        let ol = tx.read::<OrderLine>(ol_row);
+    }
+}
+
+
+
+fn delivery(tx: &mut TransactionOCC
+            tables: &Arc<Tables>,
+            w_id : i32,
+            o_carrier_id: i32,
+            )
+{
+    
+    for d_id in 1..NUM_INIT_DISTRICT {
+        let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
+        if no_arc.is_some() {
+            let no_row = no_arc.unwrap().into_table_ref(None, None);
+            let no_o_id = tx.read::<NewOrder>(no_row);
+            tables.neworder.delete(&(w_id, d_id, no_o_id));
+
+            let o_row = tables.order.retrieve(&(w_id, d_id, no_o_id)).expect("order empty").into_table_ref(None, None);
+            let o = tx.read::<Order>(o_row.box_clone()).clone();
+            let o_id = o.o_id;
+            let o_c_id = o.o_c_id;
+
+            o.o_carrier_id = o_carrier_id;
+            tx.write(o_row, o);
+
+            
+            let ol_arcs = table.orderline.find_by_oid(&(w_id, d_id, o_id));
+            let now = gen_now();
+            let ol_amount_sum = Numeric::new(0, 6, 2);
+            for ol_arc in ol_arcs {
+                let ol_row = ol_arc.into_table_ref(None, None);
+                let ol = tx.read::<OrderLine>(ol_row.box_clone()).clone();
+                ol_amount_sum += ol.ol_amount;
+
+                ol.ol_delivery_d = now;
+                tx.write(ol_row, ol);
+            }
+
+            
+            let c_row = table.customer.retrieve(&(w_id, d_id, o_c_id)).expect("deliver::customer not empty").into_table_ref(None, None);
+            let c = tx.read(c_row.box_clone()).clone();
+            c.c_balance += ol_amount_sum;
+            c.c_delivery_cnt += Numeric::new(1, 4, 0);
+
+            tx.write(c_row, c);
+        }
+    }
+
+}
+
+fn stocklevel(tx: &mut TransactionOCC,
+              tables : &Arc<Tables>,
+              w_id : i32,
+              d_id : i32,
+              thd: Numeric,
+              )
+{
+    let d_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    let d = tx.read::<District>(d_row);
+    let d_next_o_id = d.d_next_o_id;
+
+    let ol_arcs = tables.orderline.find_range(&(w_id, d_id), d_next_o_id - 20, d_next_o_id);
+    
+    let mut ol_i_ids = vec![];
+    for ol_arc in ol_arcs {
+        let ol_row = ol_arc.into_table_ref(None, None);
+        let ol = tx.read::<OrderLine>(ol_row);
+        ol_i_ids.push(ol.ol_i_id);
+
+    }
+    
+    let low_stock = 0;
+    for ol_i_id in ol_i_ids.iter() {
+        let stock_row = tables.stock.retrieve(&(w_id, ol_i_id)).expect("no stock").into_table_ref(None,None);
+        
+        let stock = tx.read::<Stock>(stock_row);
+        if stock.s_quantity < thd {
+            low_stock+=1;
+        }
+    }
+}
+               
 
 
 fn urand(min:i32, max: i32, rng : &mut SmallRng) -> i32 {

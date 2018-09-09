@@ -136,7 +136,13 @@ unsafe impl Sync for CustomerTable {}
 unsafe impl Send for CustomerTable {}
 
 pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
-pub type  OrderTable = Table<Order, (i32, i32, i32)>;
+//pub type  OrderTable = Table<Order, (i32, i32, i32)>;
+
+
+pub struct OrderTable {
+    table_ : Table<Order, (i32, i32, i32)>;
+}
+
 pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
 pub type  ItemTable = Table<Item, i32>;
 pub type  StockTable = Table<Stock, (i32, i32)>;
