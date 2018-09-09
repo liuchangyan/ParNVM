@@ -9,10 +9,11 @@ use std::{
         hash_map::RandomState,
     },
     cell::UnsafeCell,
-    ptr,
+    ptr::{self, NonNull},
     hash::{self,Hash, BuildHasher, Hasher},
     fmt::{self, Debug},
     mem,
+    
 };
 
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
@@ -441,7 +442,8 @@ pub struct Row<Entry, Index>
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone
 {
-    data_: UnsafeCell<Entry>,
+    //data_: UnsafeCell<Entry>,
+    data_ : NonNull<Entry>,
     vers_: TVersion,
     id_ : ObjectId,
     index_ : Index,
@@ -452,12 +454,26 @@ where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+     //   unsafe {write!(f, "[OID: {:?}][VERS: {:?}]\n\t[{:?}]", 
+     //                  self.id_, self.vers_,self.data_.get().as_ref().unwrap())}
         unsafe {write!(f, "[OID: {:?}][VERS: {:?}]\n\t[{:?}]", 
-                       self.id_, self.vers_,self.data_.get().as_ref().unwrap())}
+                       self.id_, self.vers_,self.data_.as_ref())}
     }
 }
 
-
+impl<Entry, Index> Drop for Row<Entry, Index> 
+where Entry: 'static + Key<Index> + Clone+Debug,
+      Index: Eq+Hash + Clone
+{
+    fn drop(&mut self) {
+        if self.data_.as_ptr().is_null() {
+            panic!("freeing null pointers")
+        } else {
+            unsafe {self.data_.as_ptr().drop_in_place()}
+        }
+        //mem::forget(self.vers_);
+    }
+}
 //impl<Entry, Index> Clone for Row<Entry, Index>
 //where Entry: 'static + Key<Index> + Clone,
 //      Index: Eq+Hash  + Clone
@@ -488,7 +504,8 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     pub fn new(entry: Entry) -> Row<Entry, Index>{
         let key = entry.primary_key();
         Row{
-            data_: UnsafeCell::new(entry),
+            //data_: UnsafeCell::new(entry),
+            data_ : Box::into_raw_non_null(Box::new(entry)),
             vers_: TVersion::default(), /* FIXME: this can carry txn info */
             id_ : OidFac::get_obj_next(),
             index_ : key, 
@@ -498,7 +515,8 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry, Index> {
         let key = entry.primary_key();
         Row {
-            data_ : UnsafeCell::new(entry),
+            //data_ : UnsafeCell::new(entry),
+            data_ : Box::into_raw_non_null(Box::new(entry)),
             vers_ : TVersion::new_with_info(txn_info),
             id_ : OidFac::get_obj_next(),
             index_ : key,
@@ -508,12 +526,14 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
     #[inline(always)]
     pub fn get_data(&self) -> &Entry {
-        unsafe { self.data_.get().as_ref().unwrap() }
+        //unsafe { self.data_.get().as_ref().unwrap() }
+        unsafe { self.data_.as_ref() }
     }
 
     #[inline(always)]
     pub fn get_ptr(&self) -> *mut u8 {
-        unsafe {self.data_.get() as *mut u8}
+        //unsafe {self.data_.get() as *mut u8}
+        self.data_.as_ptr() as *mut u8
     }
 
 
@@ -535,7 +555,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             //      tid, self.data_.get().as_ref().unwrap(), val);
 
             //ptr::write(self.data_.get(), val.clone());
-            let mut data = self.data_.get().as_mut().unwrap() ;
+            let mut data = self.data_.as_ptr() ;
             *data = val.clone();
         }
         self.vers_.set_version(tid.into());
