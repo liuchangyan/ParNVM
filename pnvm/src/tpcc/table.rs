@@ -471,6 +471,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         } else {
             unsafe {self.data_.as_ptr().drop_in_place()}
         }
+
+        println!("{:?}", self);
         //mem::forget(self.vers_);
     }
 }
