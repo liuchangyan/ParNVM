@@ -350,7 +350,7 @@ fn run_occ_tpcc(conf: Config) {
                     let tid = tid.clone();
 
                     while {
-                        if false {
+                        if i % 2 ==0 {
                             tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
                         }
                         else {
