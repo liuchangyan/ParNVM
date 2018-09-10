@@ -120,7 +120,8 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
         let me :u32 = self.commit_id().into();
-        let mut locks_ : Vec<&TTag> =  Vec::new();
+        //FIXME: this is hacky! allocate an vector large enough so that no move of reference
+        let mut locks_ : Vec<&TTag> =  Vec::with_capacity(64);
         for tag in self.deps_.values() {
             if !tag.has_write() {
                 continue;

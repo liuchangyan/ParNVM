@@ -128,6 +128,7 @@ pub trait TRef : fmt::Debug{
     fn check(&self, u32) -> bool;
     fn get_writer_info(&self) -> Arc<TxnInfo>;
     fn set_writer_info(&mut self, Arc<TxnInfo>);
+    fn get_name(&self) -> String;
 }
 
 
@@ -317,6 +318,9 @@ pub struct TTag
     //write_val_:    Option<Box<Any>>,
     pub has_write_: bool,
     pub vers_:     u32, /* 0 means empty */
+
+    //for debug
+    pub name_ : String,
 }
 
 impl TTag
@@ -324,6 +328,7 @@ impl TTag
     pub fn new(oid: ObjectId, tobj_ref: Box<dyn TRef>) -> Self {
         TTag {
             oid_:       oid,
+            name_ : tobj_ref.get_name(),
             tobj_ref_:  tobj_ref,
             //write_val_: None,
             vers_:      0,

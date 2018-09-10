@@ -185,6 +185,10 @@ impl  TRef for WarehouseRef {
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
     }
+
+    fn get_name(&self) -> String {
+        String::from("warehouse")
+    }
 }
 
 
@@ -267,6 +271,10 @@ impl  TRef for DistrictRef  {
 
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
+    
+    }
+    fn get_name(&self) -> String {
+        String::from("district")
     }
 }
 
@@ -278,7 +286,7 @@ impl  TRef for CustomerRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
-                table.customer.update_sec_index(&row);
+                //table.customer.update_sec_index(&row);
                 table.customer.get_bucket(bucket_idx).set_version(row.get_version());
                 table.customer.get_bucket(bucket_idx).push(row);
             },
@@ -352,6 +360,10 @@ impl  TRef for CustomerRef  {
 
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
+    }
+
+    fn get_name(&self) -> String {
+        String::from("customer")
     }
 }
 
@@ -436,6 +448,11 @@ impl  TRef for NewOrderRef  {
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
     }
+
+
+    fn get_name(&self) -> String {
+        String::from("neworder")
+    }
 }
 
 impl  TRef for OrderRef  {
@@ -518,6 +535,10 @@ impl  TRef for OrderRef  {
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
     }
+
+    fn get_name(&self) -> String {
+        String::from("order")
+    }
 }
 
 impl  TRef for OrderLineRef  {
@@ -598,6 +619,9 @@ impl  TRef for OrderLineRef  {
 
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
+    }
+    fn get_name(&self) -> String {
+        String::from("orderline")
     }
 }
 
@@ -682,6 +706,10 @@ impl  TRef for ItemRef  {
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
     }
+
+    fn get_name(&self) -> String {
+        String::from("item")
+    }
 }
 
 impl  TRef for HistoryRef  {
@@ -763,6 +791,9 @@ impl  TRef for HistoryRef  {
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
     }
+    fn get_name(&self) -> String {
+        String::from("history")
+    }
 }
 impl  TRef for StockRef  {
     fn install(&self, id: Tid) {
@@ -843,6 +874,9 @@ impl  TRef for StockRef  {
 
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
+    }
+    fn get_name(&self) -> String {
+        String::from("stock")
     }
 }
 

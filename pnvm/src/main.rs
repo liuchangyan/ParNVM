@@ -57,6 +57,11 @@ use pnvm_lib::{
 #[global_allocator]
 static GLOBAL: GPMem = GPMem;
 
+
+use std::alloc::{System, GlobalAlloc};
+#[global_allocator]
+static GLOBAL: System = System;
+
 fn main() {
     env_logger::init().unwrap();
 
@@ -345,7 +350,7 @@ fn run_occ_tpcc(conf: Config) {
                     let tid = tid.clone();
 
                     while {
-                        if j % 2 ==0 {
+                        if i % 2 ==0 {
                             tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
                         }
                         else {
@@ -368,6 +373,11 @@ fn run_occ_tpcc(conf: Config) {
 
     let thd_num :usize = conf.thread_num;
     report_stat(handles, conf);
+
+    println!("count : {}", Arc::strong_count(&tables));
+   // println!("{:?}", tables);
+    
+
 
     #[cfg(feature = "profile")]
     {

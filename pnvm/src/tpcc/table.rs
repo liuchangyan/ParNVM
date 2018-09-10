@@ -13,7 +13,7 @@ use std::{
     hash::{self,Hash, BuildHasher, Hasher},
     fmt::{self, Debug},
     mem,
-    
+    any::TypeId,    
 };
 
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
@@ -25,115 +25,116 @@ use super::entry::*;
 
 pub type WarehouseTable = Table<Warehouse, i32>;
 pub type DistrictTable = Table<District, (i32, i32)>;
+pub type CustomerTable = Table<Customer, (i32, i32, i32)>;
 
-#[derive(Debug)]
-pub struct CustomerTable {
-    table_ : Table<Customer, (i32, i32, i32)>,
-    
-    //c_last, c_w_id, c_d_id => c_w_id, c_d_id, c_id
-    name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,  
-
-    lock_ : AtomicBool,
-}
-
-
-impl CustomerTable {
-    pub fn new() -> CustomerTable {
-        CustomerTable {
-            table_ : Table::new(),
-            name_index_ : UnsafeCell::new(HashMap::new()),
-            lock_: AtomicBool::new(false),
-        }
-    }
-
-    pub fn new_with_buckets(num : usize , bkt_size : usize) -> CustomerTable {
-        CustomerTable {
-            table_ : Table::new_with_buckets(num, bkt_size),
-            name_index_ : UnsafeCell::new(HashMap::new()),
-            lock_ : AtomicBool::new(false),
-        }
-    }
-
-    pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
-        where Arc<Row<Customer, (i32, i32, i32)>> : TableRef 
-        {
-            self.table_.push(tx, entry, tables);
-        }
-
-
-    fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
-    {
-        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-        unsafe { self.name_index_.get().as_ref().unwrap() }
-    }
-
-
-    fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
-    {
-        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-        unsafe { self.name_index_.get().as_mut().unwrap() }
-    }
-
-    pub fn push_raw(&self, entry: Customer) 
-    {
-        /* Indexes Updates */
-        let p_key = entry.primary_key();
-        let name = entry.c_last.clone();
-        let mut id_vec = self.name_index_mut()
-            .entry((name, entry.c_w_id, entry.c_d_id))
-            .or_insert_with(|| Vec::new());
-
-        id_vec.push(p_key);
-
-        //println!("PUSHING CUSTOMER {}, {}, {}", entry.c_id, entry.c_w_id, entry.c_d_id);
-        self.table_.push_raw(entry);
-        self.lock_.store(false, Ordering::SeqCst);
-
-    }
-
-    //FIXME: deleting an entry needs to be fixed 
-    pub fn update_sec_index(&self, arc: &Arc<Row<Customer, (i32, i32, i32)>>) {
-        let c  = arc.get_data();
-
-        let mut id_vec = self.name_index_mut()
-            .entry((c.c_last.clone(), c.c_w_id, c.c_d_id))
-            .or_insert_with(|| Vec::new());
-        id_vec.push(c.primary_key());
-        self.lock_.store(false, Ordering::SeqCst);
-    }
-
-    pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
-    {
-        self.table_.retrieve(index)
-    }
-
-    pub fn get_bucket(&self, bkt_idx : usize ) -> &Bucket<Customer, (i32, i32, i32)>
-    {
-        self.table_.get_bucket(bkt_idx)
-    }
-
-    pub fn find_by_name_id(&self, index : &(String, i32, i32))
-        -> Vec<Arc<Row<Customer, (i32, i32, i32)>>>
-        {
-        match self.name_index().get(index) {
-            None => {
-                Vec::new()
-            },
-            Some(vecs) => {
-                let mut ret = vecs.iter()
-                    .filter_map(|id| self.table_.retrieve(id))
-                    .collect::<Vec<_>>();
-                
-                ret.sort_unstable_by(|a, b| a.get_data().c_first.cmp(&b.get_data().c_first));
-                ret
-            }
-        }
-
-    }
-}
-
-unsafe impl Sync for CustomerTable {}
-unsafe impl Send for CustomerTable {}
+//#[derive(Debug)]
+//pub struct CustomerTable {
+//    table_ : Table<Customer, (i32, i32, i32)>,
+//    
+//    //c_last, c_w_id, c_d_id => c_w_id, c_d_id, c_id
+//    name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,  
+//
+//    lock_ : AtomicBool,
+//}
+//
+//
+//impl CustomerTable {
+//    pub fn new() -> CustomerTable {
+//        CustomerTable {
+//            table_ : Table::new(),
+//            name_index_ : UnsafeCell::new(HashMap::new()),
+//            lock_: AtomicBool::new(false),
+//        }
+//    }
+//
+//    pub fn new_with_buckets(num : usize , bkt_size : usize) -> CustomerTable {
+//        CustomerTable {
+//            table_ : Table::new_with_buckets(num, bkt_size),
+//            name_index_ : UnsafeCell::new(HashMap::new()),
+//            lock_ : AtomicBool::new(false),
+//        }
+//    }
+//
+//    pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
+//        where Arc<Row<Customer, (i32, i32, i32)>> : TableRef 
+//        {
+//            self.table_.push(tx, entry, tables);
+//        }
+//
+//
+//    fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
+//    {
+//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+//        unsafe { self.name_index_.get().as_ref().unwrap() }
+//    }
+//
+//
+//    fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
+//    {
+//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+//        unsafe { self.name_index_.get().as_mut().unwrap() }
+//    }
+//
+//    pub fn push_raw(&self, entry: Customer) 
+//    {
+//        /* Indexes Updates */
+//        let p_key = entry.primary_key();
+//        let name = entry.c_last.clone();
+//        let mut id_vec = self.name_index_mut()
+//            .entry((name, entry.c_w_id, entry.c_d_id))
+//            .or_insert_with(|| Vec::new());
+//
+//        id_vec.push(p_key);
+//
+//        //println!("PUSHING CUSTOMER {}, {}, {}", entry.c_id, entry.c_w_id, entry.c_d_id);
+//        self.table_.push_raw(entry);
+//        self.lock_.store(false, Ordering::SeqCst);
+//
+//    }
+//
+//    //FIXME: deleting an entry needs to be fixed 
+//    pub fn update_sec_index(&self, arc: &Arc<Row<Customer, (i32, i32, i32)>>) {
+//        let c  = arc.get_data();
+//
+//        let mut id_vec = self.name_index_mut()
+//            .entry((c.c_last.clone(), c.c_w_id, c.c_d_id))
+//            .or_insert_with(|| Vec::new());
+//        id_vec.push(c.primary_key());
+//        self.lock_.store(false, Ordering::SeqCst);
+//    }
+//
+//    pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
+//    {
+//        self.table_.retrieve(index)
+//    }
+//
+//    pub fn get_bucket(&self, bkt_idx : usize ) -> &Bucket<Customer, (i32, i32, i32)>
+//    {
+//        self.table_.get_bucket(bkt_idx)
+//    }
+//
+//    pub fn find_by_name_id(&self, index : &(String, i32, i32))
+//        -> Vec<Arc<Row<Customer, (i32, i32, i32)>>>
+//        {
+//        match self.name_index().get(index) {
+//            None => {
+//                Vec::new()
+//            },
+//            Some(vecs) => {
+//                let mut ret = vecs.iter()
+//                    .filter_map(|id| self.table_.retrieve(id))
+//                    .collect::<Vec<_>>();
+//                
+//                ret.sort_unstable_by(|a, b| a.get_data().c_first.cmp(&b.get_data().c_first));
+//                ret
+//            }
+//        }
+//
+//    }
+//}
+//
+//unsafe impl Sync for CustomerTable {}
+//unsafe impl Send for CustomerTable {}
 
 pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
 //pub type  OrderTable = Table<Order, (i32, i32, i32)>;
@@ -153,14 +154,14 @@ pub type HistoryTable = Table<History, (i32)>; /* No primary key in fact */
 
 #[derive(Debug)]
 pub struct Tables {
+   pub stock: StockTable,
+   pub orderline: OrderLineTable,
+   pub customer: CustomerTable,
    pub warehouse: WarehouseTable,
    pub district: DistrictTable,
-   pub customer: CustomerTable,
    pub neworder: NewOrderTable,
    pub order: OrderTable,
-   pub orderline: OrderLineTable,
    pub item: ItemTable,
-   pub stock: StockTable,
    pub history: HistoryTable,
 }
 
@@ -181,13 +182,14 @@ pub trait Key<T> {
 #[derive(Debug)]
 pub struct Table<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone + Debug,
-      Index: Eq+Hash + Clone,
+      Index: Eq+Hash + Clone+Debug,
 {
     buckets : Vec<Bucket<Entry, Index>>,
     bucket_num: usize,
     
     //len :usize,
     hash_builder: RandomState,
+    name : String,
     
      //id_ : ObjectId,
     //vers_ : TVersion,
@@ -208,13 +210,13 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
 impl<Entry, Index> Table<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone+Debug,
-      Index: Eq+Hash+Clone,
+      Index: Eq+Hash+Clone + Debug,
 {
     pub fn new() -> Table<Entry, Index> {
        Default::default() 
     }
 
-    pub fn new_with_buckets(num: usize, bkt_size: usize) -> Table<Entry, Index> {
+    pub fn new_with_buckets(num: usize, bkt_size: usize, name: &'static str) -> Table<Entry, Index> {
         let mut buckets = Vec::with_capacity(num);
         for _ in 0..num {
             buckets.push(Bucket::with_capacity(bkt_size));
@@ -224,6 +226,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             buckets,
             bucket_num : num,
             hash_builder: Default::default(),
+            name : String::from(name)
         }
     }
 
@@ -266,7 +269,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
 impl<Entry, Index> Default for Table<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone +Debug,
-      Index: Eq+Hash  + Clone,
+      Index: Eq+Hash  + Clone + Debug,
 {
     fn default() -> Self {
         let mut buckets = Vec::with_capacity(16);
@@ -278,7 +281,24 @@ where Entry: 'static + Key<Index> + Clone +Debug,
         Table {
             buckets,
             bucket_num: 16,
-            hash_builder : Default::default(), }
+            hash_builder : Default::default(), 
+            name: String::from("default")
+        }
+        
+    }
+}
+
+
+impl<Entry, Index> Drop for Table<Entry, Index> 
+where Entry: 'static + Key<Index> + Clone +Debug,
+      Index: Eq+Hash  + Clone + Debug,
+{
+    fn drop(&mut self) {
+        println!("Dropping table {}", self.name);
+        //if self.name == "stock" {
+        //    println!("{:?}", self.buckets);
+        //}
+        
     }
 }
 
@@ -290,7 +310,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 {
     rows: RwLock<Vec<Arc<Row<Entry, Index>>>>,
     index: RwLock<HashMap<Index, usize>>,
-    len : AtomicUsize,
 
     id_ : ObjectId,
     vers_ : TVersion,
@@ -303,7 +322,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pub fn new() -> Bucket<Entry, Index> {
         Bucket {
             rows: RwLock::new(Vec::new()),
-            len: AtomicUsize::new(0),
             index: RwLock::new(HashMap::new()),
 
             id_ : OidFac::get_obj_next(),
@@ -315,7 +333,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     {
         Bucket {
             rows: RwLock::new(Vec::with_capacity(cap)),
-            len: AtomicUsize::new(0),
             index: RwLock::new(HashMap::new()),
 
             id_ : OidFac::get_obj_next(),
@@ -475,8 +492,14 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         if self.data_.as_ptr().is_null() {
             panic!("freeing null pointers")
         } else {
+           // if TypeId::of::<Entry>() == TypeId::of::<Customer>() {
+           //     println!("{:?}", self.get_data());
+           // }
+            let _data = self.get_data();
             unsafe {self.data_.as_ptr().drop_in_place()}
         }
+
+        //println!("{:?}", self);
         //mem::forget(self.vers_);
     }
 }

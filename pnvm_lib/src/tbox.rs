@@ -244,6 +244,10 @@ impl TRef for TInt {
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
     }
+
+    fn get_name(&self) -> String {
+        String::from("int")
+    }
 }
 
 impl TInt {

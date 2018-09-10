@@ -13,10 +13,12 @@ use pnvm_lib::{
     txn::*,
 };
 
+
 use std::{
     sync::Arc,
     time,
     char,
+    str,
 };
 
 use rand::{self, 
@@ -27,6 +29,7 @@ use rand::{self,
 };
 use num::{
     abs,
+    pow::pow,
 };
 
 
@@ -39,15 +42,15 @@ const NUM_INIT_CUSTOMER : i32 = 3000;
 pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     
     let mut tables = Tables {
-        warehouse: Table::new_with_buckets(16, NUM_WAREHOUSES as usize),
-        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize),
-        customer: CustomerTable::new_with_buckets(128, 64),
-        neworder: Table::new_with_buckets(32, 32768),
-        order: Table::new_with_buckets(32, 32768),
-        orderline: Table::new_with_buckets(32, 32768),
-        item: Table::new_with_buckets(512, 256),
-        stock: Table::new_with_buckets(32, 512 ),
-        history: Table::new_with_buckets(128, 128),
+        warehouse: Table::new_with_buckets(16, NUM_WAREHOUSES as usize, "warehouse"),
+        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize, "district"),
+        customer: Table::new_with_buckets(128, 64, "customer"),
+        neworder: Table::new_with_buckets(32, 32768, "neworder"),
+        order: Table::new_with_buckets(32, 32768, "order"),
+        orderline: Table::new_with_buckets(32, 32768, "orderline"),
+        item: Table::new_with_buckets(512, 256, "item"),
+        history: Table::new_with_buckets(128, 128, "history"),
+        stock: Table::new_with_buckets(32, 512 ,"stock"),
     };
 
     fill_item(&mut tables, conf, rng);
@@ -63,13 +66,20 @@ fn fill_item(tables: &mut Tables,
              )
 {
     for i_id in 1..=NUM_INIT_ITEM {
-        let item = Item {
-            i_id : i_id,
-            i_im_id : urand(1, 10_000, rng),
-            i_name : rand_a_string(14, 24, rng),
-            i_price : rand_numeric(1.00, 100.00, 5, 2, rng),
-            i_data : rand_data(26, 50, rng),
-        };
+        let item = Item::new(
+            i_id,
+            urand(1, 10_000, rng),
+            rand_a_string(14, 24, rng),
+            rand_numeric(1.00, 100.00, 5, 2, rng),
+            rand_data(26, 50, rng),
+            );
+       // let item = Item {
+       //     i_id : i_id,
+       //     i_im_id : urand(1, 10_000, rng),
+       //     i_name : rand_a_string(14, 24, rng),
+       //     i_price : rand_numeric(1.00, 100.00, 5, 2, rng),
+       //     i_data : rand_data(26, 50, rng),
+       // };
 
         tables.item.push_raw(item);
     }
@@ -79,17 +89,28 @@ fn fill_item(tables: &mut Tables,
 fn fill_warehouse(tables: &mut Tables, _config : &Config, rng: &mut SmallRng) {
     
     for w_id in 1..=NUM_WAREHOUSES {
-       let warehouse = Warehouse {
-           w_id : w_id, 
-           w_name : rand_a_string(6, 10, rng),
-           w_street_1 : rand_a_string(10, 20, rng),
-           w_street_2 : rand_a_string(10, 20, rng),
-           w_city : rand_a_string(10, 20, rng),
-           w_state: rand_a_string(2, 2, rng),
-           w_zip : rand_zip(rng),
-           w_tax : rand_numeric(0.0, 0.2, 5, 4, rng),
-           w_ytd : Numeric::new(300000, 12, 2),
-       };
+       let warehouse = Warehouse::new(
+           w_id, 
+           rand_a_string(6, 10, rng),
+           rand_a_string(10, 20, rng),
+           rand_a_string(10, 20, rng),
+           rand_a_string(10, 20, rng),
+           rand_a_string(2, 2, rng),
+           rand_zip(rng),
+           rand_numeric(0.0, 0.2, 5, 4, rng),
+           Numeric::new(300000, 12, 2),
+           );
+       //let warehouse = Warehouse {
+       //    w_id : w_id, 
+       //    w_name : rand_a_string(6, 10, rng),
+       //    w_street_1 : rand_a_string(10, 20, rng),
+       //    w_street_2 : rand_a_string(10, 20, rng),
+       //    w_city : rand_a_string(10, 20, rng),
+       //    w_state: rand_a_string(2, 2, rng),
+       //    w_zip : rand_zip(rng),
+       //    w_tax : rand_numeric(0.0, 0.2, 5, 4, rng),
+       //    w_ytd : Numeric::new(300000, 12, 2),
+       //};
 
        tables.warehouse.push_raw(warehouse);
 
@@ -102,25 +123,63 @@ const NUM_INIT_STOCK: i32 = 100_000;
 fn fill_stock(tables: &mut Tables, _config: &Config, w_id : i32, rng: &mut SmallRng) 
 {
     for s_id in 1..=NUM_INIT_STOCK {
-        let stock = Stock {
-            s_i_id : s_id,
-            s_w_id : w_id,
-            s_quantity : rand_numeric(10.0, 100.0, 4, 0, rng),
-            s_dist_01: rand_a_string(24, 24, rng),
-            s_dist_02: rand_a_string(24, 24, rng),
-            s_dist_03: rand_a_string(24, 24, rng),
-            s_dist_04: rand_a_string(24, 24, rng),
-            s_dist_05: rand_a_string(24, 24, rng),
-            s_dist_06: rand_a_string(24, 24, rng),
-            s_dist_07: rand_a_string(24, 24, rng),
-            s_dist_08: rand_a_string(24, 24, rng),
-            s_dist_09: rand_a_string(24, 24, rng),
-            s_dist_10: rand_a_string(24, 24, rng),
-            s_ytd : Numeric::new(0, 8, 0),
-            s_order_cnt : Numeric::new(0, 4, 0),
-            s_remote_cnt : Numeric::new(0, 4, 0),
-            s_data : rand_data(26, 50, rng),
-        };
+        let stock = Stock::new(
+            s_id,
+            w_id,
+            rand_numeric(10.0, 100.0, 4, 0, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            rand_a_string(24, 24, rng),
+            Numeric::new(0, 8, 0),
+            Numeric::new(0, 4, 0),
+            Numeric::new(0, 4, 0),
+            rand_data(26, 50, rng),
+            );
+       // let stock = Stock {
+       //     s_i_id : s_id,
+       //     s_w_id : w_id,
+       //     s_quantity : rand_numeric(10.0, 100.0, 4, 0, rng),
+       //     s_dist_01: String::from("hillo"),
+       //     s_dist_02: String::from("hillo"),
+       //     s_dist_03: String::from("hillo"),
+       //     s_dist_04: String::from("hillo"),
+       //     s_dist_05: String::from("hillo"),
+       //     s_dist_06: String::from("hillo"),
+       //     s_dist_07: String::from("hillo"),
+       //     s_dist_08: String::from("hillo"),
+       //     s_dist_09: String::from("hillo"),
+       //     s_dist_10: String::from("hillo"),
+       //     s_ytd : Numeric::new(0, 8, 0),
+       //     s_order_cnt : Numeric::new(0, 4, 0),
+       //     s_remote_cnt : Numeric::new(0, 4, 0),
+       //     s_data : rand_data(26, 50, rng),
+       // };
+        //let stock = Stock {
+        //    s_i_id : s_id,
+        //    s_w_id : w_id,
+        //    s_quantity : rand_numeric(10.0, 100.0, 4, 0, rng),
+        //    s_dist_01: rand_a_string(24, 24, rng),
+        //    s_dist_02: rand_a_string(24, 24, rng),
+        //    s_dist_03: rand_a_string(24, 24, rng),
+        //    s_dist_04: rand_a_string(24, 24, rng),
+        //    s_dist_05: rand_a_string(24, 24, rng),
+        //    s_dist_06: rand_a_string(24, 24, rng),
+        //    s_dist_07: rand_a_string(24, 24, rng),
+        //    s_dist_08: rand_a_string(24, 24, rng),
+        //    s_dist_09: rand_a_string(24, 24, rng),
+        //    s_dist_10: rand_a_string(24, 24, rng),
+        //    s_ytd : Numeric::new(0, 8, 0),
+        //    s_order_cnt : Numeric::new(0, 4, 0),
+        //    s_remote_cnt : Numeric::new(0, 4, 0),
+        //    s_data : rand_data(26, 50, rng),
+        //};
 
         tables.stock.push_raw(stock);
     }
@@ -130,19 +189,32 @@ const NUM_INIT_DISTRICT :i32 = 10;
 fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut SmallRng) 
 {
     for d_id in 1..=NUM_INIT_DISTRICT {
-        let district = District {
-            d_id : d_id, 
-            d_w_id : w_id,
-            d_name : rand_a_string(6, 10, rng),
-            d_street_1 : rand_a_string(10, 20, rng),
-            d_street_2 : rand_a_string(10, 20, rng),
-            d_city : rand_a_string(10, 20, rng),
-            d_state : rand_a_string(2, 2, rng),
-            d_zip : rand_zip(rng),
-            d_tax : rand_numeric(0.0, 0.20, 5, 4, rng),
-            d_ytd : Numeric::new(30_000, 12, 2),
-            d_next_o_id : NUM_INIT_NEXT_ORDER,
-        };
+        let district = District::new(
+             d_id, 
+             w_id,
+             rand_a_string(6, 10, rng),
+             rand_a_string(10, 20, rng),
+             rand_a_string(10, 20, rng),
+             rand_a_string(10, 20, rng),
+             rand_a_string(2, 2, rng),
+             rand_zip(rng),
+             rand_numeric(0.0, 0.20, 5, 4, rng),
+             Numeric::new(30_000, 12, 2),
+             NUM_INIT_NEXT_ORDER,
+            );
+       // let district = District {
+       //     d_id : d_id, 
+       //     d_w_id : w_id,
+       //     d_name : rand_a_string(6, 10, rng),
+       //     d_street_1 : rand_a_string(10, 20, rng),
+       //     d_street_2 : rand_a_string(10, 20, rng),
+       //     d_city : rand_a_string(10, 20, rng),
+       //     d_state : rand_a_string(2, 2, rng),
+       //     d_zip : rand_zip(rng),
+       //     d_tax : rand_numeric(0.0, 0.20, 5, 4, rng),
+       //     d_ytd : Numeric::new(30_000, 12, 2),
+       //     d_next_o_id : NUM_INIT_NEXT_ORDER,
+       // };
 
         tables.district.push_raw(district);
 
@@ -189,16 +261,16 @@ fn fill_order(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32, r
 
         let o_ol_cnt = urand(5, 15, rng);
 
-        let order = Order {
-            o_id : o_id,
-            o_c_id : c_ids.pop().expect("not enough c_ids"),
-            o_d_id : d_id,
-            o_w_id : w_id,
-            o_entry_d : timestamp,
-            o_carrier_id :  o_carrier_id,
-            o_ol_cnt : Numeric::new(o_ol_cnt.into(), 2, 0),
-            o_all_local : Numeric::new(1, 1, 0),
-        };
+        let order = Order::new (
+             o_id,
+             c_ids.pop().expect("not enough c_ids"),
+             d_id,
+             w_id,
+             timestamp,
+              o_carrier_id,
+             Numeric::new(o_ol_cnt.into(), 2, 0),
+             Numeric::new(1, 1, 0),
+        );
 
         tables.order.push_raw(order);
 
@@ -221,18 +293,18 @@ fn fill_orderline(tables: &mut Tables, _config : &Config, w_id : i32, d_id: i32,
             rand_numeric(0.01, 9999.99, 6, 2, rng)
         };
 
-        let orderline = OrderLine {
-            ol_o_id : o_id,
-            ol_d_id : d_id,
-            ol_w_id : w_id,
-            ol_number : ol_number,
-            ol_i_id : urand(1, 100_000, rng),
-            ol_supply_w_id : w_id,
-            ol_delivery_d : ol_delivery_d,
-            ol_quantity : Numeric::new(5, 2, 0),
-            ol_amount : ol_amount,
-            ol_dist_info: rand_a_string(24,24, rng)
-        };
+        let orderline = OrderLine::new(
+             o_id,
+             d_id,
+             w_id,
+             ol_number,
+             urand(1, 100_000, rng),
+             w_id,
+             ol_delivery_d,
+             Numeric::new(5, 2, 0),
+             ol_amount,
+             rand_a_string(24,24, rng)
+        );
 
         tables.orderline.push_raw(orderline);
     }
@@ -250,29 +322,53 @@ fn fill_customer(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32
             String::from("GC")
         };
 
-        let customer = Customer {
-            c_id : c_id,
-            c_d_id : d_id,
-            c_w_id : w_id, 
-            c_last : rand_last_name(c_id, rng),
-            c_middle : String::from("OE"),
-            c_first : rand_a_string(8, 16, rng),
-            c_street_1 : rand_a_string(10, 20, rng),
-            c_street_2 : rand_a_string(10, 20, rng),
-            c_city : rand_a_string(10, 20, rng),
-            c_state : rand_a_string(2, 2, rng),
-            c_zip: rand_zip(rng),
-            c_phone : rand_n_string(16, 16, rng),
-            c_since : timestamp,
-            c_credit : credit,
-            c_credit_lim : Numeric::new(50_000, 12, 2),
-            c_discount : rand_numeric(0.0, 0.5, 5, 4, rng),
-            c_balance : Numeric::from_str("-10.00", 12, 2).expect("invalid c_balance"),
-            c_ytd_payment : Numeric::from_str("10.00", 12, 2).expect("invliad c_ytd_payment"),
-            c_payment_cnt : Numeric::new(1, 4, 0),
-            c_delivery_cnt : Numeric::new(0, 4, 0),
-            c_data : rand_a_string(300, 500, rng),
-        };
+        let customer = Customer::new(
+             c_id,
+             d_id,
+             w_id, 
+             rand_last_name(c_id, rng),
+             String::from("OE"),
+             rand_a_string(8, 16, rng),
+             rand_a_string(10, 20, rng),
+             rand_a_string(10, 20, rng),
+             rand_a_string(10, 20, rng),
+             rand_a_string(2, 2, rng),
+             rand_zip(rng),
+             rand_n_string(16, 16, rng),
+             timestamp,
+             credit,
+             Numeric::new(50_000, 12, 2),
+             rand_numeric(0.0, 0.5, 5, 4, rng),
+             Numeric::from_str("-10.00", 12, 2).expect("invalid c_balance"),
+             Numeric::from_str("10.00", 12, 2).expect("invliad c_ytd_payment"),
+             Numeric::new(1, 4, 0),
+             Numeric::new(0, 4, 0),
+             rand_a_string(300, 500, rng),
+           );
+
+       // let customer = Customer {
+       //     c_id : c_id,
+       //     c_d_id : d_id,
+       //     c_w_id : w_id, 
+       //     c_last : rand_last_name(c_id, rng),
+       //     c_middle : String::from("OE"),
+       //     c_first : rand_a_string(8, 16, rng),
+       //     c_street_1 : rand_a_string(10, 20, rng),
+       //     c_street_2 : rand_a_string(10, 20, rng),
+       //     c_city : rand_a_string(10, 20, rng),
+       //     c_state : rand_a_string(2, 2, rng),
+       //     c_zip: rand_zip(rng),
+       //     c_phone : rand_n_string(16, 16, rng),
+       //     c_since : timestamp,
+       //     c_credit : credit,
+       //     c_credit_lim : Numeric::new(50_000, 12, 2),
+       //     c_discount : rand_numeric(0.0, 0.5, 5, 4, rng),
+       //     c_balance : Numeric::from_str("-10.00", 12, 2).expect("invalid c_balance"),
+       //     c_ytd_payment : Numeric::from_str("10.00", 12, 2).expect("invliad c_ytd_payment"),
+       //     c_payment_cnt : Numeric::new(1, 4, 0),
+       //     c_delivery_cnt : Numeric::new(0, 4, 0),
+       //     c_data : rand_a_string(300, 500, rng),
+       // };
         
         //println!("PUSHING CUSTOMER {}, {}, {}, {}", c_id, w_id, d_id, customer.c_last);
         tables.customer.push_raw(customer);
@@ -290,16 +386,16 @@ fn fill_history(
     timestamp: i32,
     rng: &mut SmallRng)
 {
-    tables.history.push_raw(History {
-        h_c_id : c_id,
-        h_c_d_id : d_id,
-        h_d_id : d_id,
-        h_c_w_id : w_id,
-        h_w_id : w_id,
-        h_date : timestamp,
-        h_amount  : Numeric::new(10,6,2),
-        h_data : rand_a_string(12, 24, rng),
-    });
+    tables.history.push_raw(History::new(
+         c_id,
+         d_id,
+         d_id,
+         w_id,
+         w_id,
+         timestamp,
+         Numeric::new(10,6,2),
+         rand_a_string(12, 24, rng),
+    ));
 }
 
 
@@ -513,16 +609,16 @@ fn payment(tx: &mut TransactionOCC,
             tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
         }, 
         None => {
-            assert!(c_last.is_some());
-            let c_last = c_last.unwrap();
-            let rows = tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id));
-            if rows.len() <= 0 {
-                warn!("NO MATCHING {}, {}, {}", c_last, c_w_id, c_d_id);
-                return;
-            }
-            /* n/2 rounded up == (n+1)/2 */
-            let i = rows.len()/2; 
-            rows[i].clone().into_table_ref(None, None)
+            panic!("oops");
+            //assert!(c_last.is_some());
+            //let c_last = c_last.unwrap();
+            //let rows = tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id));
+            //if rows.len() <= 0 {
+            //    warn!("NO MATCHING {}, {}, {}", c_last, c_w_id, c_d_id);
+            //    return;
+            //}
+            //let i = rows.len()/2; 
+            //rows[i].clone().into_table_ref(None, None)
         }
     };
     
@@ -531,13 +627,16 @@ fn payment(tx: &mut TransactionOCC,
     c.c_ytd_payment += h_amount;
     c.c_payment_cnt += Numeric::new(1, 4, 0);
     let c_id = c.c_id;
-
-    match c.c_credit.as_ref() {
+    let c_credit = c.c_credit.clone(); 
+    let c_credit = str::from_utf8(&c_credit).unwrap();
+    match c_credit {
         "BC" => {
-            c.c_data.insert_str(0, format!("|{},{},{},{},{},{}|",
-                                           c.c_id, c.c_d_id, c.c_w_id, d_id, w_id, h_amount.as_string()).as_str());
-
-            c.c_data.truncate(500);
+            let new_data_str =  format!("|{},{},{},{},{},{}|",
+                                           c.c_id, c.c_d_id, c.c_w_id, d_id, w_id, h_amount.as_string());
+            let len = new_data_str.len();
+            let new_data = new_data_str.as_bytes();
+            c.c_data.rotate_right(len);
+            c.c_data[0..len].copy_from_slice(new_data);
         },
         _ => {},
     }
@@ -545,18 +644,18 @@ fn payment(tx: &mut TransactionOCC,
     tx.write(c_row, c);
 
     /* I History */
-    let h_data = format!("{}    {}", w_name, d_name);
+    let h_data = format!("{}    {}", str::from_utf8(&w_name).unwrap(), str::from_utf8(&d_name).unwrap());
     tables.history.push(tx,
-                        History {
-                            h_c_id : c_id,
-                            h_c_d_id : c_d_id,
-                            h_c_w_id : c_w_id,
-                            h_d_id : d_id,
-                            h_w_id : w_id,
-                            h_data : h_data,
-                            h_date : h_date,
-                            h_amount : h_amount,
-                        },
+                        History::new(
+                             c_id,
+                             c_d_id,
+                             c_w_id,
+                             d_id,
+                             w_id,
+                             h_date,
+                             h_amount,
+                             h_data,
+                        ),
                         tables);
     debug!("[TXN-PAYMENT] Inserting History \n\t\t");
      
@@ -751,12 +850,8 @@ fn rand_numeric(low : f64,
                 rng : &mut SmallRng
                 ) -> Numeric 
 {
-    let num = Numeric::from_str(&format!("{:.*}",precision, rng.gen_range(low, high)), len, precision);
-
-    match num {
-        Some(num) => num,
-        None => panic!("{}, {}, {}, {}", low, high, len ,precision)
-    }
+    let val = rng.gen_range(low, high) * pow(10, precision) as f64 ;
+    Numeric::new(val.trunc() as i64, len, precision)
 }
 
 
