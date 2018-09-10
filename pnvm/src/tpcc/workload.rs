@@ -13,6 +13,7 @@ use pnvm_lib::{
     txn::*,
 };
 
+
 use std::{
     sync::Arc,
     time,
@@ -27,6 +28,7 @@ use rand::{self,
 };
 use num::{
     abs,
+    pow::pow,
 };
 
 
@@ -39,15 +41,15 @@ const NUM_INIT_CUSTOMER : i32 = 3000;
 pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     
     let mut tables = Tables {
-        warehouse: Table::new_with_buckets(16, NUM_WAREHOUSES as usize),
-        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize),
-        customer: CustomerTable::new_with_buckets(128, 64),
-        neworder: Table::new_with_buckets(32, 32768),
-        order: Table::new_with_buckets(32, 32768),
-        orderline: Table::new_with_buckets(32, 32768),
-        item: Table::new_with_buckets(512, 256),
-        stock: Table::new_with_buckets(32, 512 ),
-        history: Table::new_with_buckets(128, 128),
+        warehouse: Table::new_with_buckets(16, NUM_WAREHOUSES as usize, "warehouse"),
+        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize, "district"),
+        customer: Table::new_with_buckets(128, 64, "customer"),
+        neworder: Table::new_with_buckets(32, 32768, "neworder"),
+        order: Table::new_with_buckets(32, 32768, "order"),
+        orderline: Table::new_with_buckets(32, 32768, "orderline"),
+        item: Table::new_with_buckets(512, 256, "item"),
+        history: Table::new_with_buckets(128, 128, "history"),
+        stock: Table::new_with_buckets(32, 512 ,"stock"),
     };
 
     fill_item(&mut tables, conf, rng);
@@ -531,16 +533,16 @@ fn payment(tx: &mut TransactionOCC,
             tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
         }, 
         None => {
-            assert!(c_last.is_some());
-            let c_last = c_last.unwrap();
-            let rows = tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id));
-            if rows.len() <= 0 {
-                warn!("NO MATCHING {}, {}, {}", c_last, c_w_id, c_d_id);
-                return;
-            }
-            /* n/2 rounded up == (n+1)/2 */
-            let i = rows.len()/2; 
-            rows[i].clone().into_table_ref(None, None)
+            panic!("oops");
+            //assert!(c_last.is_some());
+            //let c_last = c_last.unwrap();
+            //let rows = tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id));
+            //if rows.len() <= 0 {
+            //    warn!("NO MATCHING {}, {}, {}", c_last, c_w_id, c_d_id);
+            //    return;
+            //}
+            //let i = rows.len()/2; 
+            //rows[i].clone().into_table_ref(None, None)
         }
     };
     
@@ -633,12 +635,8 @@ fn rand_numeric(low : f64,
                 rng : &mut SmallRng
                 ) -> Numeric 
 {
-    let num = Numeric::from_str(&format!("{:.*}",precision, rng.gen_range(low, high)), len, precision);
-
-    match num {
-        Some(num) => num,
-        None => panic!("{}, {}, {}, {}", low, high, len ,precision)
-    }
+    let val = rng.gen_range(low, high) * pow(10, precision) as f64 ;
+    Numeric::new(val.trunc() as i64, len, precision)
 }
 
 
