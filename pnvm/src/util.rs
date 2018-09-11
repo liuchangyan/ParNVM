@@ -529,6 +529,7 @@ pub struct Config {
     pub cfl_pc_num: usize,
     pub cfl_txn_num: usize,
     pub pc_num: usize,
+    pub duration: u64,
 }
 
 pub fn read_env() -> Config {
@@ -551,5 +552,6 @@ pub fn read_env() -> Config {
         cfl_txn_num: settings.get_int("CFL_TXN_NUM").unwrap() as usize,
         cfl_pc_num: settings.get_int("CFL_PC_NUM").unwrap() as usize,
         pc_num: settings.get_int("PC_NUM").unwrap() as usize,
+        duration: settings.get_int("DURATION").unwrap() as u64,
     }
 }

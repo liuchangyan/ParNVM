@@ -42,7 +42,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc, Barrier, Mutex,
     },
-    thread, time,
+    thread, time::{self, Duration, Instant},
 };
 
 use pnvm_lib::{
@@ -58,9 +58,9 @@ use pnvm_lib::{
 static GLOBAL: GPMem = GPMem;
 
 
-use std::alloc::{System, GlobalAlloc};
-#[global_allocator]
-static GLOBAL: System = System;
+//use std::alloc::{System, GlobalAlloc};
+//#[global_allocator]
+//static GLOBAL: System = System;
 
 fn main() {
     env_logger::init().unwrap();
@@ -333,24 +333,30 @@ fn run_occ_tpcc(conf: Config) {
         let barrier = barrier.clone();
         let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
         let tables = tables.clone();
+        let duration_in_secs = conf.duration;
 
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
-
+                let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
+                let start = Instant::now();
                 BenchmarkCounter::start();
+                let mut j = 0;
                 let w_home = (i as i32 )%5 +1;
 
-                for j in 0..conf.round_num {
+                //for j in 0..conf.round_num {
+                while start.elapsed() < duration {
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();
+                    j+=1;
+
 
                     while {
-                        if i % 2 ==0 {
+                        if true {
                             tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
                         }
                         else {
@@ -358,6 +364,11 @@ fn run_occ_tpcc(conf: Config) {
                         }
 
                         let res = tx.try_commit();
+                        
+                        if res && j % 2 == 0 {
+                            BenchmarkCounter::new_order_done();
+                        }
+
                         !res
                     } {}
 
@@ -467,6 +478,9 @@ fn report_stat(
     let mut total_abort = 0;
     let mut total_success = 0;
     let mut total_time = time::Duration::new(0, 0);
+    
+
+    let mut total_new_order = 0; 
 
     for handle in handles {
         //#[cfg(benchmark)]
@@ -474,6 +488,9 @@ fn report_stat(
             Ok(per_thd) => {
                 total_success += per_thd.success_cnt;
                 total_abort += per_thd.abort_cnt;
+
+                total_new_order += per_thd.new_order_cnt;
+
                 total_time = std::cmp::max(total_time, per_thd.duration);
             }
             Err(_) => warn!("thread panics"),
@@ -481,7 +498,7 @@ fn report_stat(
     }
     //let total_time =  start.elapsed() - spin_time;
     println!(
-        "{},{},{}, {}, {}, {}, {}, {:?}",
+        "{},{},{}, {}, {}, {}, {}, {:?}, {}",
         conf.thread_num,
         conf.obj_num,
         conf.set_size,
@@ -490,5 +507,6 @@ fn report_stat(
         total_success,
         total_abort,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+        total_new_order,
         )
 }

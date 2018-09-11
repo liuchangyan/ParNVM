@@ -289,18 +289,18 @@ where Entry: 'static + Key<Index> + Clone +Debug,
 }
 
 
-impl<Entry, Index> Drop for Table<Entry, Index> 
-where Entry: 'static + Key<Index> + Clone +Debug,
-      Index: Eq+Hash  + Clone + Debug,
-{
-    fn drop(&mut self) {
-        println!("Dropping table {}", self.name);
-        //if self.name == "stock" {
-        //    println!("{:?}", self.buckets);
-        //}
-        
-    }
-}
+//impl<Entry, Index> Drop for Table<Entry, Index> 
+//where Entry: 'static + Key<Index> + Clone +Debug,
+//      Index: Eq+Hash  + Clone + Debug,
+//{
+//    fn drop(&mut self) {
+//        println!("Dropping table {}", self.name);
+//        //if self.name == "stock" {
+//        //    println!("{:?}", self.buckets);
+//        //}
+//        
+//    }
+//}
 
 /* FIXME: can we avoid the copy */
 #[derive(Debug)]
