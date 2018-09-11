@@ -51,6 +51,7 @@ thread_local!{
 pub struct BenchmarkCounter {
     pub success_cnt: u32,
     pub abort_cnt:   u32,
+    pub new_order_cnt : u32,
     pub duration:    time::Duration,
     pub start : time::Instant,
 }
@@ -61,6 +62,7 @@ impl BenchmarkCounter {
         BenchmarkCounter {
             success_cnt: 0,
             abort_cnt:   0,
+            new_order_cnt : 0,
             start:    time::Instant::now(),
             duration: time::Duration::default(),
         }
@@ -70,6 +72,12 @@ impl BenchmarkCounter {
     pub fn success() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).success_cnt += 1;
+        });
+    }
+
+    pub fn new_order_done() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).new_order_cnt +=1;
         });
     }
 
