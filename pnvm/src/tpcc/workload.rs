@@ -673,62 +673,62 @@ fn payment(tx: &mut TransactionOCC,
 }
 
 
-//pub fn orderstatus_random(tx: &mut TransactionOCC, 
-//                      tables: &Arc<Tables>,
-//                      w_home : i32,
-//                      rng : &mut SmallRng,
-//                      ) 
-//{
-//    let d_id = urand(1, 10, rng);
-//    let w_id = w_home;
-//    
-//    let y = urand(1, 100, rng);
-//    
-//    if false {
-//        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
-//        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, Some(c_last), None, h_amount, h_date, rng);
-//    } else {
-//        let c_id = nurand(1023, 1, 3000, rng);
-//        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, None, Some(c_id), h_amount, h_date, rng);
-//    }
-//}
-//
-//
-//fn orderstatus(tx: &mut TransactionOCC
-//               tables: &Arc<Tables>,
-//               w_id : i32,
-//               d_id : i32,
-//               c_w_id : i32,
-//               c_d_id : i32,
-//               c_last : Option<String>,
-//               c_id : Option<i32>,
-//               )
-//{
-//
-//    let c_row = match c_id {
-//        Some(c_id) => {
-//            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
-//        },
-//        
-//        None => {
-//           panic!("not implemented"); 
-//        }
-//    };
-//    //TODO:
-//    let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
-//
-//    let o_id = tx.read::<Order>(o_row).o_id;
-//    //TODO: 
-//    let ol_arcs = table.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
-//
-//    for ol_arc in ol_arcs {
-//        let ol_row = ol_arc.into_table_ref(None, None);
-//        let ol = tx.read::<OrderLine>(ol_row);
-//    }
-//}
-//
-//
-//
+pub fn orderstatus_random(tx: &mut TransactionOCC, 
+                      tables: &Arc<Tables>,
+                      w_home : i32,
+                      rng : &mut SmallRng,
+                      ) 
+{
+    let d_id = urand(1, 10, rng);
+    let w_id = w_home;
+    
+    let y = urand(1, 100, rng);
+    
+    if false {
+        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
+        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, Some(c_last), None, h_amount, h_date, rng);
+    } else {
+        let c_id = nurand(1023, 1, 3000, rng);
+        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, None, Some(c_id), h_amount, h_date, rng);
+    }
+}
+
+
+fn orderstatus(tx: &mut TransactionOCC
+               tables: &Arc<Tables>,
+               w_id : i32,
+               d_id : i32,
+               c_w_id : i32,
+               c_d_id : i32,
+               c_last : Option<String>,
+               c_id : Option<i32>,
+               )
+{
+
+    let c_row = match c_id {
+        Some(c_id) => {
+            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
+        },
+        
+        None => {
+           panic!("not implemented"); 
+        }
+    };
+    //TODO:
+    let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
+
+    let o_id = tx.read::<Order>(o_row).o_id;
+    //TODO: 
+    let ol_arcs = table.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
+
+    for ol_arc in ol_arcs {
+        let ol_row = ol_arc.into_table_ref(None, None);
+        let ol = tx.read::<OrderLine>(ol_row);
+    }
+}
+
+
+
 //fn delivery(tx: &mut TransactionOCC
 //            tables: &Arc<Tables>,
 //            w_id : i32,

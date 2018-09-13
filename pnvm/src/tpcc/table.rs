@@ -287,10 +287,77 @@ pub type OrderTable = Table<Order, (i32, i32, i32)>;
 //unsafe impl Sync for NewOrderTable {}
 //unsafe impl Send for NewOrderTable {}
 //
-//pub struct OrderTable {
-//    table_ : Table<Order, (i32, i32, i32)>,
-//    cus_index_ : SecIndex<(i32, i32, i32), (i32, i32,i32)>,
-//}
+pub struct OrderTable {
+    table_ : Table<Order, (i32, i32, i32)>,
+    cus_index_ : SecIndex<(i32, i32, i32), (i32, i32,i32)>,
+}
+
+
+impl OrderTable {
+    pub fn new() -> OrderTable {
+        OrderTable {
+            table_ : Table::new(),
+            cus_index_ : SecIndex::new(),
+        }
+    }
+
+    pub fn new_with_buckets(num : usize, bkt_size : usize, name: &str) -> OrderTable {
+        OrderTable {
+            table_ : Table::new_with_buckets(num, bkt_size, name),
+            name_index_ : SecIndex::new(),
+        }
+    }
+
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Order, tables: &Arc<Tables>) 
+        where Arc<Row<Order, (i32, i32, i32)>> : TableRef
+    {
+        self.table_.push(tx, entry, tables) 
+    }
+
+    pub fn retrieve(&self, index: &(i32, i32, i32)) -> Option<Arc<Row<Order, (i32, i32, i32)>>>
+    {
+        self.table_.retrieve(index)
+    }
+
+    pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<Order, (i32, i32, i32)>
+    {
+        self.table_.get_bucket(bkt_idx)
+    }
+
+    pub fn push_raw(&self, entry: Order) 
+    {
+        /* Index Updates */
+        let idx_val = entry.primary_key();
+        let idx_key = (entry.o_w_id, entry.o_d_id, entry.o_c_id);
+
+        self.cus_index_.insert_index(idx_key, idx_val);
+
+        self.table_.push_raw(entry);
+        self.cus_index_.unlock();
+    }
+
+    //TODO: update index?
+    
+    pub fn retrieve_by_cid(&self, key: &(i32, i32, i32))
+        -> Option<Arc<Row<Order, (i32, i32, i32)>>> 
+        {
+            match self.cus_index_.find_many(key) {
+                None => {
+                    self.cus_index_.unlock();
+                    None
+                },
+                Some(ids) {
+                    let max_pos = ids.iter()
+                        .max_by(|a, b| a.2.cmp(&b.2))
+                        .expect("retrieve_by_cid: empty ids");
+
+                    self.table_.retrieve(max_pos)
+                }
+
+            }
+        }
+
+}
 
 pub struct SecIndex<K, V>
 where K: Hash + Eq + Debug,
