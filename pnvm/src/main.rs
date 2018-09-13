@@ -335,6 +335,7 @@ fn run_occ_tpcc(conf: Config) {
         let tables = tables.clone();
         let duration_in_secs = conf.duration;
 
+
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
@@ -356,7 +357,7 @@ fn run_occ_tpcc(conf: Config) {
 
 
                     while {
-                        if true {
+                        if j % 2 == 0 {
                             tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
                         }
                         else {

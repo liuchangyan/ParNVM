@@ -14,6 +14,8 @@ use std::{
     fmt::{self, Debug},
     mem,
     any::TypeId,    
+    str,
+    char,
 };
 
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
@@ -25,124 +27,342 @@ use super::entry::*;
 
 pub type WarehouseTable = Table<Warehouse, i32>;
 pub type DistrictTable = Table<District, (i32, i32)>;
-pub type CustomerTable = Table<Customer, (i32, i32, i32)>;
+//pub type CustomerTable = Table<Customer, (i32, i32, i32)>;
 
-//#[derive(Debug)]
-//pub struct CustomerTable {
-//    table_ : Table<Customer, (i32, i32, i32)>,
+#[derive(Debug)]
+pub struct CustomerTable {
+    table_ : Table<Customer, (i32, i32, i32)>,
+    
+    //c_last, c_w_id, c_d_id => c_w_id, c_d_id, c_id
+    //name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,  
+    pub name_index_ : SecIndex<(String, i32, i32), (i32, i32,i32, [u8;16])>,
+}
+
+
+impl CustomerTable {
+    pub fn new() -> CustomerTable {
+        CustomerTable {
+            table_ : Table::new(),
+            name_index_ : SecIndex::new(),
+        }
+    }
+
+    pub fn new_with_buckets(num : usize , bkt_size : usize, name: &str) -> CustomerTable {
+        CustomerTable {
+            table_ : Table::new_with_buckets(num, bkt_size, name),
+            name_index_ : SecIndex::new(),
+        }
+    }
+
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
+        where Arc<Row<Customer, (i32, i32, i32)>> : TableRef 
+        {
+            self.table_.push(tx, entry, tables);
+        }
+
+
+   // fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
+   // {
+   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+   //     unsafe { self.name_index_.get().as_ref().unwrap() }
+   // }
+
+
+   // fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
+   // {
+   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+   //     unsafe { self.name_index_.get().as_mut().unwrap() }
+   // }
+
+    pub fn push_raw(&self, entry: Customer) 
+    {
+        /* Indexes Updates */
+        let (w_id, d_id, c_id) = entry.primary_key();
+        let index_val = (w_id, d_id, c_id, entry.c_first);
+        let index_key = (
+            String::from(str::from_utf8(&entry.c_last).unwrap().trim_right_matches(char::from(0))),
+            entry.c_w_id,
+            entry.c_d_id,
+            );
+        self.name_index_.insert_index(index_key, index_val);
+
+        //println!("PUSHING CUSTOMER {}, {}, {}", entry.c_id, entry.c_w_id, entry.c_d_id);
+        self.table_.push_raw(entry);
+        self.name_index_.unlock();
+    }
+
+    //FIXME: deleting an entry needs to be fixed 
+    pub fn update_sec_index(&self, arc: &Arc<Row<Customer, (i32, i32, i32)>>) {
+        let c  = arc.get_data();
+
+        let idx_key = (
+            String::from(str::from_utf8(&c.c_last).unwrap().trim_right_matches(char::from(0))),
+            c.c_w_id,
+            c.c_d_id
+            );
+
+
+        let (w_id, d_id, c_id) = c.primary_key();
+        let idx_val = (w_id, d_id, c_id, c.c_first);
+
+        self.name_index_.insert_index(idx_key, idx_val);
+        self.name_index_.unlock();
+    }
+
+    pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
+    {
+        self.table_.retrieve(index)
+    }
+
+    pub fn get_bucket(&self, bkt_idx : usize ) -> &Bucket<Customer, (i32, i32, i32)>
+    {
+        self.table_.get_bucket(bkt_idx)
+    }
+
+    pub fn find_by_name_id(&self, index : &(String, i32, i32))
+        -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
+        {
+            match self.name_index_.find_many_mut(index) {
+                None => {
+                    self.name_index_.unlock();
+                    None
+                },
+                Some(mut tuples) => {
+                    assert_eq!(tuples.len() > 0 , true);
+                    tuples.sort_unstable_by(|a, b| a.3.cmp(&b.3));
+                    
+                    let i = tuples.len()/2;
+                    let (w_id, d_id, c_id, _) = tuples[i];
+                    let ret = self.table_.retrieve(&(w_id, d_id, c_id));
+                    self.name_index_.unlock();
+                    ret
+                }
+            }
+    }
+}
+
+unsafe impl Sync for CustomerTable {}
+unsafe impl Send for CustomerTable {}
+
+pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
+pub type OrderTable = Table<Order, (i32, i32, i32)>;
+//pub struct NewOrderTable {
+//    table_ : Table<NewOrder, (i32, i32, i32)>,
+//    wd_index_ : UnsafeCell<HashMap<(i32, i32), Vec<(i32, i32, i32)>>>,
 //    
-//    //c_last, c_w_id, c_d_id => c_w_id, c_d_id, c_id
-//    name_index_ : UnsafeCell<HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>>,  
-//
+//    /* Locks on the index */
 //    lock_ : AtomicBool,
 //}
 //
-//
-//impl CustomerTable {
-//    pub fn new() -> CustomerTable {
-//        CustomerTable {
+//impl NewOrderTable {
+//    pub fn new() -> NewOrderTable 
+//    {
+//        NewOrderTable {
 //            table_ : Table::new(),
-//            name_index_ : UnsafeCell::new(HashMap::new()),
+//            wd_index_ : UnsafeCell::new(HashMap::new()),
 //            lock_: AtomicBool::new(false),
 //        }
 //    }
 //
-//    pub fn new_with_buckets(num : usize , bkt_size : usize) -> CustomerTable {
-//        CustomerTable {
+//    pub fn new_with_buckets(num: usize, bkt_size : usize) -> NewOrderTable 
+//    {
+//        NewOrderTable {
 //            table_ : Table::new_with_buckets(num, bkt_size),
-//            name_index_ : UnsafeCell::new(HashMap::new()),
+//            wd_index_ : UnsafeCell::new(HashMap::new()),
 //            lock_ : AtomicBool::new(false),
 //        }
+//     }
+//
+//    pub fn push(&self, tx: &mut TransactionOCC, entry: NewOrder, tables: &Arc<Tables>)
+//    where Arc<Row<NewOrder, (i32, i32, i32)>>: TableRef 
+//    {
+//        self.table_.push(tx, entry, tables);
 //    }
 //
-//    pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
-//        where Arc<Row<Customer, (i32, i32, i32)>> : TableRef 
+//
+//    fn wd_index(&self) -> &HashMap<(i32, i32), Vec<(i32, i32,i32)>>
+//    {
+//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+//        unsafe { self.wd_index_.get().as_ref().unwrap() }
+//    }
+//
+//    fn wd_index_mut(&self) -> &mut HashMap<(i32, i32), Vec<(i32, i32, i32)>> 
+//    {
+//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+//        unsafe {self.wd_index_.get().as_mut().unwrap() }
+//    }
+//
+//    pub fn push_raw(&self, entry: NewOrder)
+//    {
+//        let p_key = entry.primary_key();
+//        let mut vecs = self.wd_index_mut()
+//            .entry((entry.no_w_id, entry.no_d_id))
+//            .or_insert_with(|| Vec::new());
+//
+//        vecs.push(p_key);
+//        
+//        self.table_.push_raw(entry);
+//        self.lock_.store(false, Ordering::SeqCst);
+//    }
+//
+//    pub fn update_wd_index(&self, arc: &Arc<Row<NewOrder, (i32, i32, i32)>>)
+//    {
+//        let no = arc.get_data();
+//
+//        let mut vecs = self.wd_index_mut()
+//            .entry((no.no_w_id, no.no_d_id))
+//            .or_insert_with(|| Vec::new());
+//
+//        vecs.push(no.primary_key());
+//        self.lock_.store(false, Ordering::SeqCst);
+//    }
+//
+//    pub fn retrieve(&self, index: &(i32, i32, i32)) 
+//        -> Option<Arc<Row<NewOrder, (i32, i32,i32)>>>
 //        {
-//            self.table_.push(tx, entry, tables);
+//            self.table_.retrieve(index);
 //        }
 //
 //
-//    fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
-//    {
-//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-//        unsafe { self.name_index_.get().as_ref().unwrap() }
-//    }
-//
-//
-//    fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
-//    {
-//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-//        unsafe { self.name_index_.get().as_mut().unwrap() }
-//    }
-//
-//    pub fn push_raw(&self, entry: Customer) 
-//    {
-//        /* Indexes Updates */
-//        let p_key = entry.primary_key();
-//        let name = entry.c_last.clone();
-//        let mut id_vec = self.name_index_mut()
-//            .entry((name, entry.c_w_id, entry.c_d_id))
-//            .or_insert_with(|| Vec::new());
-//
-//        id_vec.push(p_key);
-//
-//        //println!("PUSHING CUSTOMER {}, {}, {}", entry.c_id, entry.c_w_id, entry.c_d_id);
-//        self.table_.push_raw(entry);
-//        self.lock_.store(false, Ordering::SeqCst);
-//
-//    }
-//
-//    //FIXME: deleting an entry needs to be fixed 
-//    pub fn update_sec_index(&self, arc: &Arc<Row<Customer, (i32, i32, i32)>>) {
-//        let c  = arc.get_data();
-//
-//        let mut id_vec = self.name_index_mut()
-//            .entry((c.c_last.clone(), c.c_w_id, c.c_d_id))
-//            .or_insert_with(|| Vec::new());
-//        id_vec.push(c.primary_key());
-//        self.lock_.store(false, Ordering::SeqCst);
-//    }
-//
-//    pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
-//    {
-//        self.table_.retrieve(index)
-//    }
-//
-//    pub fn get_bucket(&self, bkt_idx : usize ) -> &Bucket<Customer, (i32, i32, i32)>
+//    pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<NewOrder, (i32, i32, i32)>
 //    {
 //        self.table_.get_bucket(bkt_idx)
 //    }
 //
-//    pub fn find_by_name_id(&self, index : &(String, i32, i32))
-//        -> Vec<Arc<Row<Customer, (i32, i32, i32)>>>
+//    pub fn retrieve_min_oid(&self, index: &(i32, i32)) 
+//        -> Option<Arc<Row<NewOrder, (i32,i32,i32)>>>
 //        {
-//        match self.name_index().get(index) {
-//            None => {
-//                Vec::new()
-//            },
-//            Some(vecs) => {
-//                let mut ret = vecs.iter()
-//                    .filter_map(|id| self.table_.retrieve(id))
-//                    .collect::<Vec<_>>();
-//                
-//                ret.sort_unstable_by(|a, b| a.get_data().c_first.cmp(&b.get_data().c_first));
-//                ret
+//            match self.wd_index().get(index) {
+//                None => {
+//                    None
+//                },
+//
+//                Some(vecs) => {
+//                    let min_no = vecs.iter()
+//                        .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
+//                        .expect("wd_index should not be empty");
+//
+//                    self.table_.retrieve(min_no)
+//                }
 //            }
 //        }
+//    
+//    pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
+//    {
+//        self.table_.delete(tx, index, tables);
+//    }
+//
+//
+//    pub fn delete_raw(index: &(i32, i32, i32))
+//    {
+//        self.delete_index(*index);
+//        self.delete_entry(*index);
+//    }
+//
+//    fn delete_entry(index : (i32, i32, i32)) 
+//    {
+//        self.table_.delete_raw(&index); 
+//    }
+//
+//    fn delete_index(index: (i32, i32, i32)) 
+//    {
+//        let (w_id, d_id, o_id) = *index;
+//        //update index
+//        let mut vecs = self.wd_index_mut()
+//            .entry((w_id, d_id))
+//            .and_modify(|v| {
+//                let idx = v.iter()
+//                    .position(|&x| x==o_id)
+//                    .expect("delete:no_id should not be empty");
+//
+//                let removed = v.swap_remove(idx);
+//                assert_eq!(removed == o_id);
+//            });
+//        
+//        self.lock_.store(false, Ordering::SeqCst);
 //
 //    }
 //}
 //
-//unsafe impl Sync for CustomerTable {}
-//unsafe impl Send for CustomerTable {}
+//unsafe impl Sync for NewOrderTable {}
+//unsafe impl Send for NewOrderTable {}
+//
+//pub struct OrderTable {
+//    table_ : Table<Order, (i32, i32, i32)>,
+//    cus_index_ : SecIndex<(i32, i32, i32), (i32, i32,i32)>,
+//}
 
-pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
-//pub type  OrderTable = Table<Order, (i32, i32, i32)>;
-
-
-pub struct OrderTable {
-    table_ : Table<Order, (i32, i32, i32)>;
+pub struct SecIndex<K, V>
+where K: Hash + Eq + Debug,
+      V: Debug
+{
+    index_ : UnsafeCell<HashMap<K, Vec::<V>>>,
+    lock_ : AtomicBool,
 }
+
+/* V is not necessary the Primary key */
+impl<K, V> SecIndex<K, V>
+where K: Hash + Eq + Debug,
+      V: Debug
+{
+    pub fn new() -> SecIndex<K, V> 
+    {
+        SecIndex {
+            index_ : UnsafeCell::new(HashMap::new()),
+            lock_ : AtomicBool::new(false),
+        }
+    }
+
+
+    pub fn index(&self) -> &HashMap<K, Vec<V>> {
+        self.lock(); /* Spin locks */
+        unsafe { self.index_.get().as_ref().unwrap() }
+    }
+
+    pub fn index_mut(&self) -> &mut HashMap<K, Vec<V>> {
+        self.lock();
+        unsafe { self.index_.get().as_mut().unwrap() }
+    }
+    
+    fn lock(&self) {
+        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+    }
+
+    pub fn unlock(&self) {
+        self.lock_.store(false, Ordering::SeqCst);
+    }
+
+    fn insert_index(&self, key: K, val : V) {
+        let ids = self.index_mut()
+            .entry(key)
+            .or_insert_with(|| Vec::new());
+
+        ids.push(val);
+        
+        /* Delay unlock until the data is pushed */
+    }
+    
+    /* FIXME: Allocating new arrays? */
+    fn find_many(&self, key: &K) -> Option<&Vec<V>> {
+        self.index().get(key)
+    }
+
+    fn find_many_mut(&self, key: &K) -> Option<&mut Vec<V>> {
+        self.index_mut().get_mut(key)
+    }
+}
+
+impl<K, V> Debug for SecIndex<K, V>
+where K: Hash + Eq + Debug,
+      V: Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.index())
+    }
+}
+
+
+
 
 pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
 pub type  ItemTable = Table<Item, i32>;
@@ -171,6 +391,10 @@ pub type TablesRef = Arc<Tables>;
 pub trait TableRef
 {
     fn into_table_ref(self, Option<usize>,Option<Arc<Tables>>) -> Box<dyn TRef>;
+}
+
+pub trait BucketDeleteRef {
+    fn into_delete_table_ref(self, usize, Arc<Tables>) -> Box<dyn TRef>;
 }
 
 
@@ -216,7 +440,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
        Default::default() 
     }
 
-    pub fn new_with_buckets(num: usize, bkt_size: usize, name: &'static str) -> Table<Entry, Index> {
+    pub fn new_with_buckets(num: usize, bkt_size: usize, name: &str) -> Table<Entry, Index> {
         let mut buckets = Vec::with_capacity(num);
         for _ in 0..num {
             buckets.push(Bucket::with_capacity(bkt_size));
@@ -245,6 +469,20 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
 
+    pub fn delete(&self, tx: &mut TransactionOCC, index: &Index, tables: &Arc<Tables>)
+        where Arc<Row<Entry, Index>> : BucketDeleteRef
+    {
+        let bucket_idx = self.get_bucket_idx(index);
+        
+        let row = self.buckets[bucket_idx].retrieve(index).expect("delete: no element").clone();
+        let table_ref = row.into_delete_table_ref(
+            bucket_idx,
+            tables.clone(),
+            );
+        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        tag.set_write(); //FIXME: better way?
+    }
+
     pub fn push_raw(&self, entry: Entry) 
     {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
@@ -260,6 +498,11 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let mut s = self.hash_builder.build_hasher();
         idx.hash(&mut s);
         s.finish() as usize
+    }
+
+    fn get_bucket_idx(&self, key: &Index) -> usize 
+    {
+        self.make_hash(key) % self.bucket_num
     }
 
     pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<Entry, Index>{
@@ -383,11 +626,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
        let rows = self.rows.read().unwrap();
        rows.capacity()
    }
-
-   // fn ptr(&self) -> *mut Arc<Row<Entry, Index>> {
-   //     let rows = self.rows.read().unwrap();
-   //     rows.ptr()
-   // }
 
 
     fn len(&self) -> usize {
@@ -649,5 +887,9 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
 
 
-
-
+#[derive(Clone, Debug)]
+pub enum Operation {
+    RWrite,
+    Delete,
+    Push,
+}

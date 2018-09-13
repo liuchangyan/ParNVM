@@ -30,6 +30,7 @@ pub struct WarehouseRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Warehouse>>,
+    ops_ : Operation,
 }
 
 
@@ -40,6 +41,7 @@ pub struct DistrictRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<District>>,
+    ops_ : Operation,
 }
 
 #[derive(Clone , Debug)]
@@ -49,6 +51,7 @@ pub struct CustomerRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Customer>>,
+    ops_ : Operation,
 }
 
 #[derive(Clone , Debug)]
@@ -58,6 +61,7 @@ pub struct NewOrderRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<NewOrder>>,
+    ops_ : Operation,
 }
 
 #[derive(Clone , Debug)]
@@ -67,6 +71,7 @@ pub struct OrderRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Order>>,
+    ops_ : Operation,
 }
 
 #[derive(Clone , Debug)]
@@ -76,6 +81,7 @@ pub struct OrderLineRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<OrderLine>>,
+    ops_ : Operation,
 }
 
 
@@ -86,6 +92,7 @@ pub struct ItemRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Item>>,
+    ops_ : Operation,
 }
 
 #[derive(Clone , Debug)]
@@ -95,6 +102,7 @@ pub struct StockRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Stock>>,
+    ops_ : Operation,
 }
 
 #[derive(Clone , Debug)]
@@ -104,6 +112,7 @@ pub struct HistoryRef  {
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<History>>,
+    ops_ : Operation,
 }
 
 impl  TRef for WarehouseRef {
@@ -894,9 +903,10 @@ impl TableRef for Arc<Row<Warehouse, i32>> {
                 WarehouseRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -914,9 +924,10 @@ impl TableRef for Arc<Row<Customer, (i32, i32, i32)>> {
                 CustomerRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -936,9 +947,10 @@ impl TableRef for Arc<Row<District, (i32, i32)>> {
                 DistrictRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -957,9 +969,10 @@ impl TableRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
                 NewOrderRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None, 
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -978,9 +991,10 @@ impl TableRef for Arc<Row<Order, (i32, i32, i32)>> {
                 OrderRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -998,9 +1012,10 @@ impl TableRef for Arc<Row<OrderLine, (i32, i32, i32, i32)>> {
                 OrderLineRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -1019,9 +1034,10 @@ impl TableRef for Arc<Row<Item, i32>> {
                 ItemRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -1039,9 +1055,10 @@ impl TableRef for Arc<Row<Stock, (i32, i32)>> {
                 StockRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None ,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
@@ -1059,11 +1076,37 @@ impl TableRef for Arc<Row<History,i32>> {
                 HistoryRef {
                     inner_ : self,
                     bucket_idx_: bucket_idx,
-                    table_ref_ : table_ref,
+                    table_ref_: table_ref,
                     //txn_info_ : txn_info,
-                    data_ : None 
+                    data_ : None,
+                    ops_ : Operation::RWrite,
                 })
         }
 }
 
+impl BucketDeleteRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
+    fn into_delete_table_ref(
+        self,
+        bucket_idx: usize,
+        table_ref : Arc<Tables>
+    )
+        -> Box<dyn TRef>
+        {
+            Box::new(
+                NewOrderRef {
+                    inner_ : self,
+                    bucket_idx_: Some(bucket_idx),
+                    table_ref_: Some(table_ref),
+                    data_ : None,
+                    ops_ : Operation::Delete,
+                })
+        }
+
+}
+
+//impl BucketPushRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
+//    fn into_push_bucket_ref
+//
+//}
+//
 
