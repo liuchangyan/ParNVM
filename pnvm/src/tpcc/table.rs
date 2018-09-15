@@ -337,11 +337,10 @@ impl OrderTable {
     }
 
     //TODO: update index?
-    
     pub fn retrieve_by_cid(&self, key: &(i32, i32, i32))
         -> Option<Arc<Row<Order, (i32, i32, i32)>>> 
         {
-            match self.cus_index_.find_many(key) {
+            match self.cus_index_.find_single(key) {
                 None => {
                     self.cus_index_.unlock();
                     None
@@ -359,27 +358,109 @@ impl OrderTable {
 
 }
 
-pub struct SecIndex<K, V>
+pub struct SecIndex<K, V, F>
 where K: Hash + Eq + Debug,
-      V: Debug
+      V: Debug,
+      F: Fn(K) -> usize
 {
-    index_ : UnsafeCell<HashMap<K, Vec::<V>>>,
-    lock_ : AtomicBool,
+   buckets_ : Vec<SecIndexBucket<K, V>>,
+   get_bucket_ : F,
 }
 
 /* V is not necessary the Primary key */
 impl<K, V> SecIndex<K, V>
 where K: Hash + Eq + Debug,
-      V: Debug
+      V: Debug,
+      F: Fn(&K) -> usize
 {
-    pub fn new() -> SecIndex<K, V> 
+    pub fn new(f: F) -> SecIndex<K, V, F> 
     {
         SecIndex {
+            buckets_ : Vec::new(),
+            get_bucket_: f,
+        }
+    }
+
+    pub fn new_with_buckets(bucket_num : usize, f: F) -> SecIndex<K, V, F> 
+    {
+        let mut buckets = Vec::with_capacity(bucket_num);
+
+        for _ in 0..bucket_num {
+            buckets.push(SecIndexBucket::new()); 
+        }
+
+        SecIndex {
+            buckets_ : buckets,
+            get_bucket_: f,
+        }
+    }
+
+    pub fn insert_index(&self, key: K, val: V) 
+    {
+        self.buckets_[(self.get_bucket_)(&key)].insert_index(key, val);
+    }
+
+    pub fn unlock_bucket(&self, key: &K) 
+    {
+        self.buckets_[(self.get_bucket_)(key)].unlock();
+    }
+
+    pub fn find_single(&self, key: &K) ->  Option<&Vec<V>> 
+    {
+        self.buckets_[(self.get_bucket_)(key)].find_many(key)
+    }
+
+    pub fn find_many(&self, keys: Range<K>,  buckets: Range<usize>) -> Option<&Vec<V>>
+    {
+        let mut ret = Vec::with_capacity(32);
+        for (key, bucket) in keys.zip(buckets) {
+            match self.buckets_[bucket].find_many(key) {
+                None => {},
+                Some(vecs) => {
+                    ret.append(vecs.clone());
+                }
+            }
+        }
+
+        if ret.len() == 0 {
+            None
+        } else {
+            Some(ret)
+        }
+    }
+}
+
+
+
+impl<K, V> Debug for SecIndex<K, V>
+where K: Hash + Eq + Debug,
+      V: Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.index())
+    }
+}
+
+
+struct SecIndexBucket<K, V>
+where K: Hash+ Eq+ Debug,
+      V: Debug
+{
+    index_ : UnsafeCell<HashMap<K, Vec<V>>>,
+    lock_ : AtomicBool,
+}
+
+impl<K, V> SecIndexBucket<K, V>
+where K: Hash+Eq+Debug,
+      V: Debug
+{
+    pub fn new() -> SecIndexBucket<K, V>
+    {
+        SecIndexBucket {
             index_ : UnsafeCell::new(HashMap::new()),
             lock_ : AtomicBool::new(false),
         }
     }
-
 
     pub fn index(&self) -> &HashMap<K, Vec<V>> {
         self.lock(); /* Spin locks */
@@ -418,16 +499,6 @@ where K: Hash + Eq + Debug,
         self.index_mut().get_mut(key)
     }
 }
-
-impl<K, V> Debug for SecIndex<K, V>
-where K: Hash + Eq + Debug,
-      V: Debug
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.index())
-    }
-}
-
 
 
 
