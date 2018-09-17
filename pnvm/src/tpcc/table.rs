@@ -302,6 +302,7 @@ unsafe impl Send for NewOrderTable {}
 #[derive(Debug)]
 pub struct OrderLineTable {
     table_ : Table<OrderLine, (i32, i32, i32, i32)>,
+    //w_id, d_id, o_id
     order_index_ : SecIndex<(i32, i32, i32), (i32, i32, i32, i32)>,
 }
 
@@ -379,6 +380,30 @@ impl OrderLineTable {
         }
     }
 
+    pub fn find_range(&self, w_id: i32, d_id: i32, o_id_low: i32, o_id_high: i32)
+        -> Vec<Arc<Row<OrderLine, (i32, i32, i32, i32)>>>
+        {
+            let mut ids = Vec::new();
+            for o_id in o_id_low..=o_id_high { 
+                let key = (w_id, d_id, o_id);
+                match self.order_index_.find_one_bucket(&key) {
+                    None=> {}, 
+                    Some(v) => {
+                        ids.append(&mut v.clone());
+
+                    }
+                }
+                self.order_index_.unlock_bucket(&key);
+            }
+
+            let arcs = ids.iter()
+                .filter_map(|id| self.table_.retrieve(id))
+                .collect::<Vec<_>>();
+
+            assert_eq!(arcs.len(), ids.len());
+            arcs
+        }
+
 }
 
 
@@ -441,12 +466,12 @@ impl OrderTable {
         self.cus_index_.unlock_bucket(&idx_key);
     }
 
-    pub fn update_cus_index(&self, arc: &Arc<Row<Customer, (i32,i32, i32)>>) 
+    pub fn update_cus_index(&self, arc: &Arc<Row<Order, (i32,i32, i32)>>) 
     {
-        let cus = arc.get_data();
-        let idx_key = (cus.c_w_id, cus.c_d_id, cus.c_id);
+        let o = arc.get_data();
+        let idx_key = (o.o_w_id, o.o_d_id, o.o_c_id);
 
-        self.cus_index_.insert_index(idx_key.clone(), cus.primary_key());
+        self.cus_index_.insert_index(idx_key.clone(), o.primary_key());
         self.cus_index_.unlock_bucket(&idx_key);
     }
 
@@ -471,6 +496,7 @@ impl OrderTable {
 
             }
         }
+
 
 }
 

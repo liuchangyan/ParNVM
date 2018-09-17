@@ -673,143 +673,157 @@ fn payment(tx: &mut TransactionOCC,
 }
 
 
-//pub fn orderstatus_random(tx: &mut TransactionOCC, 
-//                      tables: &Arc<Tables>,
-//                      w_home : i32,
-//                      rng : &mut SmallRng,
-//                      ) 
-//{
-//    let d_id = urand(1, 10, rng);
-//    let w_id = w_home;
-//    
-//    let y = urand(1, 100, rng);
-//    
-//    if false {
-//        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
-//        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, Some(c_last), None, h_amount, h_date, rng);
-//    } else {
-//        let c_id = nurand(1023, 1, 3000, rng);
-//        orderstatus(tx, tables, w_id, d_id, c_w_id , c_d_id, None, Some(c_id), h_amount, h_date, rng);
-//    }
-//}
-//
-
-//fn orderstatus(tx: &mut TransactionOCC,
-//               tables: &Arc<Tables>,
-//               w_id : i32,
-//               d_id : i32,
-//               c_w_id : i32,
-//               c_d_id : i32,
-//               c_last : Option<String>,
-//               c_id : Option<i32>,
-//               )
-//{
-//
-//    let c_row = match c_id {
-//        Some(c_id) => {
-//            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
-//        },
-//        
-//        None => {
-//           panic!("not implemented"); 
-//        }
-//    };
-//    //TODO:
-//    let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
-//
-//    let o_id = tx.read::<Order>(o_row).o_id;
-//    //TODO: 
-//    let ol_arcs = table.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
-//
-//    for ol_arc in ol_arcs {
-//        let ol_row = ol_arc.into_table_ref(None, None);
-//        let ol = tx.read::<OrderLine>(ol_row);
-//    }
-//}
+pub fn orderstatus_random(tx: &mut TransactionOCC, 
+                      tables: &Arc<Tables>,
+                      w_home : i32,
+                      rng : &mut SmallRng,
+                      ) 
+{
+    let d_id = urand(1, 10, rng);
+    let w_id = w_home;
+    
+    let y = urand(1, 100, rng);
+    
+    if false {
+        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
+        orderstatus(tx, tables, w_id, d_id, w_id , d_id, Some(c_last), None);
+    } else {
+        let c_id = nurand(1023, 1, 3000, rng);
+        orderstatus(tx, tables, w_id, d_id, w_id , d_id, None, Some(c_id));
+    }
+}
 
 
+fn orderstatus(tx: &mut TransactionOCC,
+               tables: &Arc<Tables>,
+               w_id : i32,
+               d_id : i32,
+               c_w_id : i32,
+               c_d_id : i32,
+               c_last : Option<String>,
+               c_id : Option<i32>,
+               )
+{
 
-//fn delivery(tx: &mut TransactionOCC
-//            tables: &Arc<Tables>,
-//            w_id : i32,
-//            o_carrier_id: i32,
-//            )
-//{
-//    
-//    for d_id in 1..NUM_INIT_DISTRICT {
-//        //TODO:
-//        let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
-//        if no_arc.is_some() {
-//            let no_row = no_arc.unwrap().into_table_ref(None, None);
-//            let no_o_id = tx.read::<NewOrder>(no_row);
-//            //TODO:
-//            tables.neworder.delete(&(w_id, d_id, no_o_id));
-//
-//            let o_row = tables.order.retrieve(&(w_id, d_id, no_o_id)).expect("order empty").into_table_ref(None, None);
-//            let o = tx.read::<Order>(o_row.box_clone()).clone();
-//            let o_id = o.o_id;
-//            let o_c_id = o.o_c_id;
-//
-//            o.o_carrier_id = o_carrier_id;
-//            tx.write(o_row, o);
-//
-//            
-//            let ol_arcs = table.orderline.find_by_oid(&(w_id, d_id, o_id));
-//            let now = gen_now();
-//            let ol_amount_sum = Numeric::new(0, 6, 2);
-//            for ol_arc in ol_arcs {
-//                let ol_row = ol_arc.into_table_ref(None, None);
-//                let ol = tx.read::<OrderLine>(ol_row.box_clone()).clone();
-//                ol_amount_sum += ol.ol_amount;
-//
-//                ol.ol_delivery_d = now;
-//                tx.write(ol_row, ol);
-//            }
-//
-//            
-//            let c_row = table.customer.retrieve(&(w_id, d_id, o_c_id)).expect("deliver::customer not empty").into_table_ref(None, None);
-//            let c = tx.read(c_row.box_clone()).clone();
-//            c.c_balance += ol_amount_sum;
-//            c.c_delivery_cnt += Numeric::new(1, 4, 0);
-//
-//            tx.write(c_row, c);
-//        }
-//    }
-//
-//}
-//
-//fn stocklevel(tx: &mut TransactionOCC,
-//              tables : &Arc<Tables>,
-//              w_id : i32,
-//              d_id : i32,
-//              thd: Numeric,
-//              )
-//{
-//    let d_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
-//    let d = tx.read::<District>(d_row);
-//    let d_next_o_id = d.d_next_o_id;
-//    
-//    //TODO
-//    let ol_arcs = tables.orderline.find_range(&(w_id, d_id), d_next_o_id - 20, d_next_o_id);
-//    
-//    let mut ol_i_ids = vec![];
-//    for ol_arc in ol_arcs {
-//        let ol_row = ol_arc.into_table_ref(None, None);
-//        let ol = tx.read::<OrderLine>(ol_row);
-//        ol_i_ids.push(ol.ol_i_id);
-//
-//    }
-//    
-//    let low_stock = 0;
-//    for ol_i_id in ol_i_ids.iter() {
-//        let stock_row = tables.stock.retrieve(&(w_id, ol_i_id)).expect("no stock").into_table_ref(None,None);
-//        
-//        let stock = tx.read::<Stock>(stock_row);
-//        if stock.s_quantity < thd {
-//            low_stock+=1;
-//        }
-//    }
-//}
+    let tid = tx.commit_id();
+    let c_row = match c_id {
+        Some(c_id) => {
+            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
+        },
+        
+        None => {
+            assert!(c_last.is_some());
+            info!("[{:?}][ORDER-STATUS] Getting by Name {:?}", 
+                   tid, c_last);
+            let c_last = c_last.unwrap();
+            match tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id)) {
+               None=> {
+                   warn!("[{:?}][ORDER-STATUS] No found Name {:?}", tid, c_last);
+                   return;
+               }
+               Some(arc) => arc.into_table_ref(None, None)
+            }
+
+        }
+    };
+
+    let c_id = tx.read::<Customer>(c_row).c_id;
+    //TODO:
+    let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
+
+    let o_id = tx.read::<Order>(o_row).o_id;
+    //TODO: 
+    let ol_arcs = tables.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
+
+    for ol_arc in ol_arcs {
+        let ol_row = ol_arc.into_table_ref(None, None);
+        let ol = tx.read::<OrderLine>(ol_row);
+    }
+}
+
+
+
+fn delivery(tx: &mut TransactionOCC,
+            tables: &Arc<Tables>,
+            w_id : i32,
+            o_carrier_id: i32,
+            )
+{
+    
+    for d_id in 1..NUM_INIT_DISTRICT {
+        //TODO:
+        let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
+        if no_arc.is_some() {
+            let no_row = no_arc.unwrap().into_table_ref(None, None);
+            let no_o_id = tx.read::<NewOrder>(no_row).no_o_id;
+            //TODO:
+            tables.neworder.delete(tx, &(w_id, d_id, no_o_id), tables);
+
+            let o_row = tables.order.retrieve(&(w_id, d_id, no_o_id)).expect("order empty").into_table_ref(None, None);
+            let mut o = tx.read::<Order>(o_row.box_clone()).clone();
+            let o_id = o.o_id;
+            let o_c_id = o.o_c_id;
+
+            o.o_carrier_id = o_carrier_id;
+            tx.write(o_row, o);
+
+            
+            let ol_arcs = tables.orderline.find_by_oid(&(w_id, d_id, o_id));
+            let now = gen_now();
+            let mut ol_amount_sum = Numeric::new(0, 6, 2);
+            for ol_arc in ol_arcs {
+                let ol_row = ol_arc.into_table_ref(None, None);
+                let mut ol = tx.read::<OrderLine>(ol_row.box_clone()).clone();
+                ol_amount_sum += ol.ol_amount;
+
+                ol.ol_delivery_d = now;
+                tx.write(ol_row, ol);
+            }
+
+            
+            let c_row = tables.customer.retrieve(&(w_id, d_id, o_c_id)).expect("deliver::customer not empty").into_table_ref(None, None);
+            let mut c = tx.read::<Customer>(c_row.box_clone()).clone();
+            c.c_balance += ol_amount_sum;
+            c.c_delivery_cnt += Numeric::new(1, 4, 0);
+
+            tx.write(c_row, c);
+        }
+    }
+
+}
+
+fn stocklevel(tx: &mut TransactionOCC,
+              tables : &Arc<Tables>,
+              w_id : i32,
+              d_id : i32,
+              thd: Numeric,
+              )
+{
+    let d_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    let mut d = tx.read::<District>(d_row).clone();
+    let d_next_o_id = d.d_next_o_id;
+    
+    //TODO
+    let ol_arcs = tables.orderline.find_range(w_id, d_id, d_next_o_id - 20, d_next_o_id);
+    
+    let mut ol_i_ids = vec![];
+    for ol_arc in ol_arcs {
+        let ol_row = ol_arc.into_table_ref(None, None);
+        let ol = tx.read::<OrderLine>(ol_row);
+        ol_i_ids.push(ol.ol_i_id);
+
+    }
+    
+    let mut low_stock = 0;
+    for ol_i_id in ol_i_ids.into_iter() {
+        let stock_row = tables.stock.retrieve(&(w_id, ol_i_id)).expect("no stock").into_table_ref(None,None);
+        
+        let stock = tx.read::<Stock>(stock_row);
+        if stock.s_quantity < thd {
+            low_stock+=1;
+        }
+    }
+}
                
 
 
