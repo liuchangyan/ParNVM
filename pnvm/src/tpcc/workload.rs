@@ -46,7 +46,7 @@ pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
         district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize, "district"),
         customer: CustomerTable::new_with_buckets(128, 64, "customer"),
         neworder: NewOrderTable::new_with_buckets(32, 32768, "neworder"),
-        order: Table::new_with_buckets(32, 32768, "order"),
+        order: OrderTable::new_with_buckets(32, 32768, "order"),
         orderline: Table::new_with_buckets(32, 32768, "orderline"),
         item: Table::new_with_buckets(512, 256, "item"),
         history: Table::new_with_buckets(128, 128, "history"),

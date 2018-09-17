@@ -155,7 +155,7 @@ unsafe impl Sync for CustomerTable {}
 unsafe impl Send for CustomerTable {}
 
 //pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
-pub type OrderTable = Table<Order, (i32, i32, i32)>;
+//pub type OrderTable = Table<Order, (i32, i32, i32)>;
 
 #[derive(Debug)]
 pub struct NewOrderTable {
@@ -163,6 +163,7 @@ pub struct NewOrderTable {
     wd_index_ : SecIndex<(i32, i32), (i32, i32, i32)>,
     
 }
+
 
 impl NewOrderTable {
 
@@ -291,76 +292,97 @@ impl NewOrderTable {
 unsafe impl Sync for NewOrderTable {}
 unsafe impl Send for NewOrderTable {}
 
-//pub struct OrderTable {
-//    table_ : Table<Order, (i32, i32, i32)>,
-//    cus_index_ : SecIndex<(i32, i32, i32), (i32, i32,i32)>,
-//}
-//
-//
-//impl OrderTable {
-//    pub fn new() -> OrderTable {
-//        OrderTable {
-//            table_ : Table::new(),
-//            cus_index_ : SecIndex::new(),
-//        }
-//    }
-//
-//    pub fn new_with_buckets(num : usize, bkt_size : usize, name: &str) -> OrderTable {
-//        OrderTable {
-//            table_ : Table::new_with_buckets(num, bkt_size, name),
-//            name_index_ : SecIndex::new(),
-//        }
-//    }
-//
-//    pub fn push(&self, tx: &mut TransactionOCC, entry: Order, tables: &Arc<Tables>) 
-//        where Arc<Row<Order, (i32, i32, i32)>> : TableRef
-//    {
-//        self.table_.push(tx, entry, tables) 
-//    }
-//
-//    pub fn retrieve(&self, index: &(i32, i32, i32)) -> Option<Arc<Row<Order, (i32, i32, i32)>>>
-//    {
-//        self.table_.retrieve(index)
-//    }
-//
-//    pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<Order, (i32, i32, i32)>
-//    {
-//        self.table_.get_bucket(bkt_idx)
-//    }
-//
-//    pub fn push_raw(&self, entry: Order) 
-//    {
-//        /* Index Updates */
-//        let idx_val = entry.primary_key();
-//        let idx_key = (entry.o_w_id, entry.o_d_id, entry.o_c_id);
-//
-//        self.cus_index_.insert_index(idx_key, idx_val);
-//
-//        self.table_.push_raw(entry);
-//        self.cus_index_.unlock();
-//    }
-//
-//    //TODO: update index?
-//    pub fn retrieve_by_cid(&self, key: &(i32, i32, i32))
-//        -> Option<Arc<Row<Order, (i32, i32, i32)>>> 
-//        {
-//            match self.cus_index_.find_single(key) {
-//                None => {
-//                    self.cus_index_.unlock();
-//                    None
-//                },
-//                Some(ids)=> {
-//                    let max_pos = ids.iter()
-//                        .max_by(|a, b| a.2.cmp(&b.2))
-//                        .expect("retrieve_by_cid: empty ids");
-//
-//                    self.table_.retrieve(max_pos)
-//                }
-//
-//            }
-//        }
-//
-//}
+#[derive(Debug)]
+pub struct OrderTable {
+    table_ : Table<Order, (i32, i32, i32)>,
+    cus_index_ : SecIndex<(i32, i32, i32), (i32, i32,i32)>,
+}
+
+
+unsafe impl Sync for OrderTable {}
+unsafe impl Send for OrderTable {}
+
+impl OrderTable {
+   // pub fn new() -> OrderTable {
+   //     OrderTable {
+   //         table_ : Table::new(),
+   //         cus_index_ : SecIndex::new(),
+   //     }
+   // }
+
+    pub fn new_with_buckets(num : usize, bkt_size : usize, name: &str) -> OrderTable {
+        let total_wd = (NUM_WAREHOUSES * NUM_INIT_DISTRICT) as usize;
+        OrderTable {
+            table_ : Table::new_with_buckets(num, bkt_size, name),
+            cus_index_ : SecIndex::new_with_buckets(
+                total_wd,
+                Box::new(move |key| {
+                    let (w_id, d_id, _o_id) = key;
+                    (w_id * NUM_WAREHOUSES + d_id) as usize % total_wd
+                })),
+        }
+    }
+
+    pub fn push(&self, tx: &mut TransactionOCC, entry: Order, tables: &Arc<Tables>) 
+        where Arc<Row<Order, (i32, i32, i32)>> : TableRef
+    {
+        self.table_.push(tx, entry, tables) 
+    }
+
+    pub fn retrieve(&self, index: &(i32, i32, i32)) -> Option<Arc<Row<Order, (i32, i32, i32)>>>
+    {
+        self.table_.retrieve(index)
+    }
+
+    pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<Order, (i32, i32, i32)>
+    {
+        self.table_.get_bucket(bkt_idx)
+    }
+
+    pub fn push_raw(&self, entry: Order) 
+    {
+        /* Index Updates */
+        let idx_val = entry.primary_key();
+        let idx_key = (entry.o_w_id, entry.o_d_id, entry.o_c_id);
+
+        self.cus_index_.insert_index(idx_key.clone(), idx_val);
+
+        self.table_.push_raw(entry);
+        self.cus_index_.unlock_bucket(&idx_key);
+    }
+
+    pub fn update_cus_index(&self, arc: &Arc<Row<Customer, (i32,i32, i32)>>) 
+    {
+        let cus = arc.get_data();
+        let idx_key = (cus.c_w_id, cus.c_d_id, cus.c_id);
+
+        self.cus_index_.insert_index(idx_key.clone(), cus.primary_key());
+        self.cus_index_.unlock_bucket(&idx_key);
+    }
+
+    //TODO: update index?
+    pub fn retrieve_by_cid(&self, key: &(i32, i32, i32))
+        -> Option<Arc<Row<Order, (i32, i32, i32)>>> 
+        {
+            match self.cus_index_.find_one_bucket(key) {
+                None => {
+                    self.cus_index_.unlock_bucket(key);
+                    None
+                },
+                Some(ids)=> {
+                    let max_pos = ids.iter()
+                        .max_by(|a, b| a.2.cmp(&b.2))
+                        .expect("retrieve_by_cid: empty ids");
+
+                    let ret = self.table_.retrieve(max_pos);
+                    self.cus_index_.unlock_bucket(key);
+                    ret
+                }
+
+            }
+        }
+
+}
 
 pub struct SecIndex<K, V>
 where K: Hash + Eq + Debug,
