@@ -410,7 +410,16 @@ impl  TRef for NewOrderRef  {
         match self.table_ref_ {
             None => self.inner_.lock(tid),
             Some(ref table) => {
-                table.neworder.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+                match self.ops_ {
+                    Operation::Delete => {
+                        //Lock both the deleted entry and the bucket
+                        table.neworder.get_bucket(self.bucket_idx_.unwrap()).lock(tid) && self.inner_.lock(tid)
+                    },
+                    Operation::Push => {
+                        table.neworder.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
+                    },
+                    _ => panic!("NewOrderRef::lock : RWrite has table ref")
+                }
             }
         }
     }
@@ -419,7 +428,17 @@ impl  TRef for NewOrderRef  {
         match self.table_ref_ {
             None => self.inner_.unlock(),
             Some(ref table) => {
-                table.neworder.get_bucket(self.bucket_idx_.unwrap()).unlock();
+                match self.ops_ {
+                    Operation::Delete => {
+                        //Lock both the deleted entry and the bucket
+                        self.inner_.unlock();
+                        table.neworder.get_bucket(self.bucket_idx_.unwrap()).unlock();
+                    },
+                    Operation::Push => {
+                        table.neworder.get_bucket(self.bucket_idx_.unwrap()).unlock();
+                    },
+                    _ => panic!("NewOrderRef::unlock : RWrite has table ref")
+                }
             }
         }
     }
