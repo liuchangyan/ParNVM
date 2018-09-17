@@ -292,6 +292,90 @@ impl NewOrderTable {
 unsafe impl Sync for NewOrderTable {}
 unsafe impl Send for NewOrderTable {}
 
+
+#[derive(Debug)]
+pub struct OrderLineTable {
+    table_ : Table<OrderLine, (i32, i32, i32, i32)>,
+    order_index_ : SecIndex<(i32, i32, i32), (i32, i32, i32, i32)>,
+}
+
+unsafe impl Sync for OrderLineTable {}
+unsafe impl Send for OrderLineTable {}
+
+impl OrderLineTable {
+    
+    pub fn new_with_buckets(num : usize, bkt_size: usize, name: &str) -> OrderLineTable 
+    {
+        let total_wd = NUM_WAREHOUSES * NUM_INIT_DISTRICT;
+
+        OrderLineTable {
+            table_ : Table::new_with_buckets(num, bkt_size, name),
+            order_index_ : SecIndex::new_with_buckets(
+                total_wd as usize,
+                Box::new(move |key| {
+                    let (w_id, d_id, _o_id) = key;
+                    ((w_id * NUM_WAREHOUSES + d_id) % total_wd) as usize
+                })),
+        }
+    }
+
+    pub fn push(&self, tx: &mut TransactionOCC, entry: OrderLine, tables: &Arc<Tables>)
+        where Arc<Row<OrderLine, (i32, i32, i32, i32)>> : TableRef
+        {
+            self.table_.push(tx, entry, tables);
+        }
+
+
+    pub fn push_raw(&self, ol : OrderLine)
+    {
+        let idx_key = (ol.ol_w_id, ol.ol_d_id, ol.ol_o_id);
+        self.order_index_.insert_index(idx_key.clone(), ol.primary_key());
+
+        self.table_.push_raw(ol);
+        self.order_index_.unlock_bucket(&idx_key);
+    }
+
+
+    pub fn update_order_index(&self, arc: &Arc<Row<OrderLine, (i32, i32, i32, i32)>>) 
+    {
+        let ol = arc.get_data();
+        let idx_key = (ol.ol_w_id, ol.ol_d_id, ol.ol_o_id);
+        self.order_index_.insert_index(idx_key.clone(), ol.primary_key());
+        self.order_index_.unlock_bucket(&idx_key);
+    }
+
+    pub fn retrieve(&self, index: &(i32, i32, i32, i32)) -> Option<Arc<Row<OrderLine, (i32, i32, i32, i32)>>>
+    {
+       self.table_.retrieve(index)
+    }
+
+    pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<OrderLine, (i32, i32, i32, i32)>
+    {
+        self.table_.get_bucket(bkt_idx)
+    }
+    
+    //FIXME: return slice instead
+    pub fn find_by_oid(&self, key: &(i32,i32,i32)) ->Vec<Arc<Row<OrderLine, (i32,i32, i32, i32)>>> 
+    {
+        match self.order_index_.find_one_bucket(key) {
+            None => {
+                self.order_index_.unlock_bucket(key);
+                Vec::new()
+            },
+            Some(ids) => {
+                let ret = ids.iter()
+                    .filter_map(|id| self.retrieve(id))
+                    .collect::<Vec<_>>();
+
+                self.order_index_.unlock_bucket(key);
+                ret
+            }
+        }
+    }
+
+}
+
+
 #[derive(Debug)]
 pub struct OrderTable {
     table_ : Table<Order, (i32, i32, i32)>,
@@ -531,7 +615,7 @@ where K: Hash+Eq+Debug,
 
 
 
-pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
+//pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
 pub type  ItemTable = Table<Item, i32>;
 pub type  StockTable = Table<Stock, (i32, i32)>;
 
