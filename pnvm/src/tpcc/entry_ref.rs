@@ -295,9 +295,9 @@ impl  TRef for CustomerRef  {
             Some(ref table) => {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
-                //table.customer.update_sec_index(&row);
                 table.customer.get_bucket(bucket_idx).set_version(row.get_version());
-                table.customer.get_bucket(bucket_idx).push(row);
+                table.customer.get_bucket(bucket_idx).push(row.clone());
+                table.customer.update_sec_index(&row);
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -381,10 +381,23 @@ impl  TRef for NewOrderRef  {
     fn install(&self, id: Tid) {
         match self.table_ref_ {
             Some(ref table) => {
-                let row = self.inner_.clone();
-                let bucket_idx = self.bucket_idx_.unwrap();
-                table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
-                table.neworder.get_bucket(bucket_idx).push(row);
+                match self.ops_ {
+                    Operation::Push => {
+                        let row = self.inner_.clone();
+                        let bucket_idx = self.bucket_idx_.unwrap();
+                        table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
+                        table.neworder.get_bucket(bucket_idx).push(row.clone());
+                        table.neworder.update_wd_index(&row);
+                    }, 
+                    Operation::Delete => {
+                        let row = self.inner_.clone();
+                        let bucket_idx = self.bucket_idx_.unwrap();
+                        table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
+                        table.neworder.delete_index(&row);
+                        table.neworder.get_bucket(bucket_idx).delete(row);
+                    }
+                    _ => panic!("NewOrderRef::install: RWrite has table ref")
+                }
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);

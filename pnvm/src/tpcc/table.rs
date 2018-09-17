@@ -160,6 +160,7 @@ unsafe impl Send for CustomerTable {}
 #[derive(Debug)]
 pub struct NewOrderTable {
     table_ : Table<NewOrder, (i32, i32, i32)>,
+    //w_id, d_id
     wd_index_ : SecIndex<(i32, i32), (i32, i32, i32)>,
     
 }
@@ -231,6 +232,7 @@ impl NewOrderTable {
         self.table_.get_bucket(bkt_idx)
     }
 
+
     pub fn retrieve_min_oid(&self, index: &(i32, i32)) 
         -> Option<Arc<Row<NewOrder, (i32,i32,i32)>>>
         {
@@ -252,10 +254,10 @@ impl NewOrderTable {
             }
         }
     
-   // pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
-   // {
-   //     self.table_.delete(tx, index, tables);
-   // }
+    pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
+    {
+        self.table_.delete(tx, index, tables);
+    }
 
 
    // pub fn delete_raw(index: &(i32, i32, i32))
@@ -269,24 +271,28 @@ impl NewOrderTable {
    //     self.table_.delete_raw(&index); 
    // }
 
-   // fn delete_index(index: (i32, i32, i32)) 
-   // {
-   //     let (w_id, d_id, o_id) = *index;
-   //     //update index
-   //     let mut vecs = self.wd_index_mut()
-   //         .entry((w_id, d_id))
-   //         .and_modify(|v| {
-   //             let idx = v.iter()
-   //                 .position(|&x| x==o_id)
-   //                 .expect("delete:no_id should not be empty");
+    //Holding on bucket lock
+    pub fn delete_index(&self, arc : &Arc<Row<NewOrder, (i32, i32,i32)>>)
+    {
+        let no = arc.get_data();
+        let index  = no.primary_key();
+        let (w_id, d_id, o_id) = index;
+        //update index
+        match self.wd_index_.find_one_bucket_mut(&(w_id, d_id)) {
+            None => {
+                panic!("NewOrderTable::delete_index : missing index");
+            },
+            Some(mut v) => {
+                let idx = v.iter()
+                    .position(|&x| x.2==o_id) //w_id, d_id, o_id
+                    .expect("delete:no_id should not be empty");
 
-   //             let removed = v.swap_remove(idx);
-   //             assert_eq!(removed == o_id);
-   //         });
-   //     
-   //     self.lock_.store(false, Ordering::SeqCst);
-
-   // }
+                let removed = v.swap_remove(idx);
+                assert_eq!(removed.2 == o_id, true);
+                self.wd_index_.unlock_bucket(&(w_id, d_id));
+            }
+        }
+    }
 }
 
 unsafe impl Sync for NewOrderTable {}
@@ -844,6 +850,14 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
         let mut idx_map = self.index.write().unwrap();
         idx_map.insert(idx_elem, self.len() -1);
+    }
+
+    pub fn delete(&self, row_arc: Arc<Row<Entry, Index>>) {
+        let idx_elem = row_arc.get_data().primary_key();
+
+        /* FIXME: Leave the data in the rows */
+        let mut idx_map = self.index.write().unwrap();
+        idx_map.remove(&idx_elem);
     }
 
     fn push_raw(&self, entry: Entry) {
