@@ -154,149 +154,143 @@ impl CustomerTable {
 unsafe impl Sync for CustomerTable {}
 unsafe impl Send for CustomerTable {}
 
-pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
+//pub type NewOrderTable = Table<NewOrder, (i32, i32, i32)>;
 pub type OrderTable = Table<Order, (i32, i32, i32)>;
-//pub struct NewOrderTable {
-//    table_ : Table<NewOrder, (i32, i32, i32)>,
-//    wd_index_ : UnsafeCell<HashMap<(i32, i32), Vec<(i32, i32, i32)>>>,
-//    
-//    /* Locks on the index */
-//    lock_ : AtomicBool,
-//}
-//
-//impl NewOrderTable {
-//    pub fn new() -> NewOrderTable 
-//    {
-//        NewOrderTable {
-//            table_ : Table::new(),
-//            wd_index_ : UnsafeCell::new(HashMap::new()),
-//            lock_: AtomicBool::new(false),
-//        }
-//    }
-//
-//    pub fn new_with_buckets(num: usize, bkt_size : usize) -> NewOrderTable 
-//    {
-//        NewOrderTable {
-//            table_ : Table::new_with_buckets(num, bkt_size),
-//            wd_index_ : UnsafeCell::new(HashMap::new()),
-//            lock_ : AtomicBool::new(false),
-//        }
-//     }
-//
-//    pub fn push(&self, tx: &mut TransactionOCC, entry: NewOrder, tables: &Arc<Tables>)
-//    where Arc<Row<NewOrder, (i32, i32, i32)>>: TableRef 
-//    {
-//        self.table_.push(tx, entry, tables);
-//    }
-//
-//
-//    fn wd_index(&self) -> &HashMap<(i32, i32), Vec<(i32, i32,i32)>>
-//    {
-//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-//        unsafe { self.wd_index_.get().as_ref().unwrap() }
-//    }
-//
-//    fn wd_index_mut(&self) -> &mut HashMap<(i32, i32), Vec<(i32, i32, i32)>> 
-//    {
-//        while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-//        unsafe {self.wd_index_.get().as_mut().unwrap() }
-//    }
-//
-//    pub fn push_raw(&self, entry: NewOrder)
-//    {
-//        let p_key = entry.primary_key();
-//        let mut vecs = self.wd_index_mut()
-//            .entry((entry.no_w_id, entry.no_d_id))
-//            .or_insert_with(|| Vec::new());
-//
-//        vecs.push(p_key);
-//        
-//        self.table_.push_raw(entry);
-//        self.lock_.store(false, Ordering::SeqCst);
-//    }
-//
-//    pub fn update_wd_index(&self, arc: &Arc<Row<NewOrder, (i32, i32, i32)>>)
-//    {
-//        let no = arc.get_data();
-//
-//        let mut vecs = self.wd_index_mut()
-//            .entry((no.no_w_id, no.no_d_id))
-//            .or_insert_with(|| Vec::new());
-//
-//        vecs.push(no.primary_key());
-//        self.lock_.store(false, Ordering::SeqCst);
-//    }
-//
-//    pub fn retrieve(&self, index: &(i32, i32, i32)) 
-//        -> Option<Arc<Row<NewOrder, (i32, i32,i32)>>>
-//        {
-//            self.table_.retrieve(index);
-//        }
-//
-//
-//    pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<NewOrder, (i32, i32, i32)>
-//    {
-//        self.table_.get_bucket(bkt_idx)
-//    }
-//
-//    pub fn retrieve_min_oid(&self, index: &(i32, i32)) 
-//        -> Option<Arc<Row<NewOrder, (i32,i32,i32)>>>
-//        {
-//            match self.wd_index().get(index) {
-//                None => {
-//                    None
-//                },
-//
-//                Some(vecs) => {
-//                    let min_no = vecs.iter()
-//                        .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
-//                        .expect("wd_index should not be empty");
-//
-//                    self.table_.retrieve(min_no)
-//                }
-//            }
-//        }
-//    
-//    pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
-//    {
-//        self.table_.delete(tx, index, tables);
-//    }
-//
-//
-//    pub fn delete_raw(index: &(i32, i32, i32))
-//    {
-//        self.delete_index(*index);
-//        self.delete_entry(*index);
-//    }
-//
-//    fn delete_entry(index : (i32, i32, i32)) 
-//    {
-//        self.table_.delete_raw(&index); 
-//    }
-//
-//    fn delete_index(index: (i32, i32, i32)) 
-//    {
-//        let (w_id, d_id, o_id) = *index;
-//        //update index
-//        let mut vecs = self.wd_index_mut()
-//            .entry((w_id, d_id))
-//            .and_modify(|v| {
-//                let idx = v.iter()
-//                    .position(|&x| x==o_id)
-//                    .expect("delete:no_id should not be empty");
-//
-//                let removed = v.swap_remove(idx);
-//                assert_eq!(removed == o_id);
-//            });
-//        
-//        self.lock_.store(false, Ordering::SeqCst);
-//
-//    }
-//}
-//
-//unsafe impl Sync for NewOrderTable {}
-//unsafe impl Send for NewOrderTable {}
-//
+
+#[derive(Debug)]
+pub struct NewOrderTable {
+    table_ : Table<NewOrder, (i32, i32, i32)>,
+    wd_index_ : SecIndex<(i32, i32), (i32, i32, i32)>,
+    
+}
+
+impl NewOrderTable {
+
+    pub fn new_with_buckets(num: usize, bkt_size : usize, name: &str) -> NewOrderTable 
+    {
+        let total_wd = NUM_WAREHOUSES * NUM_INIT_DISTRICT;
+        NewOrderTable {
+            table_ : Table::new_with_buckets(num, bkt_size, name),
+            wd_index_ : SecIndex::new_with_buckets(
+                total_wd as usize, 
+                Box::new(move |key| { 
+                   ((key.0 * NUM_WAREHOUSES + key.1) % total_wd) as usize
+                }))
+        }
+     }
+
+    pub fn push(&self, tx: &mut TransactionOCC, entry: NewOrder, tables: &Arc<Tables>)
+    where Arc<Row<NewOrder, (i32, i32, i32)>>: TableRef 
+    {
+        self.table_.push(tx, entry, tables);
+    }
+
+
+   // fn wd_index(&self) -> &HashMap<(i32, i32), Vec<(i32, i32,i32)>>
+   // {
+   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+   //     unsafe { self.wd_index_.get().as_ref().unwrap() }
+   // }
+
+   // fn wd_index_mut(&self) -> &mut HashMap<(i32, i32), Vec<(i32, i32, i32)>> 
+   // {
+   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
+   //     unsafe {self.wd_index_.get().as_mut().unwrap() }
+   // }
+
+    pub fn push_raw(&self, entry: NewOrder)
+    {
+        let p_key = entry.primary_key();
+        let idx_key = (entry.no_w_id, entry.no_d_id);
+
+        self.wd_index_.insert_index(idx_key.clone(),p_key);
+        
+        self.table_.push_raw(entry);
+        self.wd_index_.unlock_bucket(&idx_key);
+    }
+
+    pub fn update_wd_index(&self, arc: &Arc<Row<NewOrder, (i32, i32, i32)>>)
+    {
+        let no = arc.get_data();
+        let idx_key = (no.no_w_id, no.no_d_id);
+        
+        self.wd_index_.insert_index(idx_key.clone(), no.primary_key());
+        self.wd_index_.unlock_bucket(&idx_key);
+    }
+
+    pub fn retrieve(&self, index: &(i32, i32, i32)) 
+        -> Option<Arc<Row<NewOrder, (i32, i32,i32)>>>
+        {
+            self.table_.retrieve(index)
+        }
+
+
+    pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<NewOrder, (i32, i32, i32)>
+    {
+        self.table_.get_bucket(bkt_idx)
+    }
+
+    pub fn retrieve_min_oid(&self, index: &(i32, i32)) 
+        -> Option<Arc<Row<NewOrder, (i32,i32,i32)>>>
+        {
+            match self.wd_index_.find_one_bucket(index) {
+                None => {
+                    self.wd_index_.unlock_bucket(index);
+                    None
+                },
+
+                Some(vecs) => {
+                    let min_no = vecs.iter()
+                        .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
+                        .expect("wd_index should not be empty");
+                        
+                    let ret =self.table_.retrieve(min_no);
+                    self.wd_index_.unlock_bucket(index);
+                    ret
+                }
+            }
+        }
+    
+   // pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
+   // {
+   //     self.table_.delete(tx, index, tables);
+   // }
+
+
+   // pub fn delete_raw(index: &(i32, i32, i32))
+   // {
+   //     self.delete_index(*index);
+   //     self.delete_entry(*index);
+   // }
+
+   // fn delete_entry(index : (i32, i32, i32)) 
+   // {
+   //     self.table_.delete_raw(&index); 
+   // }
+
+   // fn delete_index(index: (i32, i32, i32)) 
+   // {
+   //     let (w_id, d_id, o_id) = *index;
+   //     //update index
+   //     let mut vecs = self.wd_index_mut()
+   //         .entry((w_id, d_id))
+   //         .and_modify(|v| {
+   //             let idx = v.iter()
+   //                 .position(|&x| x==o_id)
+   //                 .expect("delete:no_id should not be empty");
+
+   //             let removed = v.swap_remove(idx);
+   //             assert_eq!(removed == o_id);
+   //         });
+   //     
+   //     self.lock_.store(false, Ordering::SeqCst);
+
+   // }
+}
+
+unsafe impl Sync for NewOrderTable {}
+unsafe impl Send for NewOrderTable {}
+
 //pub struct OrderTable {
 //    table_ : Table<Order, (i32, i32, i32)>,
 //    cus_index_ : SecIndex<(i32, i32, i32), (i32, i32,i32)>,
