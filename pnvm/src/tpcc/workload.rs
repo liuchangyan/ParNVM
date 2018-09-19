@@ -743,7 +743,7 @@ fn orderstatus(tx: &mut TransactionOCC,
 
 
 
-fn delivery(tx: &mut TransactionOCC,
+pub fn delivery(tx: &mut TransactionOCC,
             tables: &Arc<Tables>,
             w_id : i32,
             o_carrier_id: i32,
@@ -792,7 +792,7 @@ fn delivery(tx: &mut TransactionOCC,
 
 }
 
-fn stocklevel(tx: &mut TransactionOCC,
+pub fn stocklevel(tx: &mut TransactionOCC,
               tables : &Arc<Tables>,
               w_id : i32,
               d_id : i32,

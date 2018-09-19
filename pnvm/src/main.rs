@@ -25,7 +25,9 @@ extern crate core;
 
 mod util;
 mod tpcc;
+
 use tpcc::*;
+
 
 
 use util::*;
@@ -34,6 +36,7 @@ use rand::{
     rngs::SmallRng,
     thread_rng,
     SeedableRng,
+    Rng,
 };
 
 use std::{
@@ -334,6 +337,8 @@ fn run_occ_tpcc(conf: Config) {
         let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
         let tables = tables.clone();
         let duration_in_secs = conf.duration;
+        let wh_num = conf.wh_num;
+        let d_num = conf.d_num;
 
 
         let handle = builder
@@ -345,22 +350,32 @@ fn run_occ_tpcc(conf: Config) {
                 barrier.wait();
                 let start = Instant::now();
                 BenchmarkCounter::start();
-                let mut j = 0;
-                let w_home = (i as i32 )%5 +1;
+                let w_home = (i as i32 )% wh_num +1;
+                let d_home = (i as i32) % d_num + 1;
 
                 //for j in 0..conf.round_num {
                 while start.elapsed() < duration {
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();
-                    j+=1;
+                    let j : u32= rng.gen::<u32>() % 100;
+
+
 
 
                     while {
-                        if j % 2 == 0 {
+                        if j > 55 {
                             tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
+                        } else if j < 4 {
+                            tpcc::workload::orderstatus_random(tx, &tables, w_home, &mut rng);
+                        } else if j < 8  {
+                            let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
+                            tpcc::workload::delivery(tx, &tables, w_home, o_carrier_id);
+                        } else if j < 12 {
+                            let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
+                            tpcc::workload::stocklevel(tx, &tables, w_home, d_home, thd);
                         }
-                        else {
+                        else{
                             tpcc::workload::payment_random(tx, &tables,w_home  ,  &mut rng);
                         }
 
