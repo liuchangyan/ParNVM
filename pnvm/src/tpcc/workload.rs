@@ -732,7 +732,7 @@ fn orderstatus(tx: &mut TransactionOCC,
     let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
 
     let o_id = tx.read::<Order>(o_row).o_id;
-    //TODO: 
+    info!("[{:?}][ORDER-STATUS] GET ORDER FROM CUSTOMER [w_d: {}-{}, o_id: {}, c_id: {}]", tid, c_w_id, c_d_id,o_id, c_id);
     let ol_arcs = tables.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
 
     for ol_arc in ol_arcs {
@@ -780,6 +780,7 @@ pub fn delivery(tx: &mut TransactionOCC,
                 ol_amount_sum += ol.ol_amount;
 
                 ol.ol_delivery_d = now;
+                info!("[{:?}][DELIVERY] UPDATEING ORDERLINE [OL_AMOUNT_SUM: {:?}]", tid, ol_amount_sum);
                 tx.write(ol_row, ol);
             }
 
@@ -789,6 +790,7 @@ pub fn delivery(tx: &mut TransactionOCC,
             c.c_balance += ol_amount_sum;
             c.c_delivery_cnt += Numeric::new(1, 4, 0);
 
+            info!("[{:?}][DELIVERY] UPDATEING CUSTOEMR [CID: {}, DELIVERY_CNT: {:?}]", tid, o_c_id, c.c_delivery_cnt);
             tx.write(c_row, c);
         }
     }
@@ -802,9 +804,11 @@ pub fn stocklevel(tx: &mut TransactionOCC,
               thd: Numeric,
               )
 {
+    let tid = tx.commit_id();
     let d_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
     let mut d = tx.read::<District>(d_row).clone();
     let d_next_o_id = d.d_next_o_id;
+    info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);
     
     //TODO
     let ol_arcs = tables.orderline.find_range(w_id, d_id, d_next_o_id - 20, d_next_o_id);
@@ -814,7 +818,7 @@ pub fn stocklevel(tx: &mut TransactionOCC,
         let ol_row = ol_arc.into_table_ref(None, None);
         let ol = tx.read::<OrderLine>(ol_row);
         ol_i_ids.push(ol.ol_i_id);
-
+        info!("[{:?}][STOCK-LEVEL] RECENT ORDER LINE [W_D: {}-{}, OL_I_ID: {}]", tid, w_id, d_id, ol.ol_i_id);
     }
     
     let mut low_stock = 0;
@@ -822,6 +826,7 @@ pub fn stocklevel(tx: &mut TransactionOCC,
         let stock_row = tables.stock.retrieve(&(w_id, ol_i_id)).expect("no stock").into_table_ref(None,None);
         
         let stock = tx.read::<Stock>(stock_row);
+        info!("[{:?}][STOCK-LEVEL] STOCK LEVEL CHECK [W_ID:{}, ol_i_id: {}, stock_level: {:?}]", tid, w_id, ol_i_id, stock.s_quantity);
         if stock.s_quantity < thd {
             low_stock+=1;
         }
