@@ -345,6 +345,8 @@ fn run_occ_tpcc(conf: Config) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
+                tpcc::workload::num_warehouse_set(wh_num);
+                tpcc::workload::num_district_set(d_num);
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();

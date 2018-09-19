@@ -54,6 +54,8 @@ impl CustomerTable {
    // }
 
     pub fn new_with_buckets(num : usize , bkt_size : usize, name: &str) -> CustomerTable {
+        let NUM_WAREHOUSES = num_warehouse_get();
+        let NUM_INIT_DISTRICT = num_district_get();
         let total_wd = NUM_WAREHOUSES * NUM_INIT_DISTRICT;
         CustomerTable {
             table_ : Table::new_with_buckets(num, bkt_size, name),
@@ -170,6 +172,8 @@ impl NewOrderTable {
 
     pub fn new_with_buckets(num: usize, bkt_size : usize, name: &str) -> NewOrderTable 
     {
+        let NUM_WAREHOUSES = num_warehouse_get();
+        let NUM_INIT_DISTRICT = num_district_get();
         let total_wd = NUM_WAREHOUSES * NUM_INIT_DISTRICT;
         NewOrderTable {
             table_ : Table::new_with_buckets(num, bkt_size, name),
@@ -313,6 +317,8 @@ impl OrderLineTable {
     
     pub fn new_with_buckets(num : usize, bkt_size: usize, name: &str) -> OrderLineTable 
     {
+        let NUM_WAREHOUSES = num_warehouse_get();
+        let NUM_INIT_DISTRICT = num_district_get();
         let total_wd = NUM_WAREHOUSES * NUM_INIT_DISTRICT;
 
         OrderLineTable {
@@ -426,6 +432,8 @@ impl OrderTable {
    // }
 
     pub fn new_with_buckets(num : usize, bkt_size : usize, name: &str) -> OrderTable {
+        let NUM_WAREHOUSES = num_warehouse_get();
+        let NUM_INIT_DISTRICT = num_district_get();
         let total_wd = (NUM_WAREHOUSES * NUM_INIT_DISTRICT) as usize;
         OrderTable {
             table_ : Table::new_with_buckets(num, bkt_size, name),

@@ -19,6 +19,8 @@ use std::{
     time,
     char,
     str,
+    cell::RefCell,
+    rc::Rc,
 };
 
 use rand::{self, 
@@ -33,16 +35,45 @@ use num::{
 };
 
 
-pub const NUM_WAREHOUSES : i32 = 8;
+thread_local! {
+    pub static G_NUM_WAREHOUSES: Rc<RefCell<i32>> = Rc::new(RefCell::new(10));
+    pub static G_NUM_DISTRICTS : Rc<RefCell<i32>> = Rc::new(RefCell::new(8));
+}
+
+pub fn num_warehouse_get() -> i32 {
+    G_NUM_WAREHOUSES.with(|n| *n.borrow())
+}
+
+pub fn num_warehouse_set(x : i32) {
+    G_NUM_WAREHOUSES.with(|n| *n.borrow_mut() = x);
+}
+
+pub fn num_district_get() -> i32 {
+    G_NUM_DISTRICTS.with(|n| *n.borrow())
+}
+
+pub fn num_district_set(x : i32) {
+    G_NUM_DISTRICTS.with(|n| *n.borrow_mut() = x);
+}
+
+
+//pub static mut NUM_INIT_DISTRICT :i32 = 10;
+//pub static mut NUM_WAREHOUSES : i32 = 8;
 pub const NUM_INIT_ORDER: i32 = 3000;
 pub const NUM_INIT_NEXT_ORDER : i32 = 3001;
 pub const NUM_INIT_ITEM: i32 = 100_000;
 pub const NUM_INIT_CUSTOMER : i32 = 3000;
 
 pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
+   
+    num_warehouse_set(conf.wh_num);
+    num_district_set(conf.d_num);
     
+    let NUM_WAREHOUSES = num_warehouse_get();
+    let NUM_INIT_DISTRICT = num_district_get();
+
     let mut tables = Tables {
-        warehouse: Table::new_with_buckets(16, NUM_WAREHOUSES as usize, "warehouse"),
+        warehouse: Table::new_with_buckets(NUM_WAREHOUSES as usize, conf.wh_num as usize, "warehouse"),
         district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize, "district"),
         customer: CustomerTable::new_with_buckets(128, 64, "customer"),
         neworder: NewOrderTable::new_with_buckets(32, 32768, "neworder"),
@@ -88,7 +119,7 @@ fn fill_item(tables: &mut Tables,
 
 fn fill_warehouse(tables: &mut Tables, _config : &Config, rng: &mut SmallRng) {
     
-    for w_id in 1..=NUM_WAREHOUSES {
+    for w_id in 1..=_config.wh_num {
        let warehouse = Warehouse::new(
            w_id, 
            rand_a_string(6, 10, rng),
@@ -185,9 +216,9 @@ fn fill_stock(tables: &mut Tables, _config: &Config, w_id : i32, rng: &mut Small
     }
 }
 
-pub const NUM_INIT_DISTRICT :i32 = 10;
 fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut SmallRng) 
 {
+    let NUM_INIT_DISTRICT = num_district_get();
     for d_id in 1..=NUM_INIT_DISTRICT {
         let district = District::new(
              d_id, 
@@ -506,6 +537,7 @@ fn new_order(tx: &mut TransactionOCC,
 }
 
 pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : i32,rng: &mut SmallRng) {
+    let NUM_WAREHOUSES = num_warehouse_get();
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
     //let w_id = urand(1, NUM_WAREHOUSES, rng);
     let w_id = w_home;
@@ -538,6 +570,8 @@ pub fn payment_random(tx: &mut TransactionOCC,
                       ) 
 {
     //let w_id = w_home;
+    let NUM_WAREHOUSES = num_warehouse_get();
+
     let w_id = urand(1, NUM_WAREHOUSES, rng);
     let d_id = urand(1, 10, rng);
         
@@ -751,6 +785,7 @@ pub fn delivery(tx: &mut TransactionOCC,
 {
     let tid = tx.commit_id();    
     info!("[{:?}][DELIVERY STARTs]", tid);
+    let NUM_INIT_DISTRICT = num_district_get();
     for d_id in 1..NUM_INIT_DISTRICT {
         //TODO:
         let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
