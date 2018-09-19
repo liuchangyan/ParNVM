@@ -263,9 +263,9 @@ fn fill_order(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32, r
 
         let order = Order::new (
              o_id,
-             c_ids.pop().expect("not enough c_ids"),
              d_id,
              w_id,
+             c_ids.pop().expect("not enough c_ids"),
              timestamp,
               o_carrier_id,
              Numeric::new(o_ol_cnt.into(), 2, 0),
@@ -436,7 +436,7 @@ fn new_order(tx: &mut TransactionOCC,
          }
      }
       
-     info!("[{:?}][TXN-NEWORDER] Push ORDER {:?}, cnt {}", tid, o_id, ol_cnt);
+     info!("[{:?}][TXN-NEWORDER] Push ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
      tables.order.push(tx,
                        Order {
                            o_id: o_id, o_d_id: d_id, o_w_id: w_id, o_c_id: c_id, o_entry_d: now,
@@ -749,7 +749,8 @@ pub fn delivery(tx: &mut TransactionOCC,
             o_carrier_id: i32,
             )
 {
-    
+    let tid = tx.commit_id();    
+    info!("[{:?}][DELIVERY STARTs]", tid);
     for d_id in 1..NUM_INIT_DISTRICT {
         //TODO:
         let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
@@ -757,8 +758,10 @@ pub fn delivery(tx: &mut TransactionOCC,
             let no_row = no_arc.unwrap().into_table_ref(None, None);
             let no_o_id = tx.read::<NewOrder>(no_row).no_o_id;
             //TODO:
+            info!("[{:?}][DELIVERY] DELETING NEWORDER [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
             tables.neworder.delete(tx, &(w_id, d_id, no_o_id), tables);
 
+            info!("[{:?}][DELIVERY] RETRIEVING ORDER  [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
             let o_row = tables.order.retrieve(&(w_id, d_id, no_o_id)).expect("order empty").into_table_ref(None, None);
             let mut o = tx.read::<Order>(o_row.box_clone()).clone();
             let o_id = o.o_id;

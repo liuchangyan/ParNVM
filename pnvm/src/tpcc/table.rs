@@ -64,11 +64,11 @@ impl CustomerTable {
         }
     }
 
-    pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
-        where Arc<Row<Customer, (i32, i32, i32)>> : TableRef 
-        {
-            self.table_.push(tx, entry, tables);
-        }
+   // pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
+   //     where Arc<Row<Customer, (i32, i32, i32)>> : BucketPushRef
+   //     {
+   //         self.table_.push(tx, entry, tables);
+   //     }
 
 
    // fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
@@ -680,6 +680,10 @@ pub trait BucketDeleteRef {
     fn into_delete_table_ref(self, usize, Arc<Tables>) -> Box<dyn TRef>;
 }
 
+pub trait BucketPushRef {
+    fn into_push_table_ref(self, usize, Arc<Tables>) -> Box<dyn TRef>;
+}
+
 
 pub trait Key<T> {
     fn primary_key(&self) -> T;
@@ -738,13 +742,13 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     }
 
     pub fn push(&self, tx: &mut TransactionOCC, entry: Entry, tables: &Arc<Tables>)
-    where Arc<Row<Entry, Index>> : TableRef
+    where Arc<Row<Entry, Index>> :BucketPushRef 
     {
         let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
         
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
-        let table_ref = row.into_table_ref(Some(bucket_idx), Some(tables.clone()));
+        let table_ref = row.into_push_table_ref(bucket_idx, tables.clone());
         
         let tid = tx.commit_id().clone();
         let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());

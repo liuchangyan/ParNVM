@@ -280,7 +280,7 @@ impl  TRef for DistrictRef  {
 
     fn get_writer_info(&self) -> Arc<TxnInfo> {
         self.inner_.get_writer_info()
-    
+
     }
     fn get_name(&self) -> String {
         String::from("district")
@@ -384,14 +384,14 @@ impl  TRef for NewOrderRef  {
                 match self.ops_ {
                     Operation::Push => {
                         let row = self.inner_.clone();
-                        let bucket_idx = self.bucket_idx_.unwrap();
+                        let bucket_idx = self.bucket_idx_.expect("no bucketidx");
                         table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
                         table.neworder.get_bucket(bucket_idx).push(row.clone());
                         table.neworder.update_wd_index(&row);
                     }, 
                     Operation::Delete => {
                         let row = self.inner_.clone();
-                        let bucket_idx = self.bucket_idx_.unwrap();
+                        let bucket_idx = self.bucket_idx_.expect("no bucket indx");
                         table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
                         table.neworder.delete_index(&row);
                         table.neworder.get_bucket(bucket_idx).delete(row);
@@ -400,7 +400,7 @@ impl  TRef for NewOrderRef  {
                 }
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                self.inner_.install(self.data_.as_ref().expect("no data"), id);
             }
         }
     }
@@ -1135,6 +1135,91 @@ impl BucketDeleteRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
         }
 
 }
+
+impl BucketPushRef for Arc<Row<Order, (i32, i32, i32)>> {
+    fn into_push_table_ref(
+        self,
+        bucket_idx: usize,
+        table_ref : Arc<Tables>
+    ) 
+        -> Box<dyn TRef>
+        {
+            Box::new(
+                OrderRef {
+                    inner_ : self,
+                    bucket_idx_: Some(bucket_idx),
+                    table_ref_: Some(table_ref),
+                    data_ : None,
+                    ops_: Operation::Push,
+                })
+        }
+}
+
+
+impl BucketPushRef for Arc<Row<NewOrder, (i32, i32, i32)>>
+{
+    fn into_push_table_ref(
+        self,
+        bucket_idx: usize,
+        table_ref: Arc<Tables>
+    )
+        -> Box<dyn TRef>
+        {
+            Box::new(
+                NewOrderRef {
+                    inner_ : self,
+                    bucket_idx_: Some(bucket_idx),
+                    table_ref_: Some(table_ref),
+                    data_ : None,
+                    ops_ : Operation::Push,
+                })
+        }
+}
+
+
+impl BucketPushRef for Arc<Row<OrderLine, (i32, i32, i32, i32)>>
+{
+    fn into_push_table_ref(
+        self,
+        bucket_idx: usize,
+        table_ref: Arc<Tables>
+    )
+        -> Box<dyn TRef>
+        {
+            Box::new(
+                OrderLineRef {
+                    inner_ : self,
+                    bucket_idx_: Some(bucket_idx),
+                    table_ref_: Some(table_ref),
+                    data_ : None,
+                    ops_ : Operation::Push,
+                })
+        }
+}
+
+impl BucketPushRef for Arc<Row<History, i32>>
+{
+    fn into_push_table_ref(
+        self,
+        bucket_idx: usize,
+        table_ref: Arc<Tables>
+    )
+        -> Box<dyn TRef>
+        {
+            Box::new(
+                HistoryRef {
+                    inner_ : self,
+                    bucket_idx_: Some(bucket_idx),
+                    table_ref_: Some(table_ref),
+                    data_ : None,
+                    ops_ : Operation::Push,
+                })
+        }
+}
+
+
+
+
 
 //impl BucketPushRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
 //    fn into_push_bucket_ref
