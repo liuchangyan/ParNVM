@@ -133,7 +133,7 @@ pub trait TRef : fmt::Debug{
     fn write(&mut self, Box<Any>);
     fn lock(&self, Tid) -> bool;
     fn unlock(&self);
-    fn check(&self, u32) -> bool;
+    fn check(&self, u32, u32) -> bool;
     fn get_writer_info(&self) -> Arc<TxnInfo>;
     fn set_writer_info(&mut self, Arc<TxnInfo>);
     fn get_name(&self) -> String;
@@ -201,9 +201,10 @@ impl TVersion {
     }
 
     #[inline(always)]
-    pub fn check_version(&self, cur: u32) -> bool {
-        (self.lock_owner_.load(Ordering::Acquire) == 0 &&
-            self.last_writer_.load(Ordering::Acquire) == cur)
+    pub fn check_version(&self, cur: u32, tid: u32) -> bool {
+        ((self.lock_owner_.load(Ordering::Acquire) == 0 || 
+          self.lock_owner_.load(Ordering::Acquire) == tid)
+         && self.last_writer_.load(Ordering::Acquire) == cur)
 
        // if locker != 0 {
        //     return locker;
@@ -394,8 +395,8 @@ impl TTag
         self.tobj_ref_.unlock()
     }
 
-    pub fn check(&self, vers: u32) -> bool {
-        self.tobj_ref_.check(vers)
+    pub fn check(&self, vers: u32, tid: u32) -> bool {
+        self.tobj_ref_.check(vers, tid)
     }
 
     pub fn set_write(&mut self) {

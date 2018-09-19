@@ -39,8 +39,8 @@ where
     }
 
     #[inline(always)]
-    pub fn check(&self, cur_ver: u32) -> bool {
-        self.vers_.check_version(cur_ver)
+    pub fn check(&self, cur_ver: u32, tid: u32) -> bool {
+        self.vers_.check_version(cur_ver, tid)
     }
 
     #[inline]
@@ -233,8 +233,8 @@ impl TRef for TInt {
         self.inner_.unlock()
     }
 
-    fn check(&self, vers: u32) -> bool {
-        self.inner_.check(vers)
+    fn check(&self, vers: u32, _tid: u32) -> bool {
+        self.inner_.check(vers, _tid)
     }
 
     fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {

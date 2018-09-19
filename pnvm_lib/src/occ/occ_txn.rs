@@ -18,12 +18,13 @@ pub struct TransactionOCC
 
     tid_:   Tid,
     state_: TxState,
-    deps_:  HashMap<ObjectId, TTag>,
+    deps_:  HashMap<(ObjectId, i8), TTag>,
     locks_ : Vec<*const TTag>,
     txn_info_ : Arc<TxnInfo>,
 
 }
 
+const OPERATION_CODE_RW: i8 = 2;
 impl TransactionOCC
 {
 
@@ -59,7 +60,7 @@ impl TransactionOCC
         
         let id = *tref.get_id();
         let vers = tref.get_version();
-        let tag = self.retrieve_tag(&id, tref);
+        let tag = self.retrieve_tag(&id, tref, OPERATION_CODE_RW);
         tag.add_version(vers);
         tag.get_data()
     }
@@ -70,7 +71,7 @@ impl TransactionOCC
     {
         //let tref = tobj.clone().into_box_ref();
         let id = *tref.get_id();
-        let mut tag = self.retrieve_tag(&id,tref);
+        let mut tag = self.retrieve_tag(&id,tref, OPERATION_CODE_RW);
         tag.write::<T>(val);
     }
 
@@ -150,7 +151,8 @@ impl TransactionOCC
             if !tag.has_read() {
                 continue;
             }
-            if !tag.check(tag.vers_)  {
+            if !tag.check(tag.vers_, self.commit_id().into())  {
+                warn!("{:?} CHECKED FAILED ---- EXPECT: {}, BUT: {}", self.tid_, tag.get_version(), tag.vers_);
                 return false;
             }
         }
@@ -243,9 +245,11 @@ impl TransactionOCC
     #[inline(always)]
     pub fn retrieve_tag(&mut self,
                         id: &ObjectId, 
-                        tobj_ref: Box<dyn TRef>) 
+                        tobj_ref: Box<dyn TRef>,
+                        code: i8
+                        ) 
         -> &mut TTag
         {
-            self.deps_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
+            self.deps_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
         }
 }

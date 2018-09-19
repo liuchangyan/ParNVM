@@ -179,9 +179,9 @@ impl  TRef for WarehouseRef {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -266,9 +266,9 @@ impl  TRef for DistrictRef  {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -354,9 +354,9 @@ impl  TRef for CustomerRef  {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -442,9 +442,9 @@ impl  TRef for NewOrderRef  {
             }
         }
     }
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -529,9 +529,9 @@ impl  TRef for OrderRef  {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -615,9 +615,9 @@ impl  TRef for OrderLineRef  {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -699,9 +699,9 @@ impl  TRef for ItemRef  {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -786,9 +786,9 @@ impl  TRef for HistoryRef  {
         }
     }
 
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }
@@ -869,9 +869,9 @@ impl  TRef for StockRef  {
             }
         }
     }
-    fn check(&self, vers: u32) -> bool {
+    fn check(&self, vers: u32, tid: u32) -> bool {
         if self.table_ref_.is_none() {
-            self.inner_.check(vers)
+            self.inner_.check(vers, tid)
         } else {
             true
         }

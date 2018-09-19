@@ -751,7 +751,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let table_ref = row.into_push_table_ref(bucket_idx, tables.clone());
         
         let tid = tx.commit_id().clone();
-        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
@@ -766,7 +766,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             bucket_idx,
             tables.clone(),
             );
-        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone());
+        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
         tag.set_write(); //FIXME: better way?
     }
 
@@ -936,8 +936,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     }
 
     #[inline(always)]
-    pub fn check(&self, cur_ver: u32) -> bool {
-        self.vers_.check_version(cur_ver)
+    pub fn check(&self, cur_ver: u32, tid: u32) -> bool {
+        self.vers_.check_version(cur_ver, tid)
     }
 
     //FIXME: how to not Clone
@@ -1104,8 +1104,8 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     }
 
     #[inline(always)]
-    pub fn check(&self, cur_ver: u32) -> bool {
-        self.vers_.check_version(cur_ver)
+    pub fn check(&self, cur_ver: u32, tid: u32) -> bool {
+        self.vers_.check_version(cur_ver, tid)
     }
 
     //FIXME: how to not Clone
@@ -1187,3 +1187,6 @@ pub enum Operation {
     Delete,
     Push,
 }
+
+const OPERATION_CODE_PUSH :i8 = 0;
+const OPERATION_CODE_DELETE : i8 = 1;

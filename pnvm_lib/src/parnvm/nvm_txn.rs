@@ -277,7 +277,7 @@ impl TransactionParOCC
                 continue;
             }
 
-            if !tag.check(tag.vers_) {
+            if !tag.check(tag.vers_, self.id().into()) {
                 return false;
             }
         }
