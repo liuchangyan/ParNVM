@@ -241,30 +241,23 @@ impl TransactionParOCC
 
     fn clean_up(&mut self) {
         for (_, tag) in self.tags_.drain() {
-            if tag.has_write() {
+            if tag.has_write() && tag.is_lock() {
                 tag.tobj_ref_.unlock();
             }
         }
-        self.locks_.clear();
     }
 
 
     fn lock(&mut self) -> bool {
         let me = *self.id();
-        for tag in self.tags_.values() {
+        for tag in self.tags_.values_mut() {
             if !tag.has_write() {
                 continue;
             }
 
             if !tag.lock(me) {
-                while let Some(_tag) = self.locks_.pop() {
-                    //FIXME: Hacky way use raw pointer to eschew lifetime checker
-                    unsafe{ _tag.as_ref().unwrap().unlock()};
-                } debug!("{:#?} failed to locked!", tag);
                 return false;
-            } else {
-                self.locks_.push(tag as *const TTag);
-            }
+            } 
             debug!("{:#?} locked!", tag);
         }
 

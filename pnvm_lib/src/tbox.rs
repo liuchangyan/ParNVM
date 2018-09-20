@@ -122,6 +122,7 @@ where
             tvalue_: TValue::new(val),
             id_:     id,
             vers_:   TVersion {
+                count_: AtomicU32::new(0),
                 last_writer_: AtomicU32::new(0),
                 lock_owner_:  AtomicU32::new(0),
                 txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),
@@ -140,6 +141,7 @@ where
             tvalue_ : TValue::new(val),
             id_ : id,
             vers_: TVersion {
+                count_: AtomicU32::new(0),
                 last_writer_ : AtomicU32::new(0),
                 lock_owner_: AtomicU32::new(0),
                 txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),

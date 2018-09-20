@@ -884,7 +884,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     {
         Bucket {
             rows: UnsafeCell::new(Vec::with_capacity(cap)),
-            index: UnsafeCell::new(HashMap::new()),
+            index: UnsafeCell::new(HashMap::with_capacity(cap)),
 
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
@@ -894,6 +894,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
         debug!("[PUSH ROW] : {:?}", *row_arc);
+        assert_eq!(self.vers_.get_count() > 0 , true);
+        assert_eq!(self.vers_.get_locker() == 0, false);
         let idx_elem = row_arc.get_data().primary_key();
         unsafe {
             let mut rows = self.rows.get().as_mut().unwrap();
@@ -904,6 +906,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     }
 
     pub fn delete(&self, row_arc: Arc<Row<Entry, Index>>) {
+        assert_eq!(self.vers_.get_count() > 0 , true);
+        assert_eq!(self.vers_.get_locker() == 0, false);
         let idx_elem = row_arc.get_data().primary_key();
 
         /* FIXME: Leave the data in the rows */

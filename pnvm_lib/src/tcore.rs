@@ -172,6 +172,7 @@ pub struct TVersion {
     //lock_:        Arc<Mutex<bool>>,
     pub lock_owner_: AtomicU32, 
     pub txn_info_ : ArcCell<TxnInfo>, /* Info of the last writer's txn_ info */
+    pub count_ : AtomicU32, /* This to allow multiple times of locking */
 }
 
 
@@ -181,23 +182,48 @@ impl TVersion {
             last_writer_ : AtomicU32::new(txn_info.id().into()),
             lock_owner_ : AtomicU32::new(0),
             txn_info_: ArcCell::new(txn_info),
+            count_: AtomicU32::new(0),
         }
     }
 
     #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool{
         let tid : u32 = tid.into();
-        if self.lock_owner_.load(Ordering::Relaxed) == tid {
-            true
-        } else {
-            self.lock_owner_.compare_and_swap(0, tid, Ordering::Acquire) == 0
+        assert_eq!(tid != 0 , true);
+        match self.lock_owner_.compare_exchange(0, tid, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(cur) => {
+                assert_eq!(self.count_.load(Ordering::SeqCst), 0);
+                self.count_.fetch_add(1, Ordering::SeqCst);
+                true
+            },
+            Err(cur) => {
+                if cur == tid {
+                    assert_eq!(self.count_.load(Ordering::SeqCst) > 0, true);
+                    self.count_.fetch_add(1, Ordering::SeqCst);
+                    true
+                } else {
+                    false /* Lock by others */
+                }
+            }
         }
     }
 
     //Caution: whoever has access to self can unlock
     #[inline(always)]
     pub fn unlock(&self) {
-        self.lock_owner_.store(0, Ordering::Release);
+        if self.count_.fetch_sub(1, Ordering::SeqCst) == 1 {
+            assert_eq!(self.lock_owner_.load(Ordering::SeqCst) != 0,  true);
+            assert_eq!(self.count_.load(Ordering::SeqCst), 0);
+            self.lock_owner_.store(0, Ordering::SeqCst);
+        }
+    }
+
+    pub fn get_locker(&self) -> u32 {
+        self.lock_owner_.load(Ordering::Relaxed)
+    }
+
+    pub fn get_count(&self) -> u32 {
+        self.count_.load(Ordering::Relaxed)
     }
 
     #[inline(always)]
@@ -255,6 +281,7 @@ impl Default for TVersion {
             last_writer_ : AtomicU32::new(0),
             lock_owner_ : AtomicU32::new(0),
             txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),
+            count_: AtomicU32::new(0),
         }
     }
 }
@@ -326,6 +353,7 @@ pub struct TTag
     pub oid_:      ObjectId,
     //write_val_:    Option<Box<Any>>,
     pub has_write_: bool,
+    is_lock_ : bool,
     pub vers_:     u32, /* 0 means empty */
 
     //for debug
@@ -342,6 +370,7 @@ impl TTag
             //write_val_: None,
             vers_:      0,
             has_write_: false,
+            is_lock_: false,
         }
     }
     
@@ -369,7 +398,6 @@ impl TTag
    //     self.write_val_.as_ref().expect("write non null")
    // }
 
-
     pub fn commit_data(&mut self, id: Tid) {
         if !self.has_write() {
             return;
@@ -386,13 +414,23 @@ impl TTag
 
     }
 
-    pub fn lock(&self, tid: Tid) -> bool {
-        self.tobj_ref_.lock(tid)
+    pub fn lock(&mut self, tid: Tid) -> bool {
+        if self.tobj_ref_.lock(tid) {
+            self.is_lock_ = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_lock(&self) -> bool {
+        self.is_lock_
     }
 
 
-    pub fn unlock(&self) {
-        self.tobj_ref_.unlock()
+    pub fn unlock(&mut self) {
+        self.tobj_ref_.unlock();
+        self.is_lock_ = false;
     }
 
     pub fn check(&self, vers: u32, tid: u32) -> bool {

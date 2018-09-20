@@ -120,23 +120,20 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
-        let me :u32 = self.commit_id().into();
+        let me  = self.commit_id();
         //FIXME: this is hacky! allocate an vector large enough so that no move of reference
-        let mut locks_ : Vec<&TTag> =  Vec::with_capacity(64);
-        for tag in self.deps_.values() {
+        //let mut locks_ : Vec<&TTag> =  Vec::with_capacity(64);
+        for tag in self.deps_.values_mut() {
             if !tag.has_write() {
                 continue;
             }
-            if !tag.lock(self.commit_id()) {
-                while let Some(_tag) = locks_.pop() {
-                    _tag.unlock();
-                }
+            if !tag.lock(me) {
+                //while let Some(_tag) = locks_.pop() {
+                //    _tag.unlock();
+                //}
                 debug!("{:#?} failed to locked!", tag);
                 return false;
-            } else {
-                //self.locks_.push(tag as *const TTag);
-                locks_.push(tag);
-            }
+            } 
             debug!("{:#?} locked!", tag);
         }
 
@@ -232,7 +229,7 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     fn clean_up(&mut self) {
         for (_, tag) in self.deps_.drain() {
-            if tag.has_write() {
+            if tag.has_write() && tag.is_lock() {
                 tag.tobj_ref_.unlock();
             }
         }
