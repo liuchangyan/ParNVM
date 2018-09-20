@@ -71,17 +71,18 @@ pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     
     let NUM_WAREHOUSES = num_warehouse_get();
     let NUM_INIT_DISTRICT = num_district_get();
+    let total_wd : usize = (NUM_WAREHOUSES * NUM_INIT_DISTRICT) as usize;
 
     let mut tables = Tables {
         warehouse: Table::new_with_buckets(NUM_WAREHOUSES as usize, conf.wh_num as usize, "warehouse"),
-        district: Table::new_with_buckets(NUM_INIT_DISTRICT as usize, NUM_INIT_DISTRICT as usize, "district"),
-        customer: CustomerTable::new_with_buckets(128, 64, "customer"),
-        neworder: NewOrderTable::new_with_buckets(32, 32768, "neworder"),
-        order: OrderTable::new_with_buckets(32, 32768, "order"),
-        orderline: OrderLineTable::new_with_buckets(32, 32768, "orderline"),
+        district: Table::new_with_buckets(total_wd, NUM_INIT_DISTRICT as usize, "district"),
+        customer: CustomerTable::new_with_buckets(total_wd, 64, "customer"),
+        neworder: NewOrderTable::new_with_buckets(total_wd, 32768, "neworder"),
+        order: OrderTable::new_with_buckets(total_wd, 32768, "order"),
+        orderline: OrderLineTable::new_with_buckets(total_wd, 32768, "orderline"),
         item: Table::new_with_buckets(512, 256, "item"),
-        history: Table::new_with_buckets(128, 128, "history"),
-        stock: Table::new_with_buckets(32, 512 ,"stock"),
+        history: Table::new_with_buckets(total_wd, 128, "history"),
+        stock: Table::new_with_buckets(total_wd, 512 ,"stock"),
     };
 
     fill_item(&mut tables, conf, rng);
@@ -443,7 +444,8 @@ fn new_order(tx: &mut TransactionOCC,
 
 {
     let tid = tx.commit_id();
-    let warehouse_ref = tables.warehouse.retrieve(&w_id).unwrap().into_table_ref(None, None);
+    let wh_num = num_warehouse_get();
+    let warehouse_ref = tables.warehouse.retrieve(&w_id, w_id as usize).unwrap().into_table_ref(None, None);
     //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
     let w_tax = tx.read::<Warehouse>(warehouse_ref).w_tax;
     
@@ -451,7 +453,7 @@ fn new_order(tx: &mut TransactionOCC,
     let c_discount = tx.read::<Customer>(customer_ref).c_discount;
      info!("[{:?}][TXN-NEWORDER] Read Customer {:?}", tid, c_id);
 
-    let district_ref = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
     //println!("READ : DISTRICT : {:?}", district_ref.get_id());
     let mut district = tx.read::<District>(district_ref.box_clone()).clone();
 
@@ -482,12 +484,13 @@ fn new_order(tx: &mut TransactionOCC,
 
      for i in 0..ol_cnt as usize {
          //let i_price = tables.item.retrieve(item_ids[i]).unwrap().read(tx).i_price;
-         let item_arc = tables.item.retrieve(&(item_ids[i])).unwrap();
+         let id = item_ids[i];
+         let item_arc = tables.item.retrieve(&id, id as usize ).unwrap();
          let item_ref = item_arc.into_table_ref(None, None);
          //println!("READ : ITEM : {:?}", item_ref.get_id());
          let i_price = tx.read::<Item>(item_ref).i_price;
 
-         let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i])).unwrap().into_table_ref(None, None);
+         let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), (src_whs[i] as usize)).unwrap().into_table_ref(None, None);
          let mut stock = tx.read::<Stock>(stock_ref.box_clone()).clone();
          let s_quantity = stock.s_quantity;
          let s_remote_cnt = stock.s_remote_cnt;
@@ -617,9 +620,10 @@ fn payment(tx: &mut TransactionOCC,
            h_date : i32,
            rng : &mut SmallRng)
 {
+    let wh_num = num_warehouse_get();
     let tid = tx.commit_id();
     /* RW Warehouse */
-    let warehouse_row = tables.warehouse.retrieve(&w_id).expect("warehouse empty").into_table_ref(None, None);
+    let warehouse_row = tables.warehouse.retrieve(&w_id, w_id as usize).expect("warehouse empty").into_table_ref(None, None);
     let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
     let w_name = warehouse.w_name.clone();
    // let _w_street_1 = &warehouse.w_street_1;
@@ -632,7 +636,7 @@ fn payment(tx: &mut TransactionOCC,
     tx.write(warehouse_row, warehouse);
 
     /* RW District */
-    let district_row = tables.district.retrieve(&(w_id, d_id)).expect("district empty").into_table_ref(None, None);
+    let district_row = tables.district.retrieve(&(w_id, d_id),(w_id * wh_num + d_id) as usize ).expect("district empty").into_table_ref(None, None);
     let mut district = tx.read::<District>(district_row.box_clone()).clone();
     let d_name = district.d_name.clone();
    // let _d_street_1 = district.d_street_1;
@@ -786,6 +790,8 @@ pub fn delivery(tx: &mut TransactionOCC,
     let tid = tx.commit_id();    
     info!("[{:?}][DELIVERY STARTs]", tid);
     let NUM_INIT_DISTRICT = num_district_get();
+    let wh_num = num_warehouse_get();
+
     for d_id in 1..NUM_INIT_DISTRICT {
         //TODO:
         let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
@@ -840,7 +846,8 @@ pub fn stocklevel(tx: &mut TransactionOCC,
               )
 {
     let tid = tx.commit_id();
-    let d_row = tables.district.retrieve(&(w_id, d_id)).unwrap().into_table_ref(None, None);
+    let wh_num = num_warehouse_get();
+    let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
     let mut d = tx.read::<District>(d_row).clone();
     let d_next_o_id = d.d_next_o_id;
     info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);
@@ -858,7 +865,7 @@ pub fn stocklevel(tx: &mut TransactionOCC,
     
     let mut low_stock = 0;
     for ol_i_id in ol_i_ids.into_iter() {
-        let stock_row = tables.stock.retrieve(&(w_id, ol_i_id)).expect("no stock").into_table_ref(None,None);
+        let stock_row = tables.stock.retrieve(&(w_id, ol_i_id), w_id as usize).expect("no stock").into_table_ref(None,None);
         
         let stock = tx.read::<Stock>(stock_row);
         info!("[{:?}][STOCK-LEVEL] STOCK LEVEL CHECK [W_ID:{}, ol_i_id: {}, stock_level: {:?}]", tid, w_id, ol_i_id, stock.s_quantity);

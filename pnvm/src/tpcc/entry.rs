@@ -4,6 +4,7 @@ use std::{
     fmt::{Debug, self},
 };
 use table::{Key, Table};
+use workload::{num_district_get, num_warehouse_get};
 
 use pnvm_lib::{tcore::*, txn::TxnInfo};
 
@@ -29,6 +30,10 @@ impl Key<i32> for Warehouse {
     #[inline(always)]
     fn primary_key(&self) -> i32 {
         self.w_id
+    }
+
+    fn bucket_key(&self) -> usize {
+        self.w_id as usize
     }
 }
 
@@ -91,6 +96,12 @@ impl Key<(i32, i32)> for District {
     #[inline(always)]
     fn primary_key(&self) -> (i32, i32) {
         (self.d_w_id, self.d_id)
+    }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        let wh_num = num_warehouse_get();
+        (self.d_w_id * wh_num + self.d_id) as usize
     }
 }
 
@@ -169,6 +180,12 @@ impl Key<(i32, i32, i32)> for Customer {
     #[inline(always)]
     fn primary_key(&self) -> (i32, i32, i32) {
         (self.c_w_id, self.c_d_id, self.c_id)
+    }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        let wh_num = num_warehouse_get();
+        (self.c_w_id * wh_num + self.c_d_id) as usize
     }
 }
 
@@ -264,6 +281,12 @@ impl Key<(i32, i32, i32)> for NewOrder {
     fn primary_key(&self) -> (i32, i32, i32) {
         (self.no_w_id, self.no_d_id, self.no_o_id)
     }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        let wh_num = num_warehouse_get();
+        (self.no_w_id * wh_num + self.no_d_id) as usize
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -282,6 +305,11 @@ impl Key<(i32, i32, i32)> for Order {
     #[inline(always)]
     fn primary_key(&self) -> (i32, i32, i32) {
         (self.o_w_id, self.o_d_id, self.o_id)
+    }
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        let wh_num = num_warehouse_get();
+        (self.o_w_id * wh_num + self.o_d_id) as usize
     }
 }
 
@@ -329,6 +357,12 @@ impl Key<(i32, i32, i32, i32)> for OrderLine {
     #[inline(always)]
     fn primary_key(&self) -> (i32, i32, i32, i32) {
         (self.ol_w_id, self.ol_d_id, self.ol_o_id, self.ol_number)
+    }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        let wh_num = num_warehouse_get();
+        (self.ol_w_id * wh_num + self.ol_d_id) as usize
     }
 }
 
@@ -410,6 +444,11 @@ impl Key<i32> for Item {
     fn primary_key(&self) -> i32 {
         self.i_id
     }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        (self.i_id) as usize
+    }
 }
 
 #[derive(Clone)]
@@ -444,6 +483,11 @@ impl Key<(i32, i32)> for Stock {
     #[inline(always)]
     fn primary_key(&self) -> (i32, i32) {
         (self.s_w_id, self.s_i_id)
+    }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        self.s_w_id as usize
     }
 }
 
@@ -526,10 +570,16 @@ pub struct History {
     pub h_data: [u8; 24],
 }
 
-impl Key<i32> for History {
+impl Key<(i32, i32)> for History {
     #[inline(always)]
-    fn primary_key(&self) -> i32 {
-        0
+    fn primary_key(&self) -> (i32, i32) {
+       (self.h_w_id, self.h_d_id) 
+    }
+
+    #[inline(always)]
+    fn bucket_key(&self) -> usize {
+        let wh_num = num_warehouse_get();
+        (self.h_w_id * wh_num + self.h_d_id) as usize
     }
 }
 

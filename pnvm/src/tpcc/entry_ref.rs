@@ -107,7 +107,7 @@ pub struct StockRef  {
 
 #[derive(Clone , Debug)]
 pub struct HistoryRef  {
-    inner_ : Arc<Row<History, i32>>,
+    inner_ : Arc<Row<History, (i32, i32)>>,
     bucket_idx_: Option<usize>,
     table_ref_: Option<Arc<Tables>>,
     //txn_info_ : Option<Arc<TxnInfo>>,
@@ -1095,7 +1095,7 @@ impl TableRef for Arc<Row<Stock, (i32, i32)>> {
         }
 }
 
-impl TableRef for Arc<Row<History,i32>> {
+impl TableRef for Arc<Row<History,(i32, i32)>> {
     fn into_table_ref(
         self,
         bucket_idx: Option<usize>,
@@ -1197,7 +1197,7 @@ impl BucketPushRef for Arc<Row<OrderLine, (i32, i32, i32, i32)>>
         }
 }
 
-impl BucketPushRef for Arc<Row<History, i32>>
+impl BucketPushRef for Arc<Row<History, (i32, i32)>>
 {
     fn into_push_table_ref(
         self,

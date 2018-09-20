@@ -123,7 +123,9 @@ impl CustomerTable {
 
     pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
     {
-        self.table_.retrieve(index)
+        let wh_num = num_warehouse_get();
+        let bucket_idx = index.0 * wh_num + index.1;
+        self.table_.retrieve(index, bucket_idx as usize)
     }
 
     pub fn get_bucket(&self, bkt_idx : usize ) -> &Bucket<Customer, (i32, i32, i32)>
@@ -134,6 +136,7 @@ impl CustomerTable {
     pub fn find_by_name_id(&self, index : &(String, i32, i32))
         -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
         {
+            let wh_num = num_warehouse_get();
             match self.name_index_.find_one_bucket_mut(index) {
                 None => {
                     self.name_index_.unlock_bucket(index);
@@ -145,7 +148,7 @@ impl CustomerTable {
                     
                     let i = tuples.len()/2;
                     let (w_id, d_id, c_id, _) = tuples[i];
-                    let ret = self.table_.retrieve(&(w_id, d_id, c_id));
+                    let ret = self.table_.retrieve(&(w_id, d_id, c_id), (wh_num * w_id + d_id) as usize);
                     self.name_index_.unlock_bucket(index);
                     ret
                 }
@@ -227,7 +230,9 @@ impl NewOrderTable {
     pub fn retrieve(&self, index: &(i32, i32, i32)) 
         -> Option<Arc<Row<NewOrder, (i32, i32,i32)>>>
         {
-            self.table_.retrieve(index)
+            let wh_num = num_warehouse_get();
+            let bucket_idx = index.0 * wh_num + index.1;
+            self.table_.retrieve(index, bucket_idx as usize)
         }
 
 
@@ -240,6 +245,7 @@ impl NewOrderTable {
     pub fn retrieve_min_oid(&self, index: &(i32, i32)) 
         -> Option<Arc<Row<NewOrder, (i32,i32,i32)>>>
         {
+            let wh_num = num_warehouse_get();
             match self.wd_index_.find_one_bucket(index) {
                 None => {
                     self.wd_index_.unlock_bucket(index);
@@ -251,7 +257,7 @@ impl NewOrderTable {
                         .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
                         .expect("wd_index should not be empty");
                         
-                    let ret =self.table_.retrieve(min_no);
+                    let ret =self.table_.retrieve(min_no, (min_no.0 * wh_num + min_no.1) as usize);
                     self.wd_index_.unlock_bucket(index);
                     ret
                 }
@@ -260,7 +266,9 @@ impl NewOrderTable {
     
     pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
     {
-        self.table_.delete(tx, index, tables);
+        let wh_num = num_warehouse_get();
+        let bucket_idx = index.0 * wh_num + index.1;
+        self.table_.delete(tx, index, tables, bucket_idx as usize);
     }
 
 
@@ -359,7 +367,9 @@ impl OrderLineTable {
 
     pub fn retrieve(&self, index: &(i32, i32, i32, i32)) -> Option<Arc<Row<OrderLine, (i32, i32, i32, i32)>>>
     {
-       self.table_.retrieve(index)
+        let wh_num = num_warehouse_get();
+        let bucket_idx = index.0 * wh_num + index.1;
+       self.table_.retrieve(index, bucket_idx as usize)
     }
 
     pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<OrderLine, (i32, i32, i32, i32)>
@@ -390,6 +400,7 @@ impl OrderLineTable {
         -> Vec<Arc<Row<OrderLine, (i32, i32, i32, i32)>>>
         {
             let mut ids = Vec::new();
+            let wh_num = num_warehouse_get();
             for o_id in o_id_low..=o_id_high { 
                 let key = (w_id, d_id, o_id);
                 match self.order_index_.find_one_bucket(&key) {
@@ -403,7 +414,7 @@ impl OrderLineTable {
             }
 
             let arcs = ids.iter()
-                .filter_map(|id| self.table_.retrieve(id))
+                .filter_map(|id| self.table_.retrieve(id, (id.0 * wh_num + id.1) as usize))
                 .collect::<Vec<_>>();
 
             assert_eq!(arcs.len(), ids.len());
@@ -454,7 +465,9 @@ impl OrderTable {
 
     pub fn retrieve(&self, index: &(i32, i32, i32)) -> Option<Arc<Row<Order, (i32, i32, i32)>>>
     {
-        self.table_.retrieve(index)
+        let wh_num = num_warehouse_get();
+        let bucket_idx = index.0 * wh_num + index.1;
+        self.table_.retrieve(index, bucket_idx as usize)
     }
 
     pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<Order, (i32, i32, i32)>
@@ -487,6 +500,7 @@ impl OrderTable {
     pub fn retrieve_by_cid(&self, key: &(i32, i32, i32))
         -> Option<Arc<Row<Order, (i32, i32, i32)>>> 
         {
+            let wh_num = num_warehouse_get();
             match self.cus_index_.find_one_bucket(key) {
                 None => {
                     self.cus_index_.unlock_bucket(key);
@@ -497,7 +511,7 @@ impl OrderTable {
                         .max_by(|a, b| a.2.cmp(&b.2))
                         .expect("retrieve_by_cid: empty ids");
 
-                    let ret = self.table_.retrieve(max_pos);
+                    let ret = self.table_.retrieve(max_pos, (max_pos.0 * wh_num + max_pos.1) as usize);
                     self.cus_index_.unlock_bucket(key);
                     ret
                 }
@@ -661,7 +675,7 @@ pub type  StockTable = Table<Stock, (i32, i32)>;
 
 //FIXME: 
 //pub type HistoryTable = NonIndexTable<History>;
-pub type HistoryTable = Table<History, (i32)>; /* No primary key in fact */
+pub type HistoryTable = Table<History, (i32, i32)>; /* No primary key in fact */
 
 #[derive(Debug)]
 pub struct Tables {
@@ -695,6 +709,8 @@ pub trait BucketPushRef {
 
 pub trait Key<T> {
     fn primary_key(&self) -> T;
+
+    fn bucket_key(&self) -> usize;
 }
 
 
@@ -752,11 +768,11 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pub fn push(&self, tx: &mut TransactionOCC, entry: Entry, tables: &Arc<Tables>)
     where Arc<Row<Entry, Index>> :BucketPushRef 
     {
-        let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
-        
+        let bkt_idx = entry.bucket_key() % self.bucket_num;
+
         //Make into row and then make into a RowRef
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
-        let table_ref = row.into_push_table_ref(bucket_idx, tables.clone());
+        let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.commit_id().clone();
         let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
@@ -764,11 +780,10 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
 
-    pub fn delete(&self, tx: &mut TransactionOCC, index: &Index, tables: &Arc<Tables>)
+    pub fn delete(&self, tx: &mut TransactionOCC, index: &Index, tables: &Arc<Tables>, bucket_idx: usize)
         where Arc<Row<Entry, Index>> : BucketDeleteRef
     {
-        let bucket_idx = self.get_bucket_idx(index);
-        
+        let bucket_idx = bucket_idx % self.bucket_num;
         let row = self.buckets[bucket_idx].retrieve(index).expect("delete: no element").clone();
         let table_ref = row.into_delete_table_ref(
             bucket_idx,
@@ -780,25 +795,24 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
     pub fn push_raw(&self, entry: Entry) 
     {
-        let bucket_idx = self.make_hash(&entry.primary_key()) % self.bucket_num;
-        self.buckets[bucket_idx].push_raw(entry);
+        let bkt_idx = entry.bucket_key() % self.bucket_num;
+        self.buckets[bkt_idx].push_raw(entry);
     }
 
-    pub fn retrieve(&self, index: &Index) -> Option<Arc<Row<Entry, Index>>> {
-        let bucket_idx = self.make_hash(&index) % self.bucket_num;
-        self.buckets[bucket_idx].retrieve(index)
+    pub fn retrieve(&self, index: &Index, bucket_idx: usize) -> Option<Arc<Row<Entry, Index>>> {
+        self.buckets[bucket_idx % self.bucket_num].retrieve(index)
     }
 
-    fn make_hash(&self, idx : &Index) -> usize {
-        let mut s = self.hash_builder.build_hasher();
-        idx.hash(&mut s);
-        s.finish() as usize
-    }
+   // fn make_hash(&self, idx : &Index) -> usize {
+   //     let mut s = self.hash_builder.build_hasher();
+   //     idx.hash(&mut s);
+   //     s.finish() as usize
+   // }
 
-    fn get_bucket_idx(&self, key: &Index) -> usize 
-    {
-        self.make_hash(key) % self.bucket_num
-    }
+   // fn get_bucket_idx(&self, key: &Index) -> usize 
+   // {
+   //     self.make_hash(key) % self.bucket_num
+   // }
 
     pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<Entry, Index>{
         &self.buckets[bkt_idx]
