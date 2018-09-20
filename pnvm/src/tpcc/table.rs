@@ -860,8 +860,8 @@ pub struct Bucket<Entry, Index>
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone,
 {
-    rows: RwLock<Vec<Arc<Row<Entry, Index>>>>,
-    index: RwLock<HashMap<Index, usize>>,
+    rows: UnsafeCell<Vec<Arc<Row<Entry, Index>>>>,
+    index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
     vers_ : TVersion,
 }
@@ -872,8 +872,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 {
     pub fn new() -> Bucket<Entry, Index> {
         Bucket {
-            rows: RwLock::new(Vec::new()),
-            index: RwLock::new(HashMap::new()),
+            rows: UnsafeCell::new(Vec::new()),
+            index: UnsafeCell::new(HashMap::new()),
 
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
@@ -883,8 +883,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pub fn with_capacity(cap: usize) -> Bucket<Entry, Index> 
     {
         Bucket {
-            rows: RwLock::new(Vec::with_capacity(cap)),
-            index: RwLock::new(HashMap::new()),
+            rows: UnsafeCell::new(Vec::with_capacity(cap)),
+            index: UnsafeCell::new(HashMap::new()),
 
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
@@ -895,41 +895,41 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
         debug!("[PUSH ROW] : {:?}", *row_arc);
         let idx_elem = row_arc.get_data().primary_key();
-        {
-            let mut rows = self.rows.write().unwrap();
+        unsafe {
+            let mut rows = self.rows.get().as_mut().unwrap();
             rows.push(row_arc);
+            let mut idx_map = self.index.get().as_mut().unwrap();
+            idx_map.insert(idx_elem, self.len() -1);
         }
-
-        let mut idx_map = self.index.write().unwrap();
-        idx_map.insert(idx_elem, self.len() -1);
     }
 
     pub fn delete(&self, row_arc: Arc<Row<Entry, Index>>) {
         let idx_elem = row_arc.get_data().primary_key();
 
         /* FIXME: Leave the data in the rows */
-        let mut idx_map = self.index.write().unwrap();
-        idx_map.remove(&idx_elem);
+        unsafe {
+            let mut idx_map = self.index.get().as_mut().unwrap();
+            idx_map.remove(&idx_elem);
+        }
     }
 
     fn push_raw(&self, entry: Entry) {
         let idx_elem = entry.primary_key();
-        {
-            let mut rows = self.rows.write().unwrap();
+        unsafe {
+            let mut rows = self.rows.get().as_mut().unwrap();
             rows.push(Arc::new(Row::new(entry)));
+            let mut idx_map = self.index.get().as_mut().unwrap();
+            idx_map.insert(idx_elem, self.len()-1);
         }
-
-        let mut idx_map = self.index.write().unwrap();
-        idx_map.insert(idx_elem, self.len()-1);
     }
 
     pub fn retrieve(&self, index_elem: &Index) -> Option<Arc<Row<Entry, Index>>> { 
         //Check out of bound
-        let index = self.index.read().unwrap();
+        let index = unsafe {self.index.get().as_ref().unwrap()};
         match index.get(index_elem) {
             None => None,
             Some(idx) => {
-                let rows = self.rows.read().unwrap();
+                let rows = unsafe {self.rows.get().as_ref().unwrap()};
                 Some(rows.get(*idx).expect("row should not be empty. inconsistent with index").clone())
                 //unsafe {
                 //    rows.ptr().offset(*idx as isize).as_ref()
@@ -939,13 +939,13 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     }
 
    fn cap(&self) -> usize {
-       let rows = self.rows.read().unwrap();
+       let rows = unsafe {self.rows.get().as_ref().unwrap()};
        rows.capacity()
    }
 
 
     fn len(&self) -> usize {
-        let rows = self.rows.read().unwrap();
+        let rows = unsafe {self.rows.get().as_ref().unwrap()};
         rows.len()
     }
 
@@ -1014,6 +1014,17 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
 
 }
+
+unsafe impl<Entry, Index> Sync for Bucket<Entry, Index>
+where Entry: 'static + Key<Index> + Clone+Debug,
+      Index: Eq+Hash + Clone, 
+{}
+
+
+unsafe impl<Entry, Index> Send for Bucket<Entry, Index>
+where Entry: 'static + Key<Index> + Clone+Debug,
+      Index: Eq+Hash + Clone,
+{}
 
 pub struct Row<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone+Debug,
