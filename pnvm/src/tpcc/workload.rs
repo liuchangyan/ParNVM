@@ -541,10 +541,11 @@ fn new_order(tx: &mut TransactionOCC,
 
 pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : i32,rng: &mut SmallRng) {
     let NUM_WAREHOUSES = num_warehouse_get();
+    let NUM_DISTRICT = num_district_get();
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
     //let w_id = urand(1, NUM_WAREHOUSES, rng);
     let w_id = w_home;
-    let d_id = urand(1, 10, rng);
+    let d_id = urand(1, NUM_DISTRICT, rng);
     let c_id = nurand(1023, 1, 3000, rng);
     let ol_cnt = urand(5, 15, rng);
 
@@ -553,7 +554,8 @@ pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : 
     let mut qty = [0 as i32;15];
 
     for i in 0..ol_cnt as usize {
-        supware[i] = if urand(1, 100, rng) > 1 {
+        //supware[i] = if urand(1, 100, rng) > 1 {
+        supware[i] = if true {
             w_id
         } else {
             urandexcept(1, NUM_WAREHOUSES, w_id, rng)
@@ -574,9 +576,11 @@ pub fn payment_random(tx: &mut TransactionOCC,
 {
     //let w_id = w_home;
     let NUM_WAREHOUSES = num_warehouse_get();
+    let NUM_DISTRICT = num_district_get();
 
-    let w_id = urand(1, NUM_WAREHOUSES, rng);
-    let d_id = urand(1, 10, rng);
+    //let w_id = urand(1, NUM_WAREHOUSES, rng);
+    let w_id = w_home;
+    let d_id = urand(1, NUM_DISTRICT, rng);
         
     let x = urand(1, 100, rng);
     let y = urand(1, 100, rng);
@@ -792,7 +796,7 @@ pub fn delivery(tx: &mut TransactionOCC,
     let NUM_INIT_DISTRICT = num_district_get();
     let wh_num = num_warehouse_get();
 
-    for d_id in 1..NUM_INIT_DISTRICT {
+    for d_id in 1..=NUM_INIT_DISTRICT {
         //TODO:
         let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
         if no_arc.is_some() {

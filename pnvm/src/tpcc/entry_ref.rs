@@ -503,7 +503,8 @@ impl  TRef for OrderRef  {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
                 table.order.get_bucket(bucket_idx).set_version(row.get_version());
-                table.order.get_bucket(bucket_idx).push(row);
+                table.order.get_bucket(bucket_idx).push(row.clone());
+                table.order.update_cus_index(&row);
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
@@ -589,7 +590,8 @@ impl  TRef for OrderLineRef  {
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
                 table.orderline.get_bucket(bucket_idx).set_version(row.get_version());
-                table.orderline.get_bucket(bucket_idx).push(row);
+                table.orderline.get_bucket(bucket_idx).push(row.clone());
+                table.orderline.update_order_index(&row);
             },
             None => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);

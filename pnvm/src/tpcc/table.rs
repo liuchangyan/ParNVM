@@ -253,6 +253,7 @@ impl NewOrderTable {
                 },
 
                 Some(vecs) => {
+                    assert_eq!(vecs.len()> 0, true);
                     let min_no = vecs.iter()
                         .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
                         .expect("wd_index should not be empty");
