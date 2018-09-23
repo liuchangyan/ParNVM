@@ -7,6 +7,7 @@ use std::{
     collections::{
         HashMap,
         hash_map::RandomState,
+        VecDeque,
     },
     cell::UnsafeCell,
     ptr::{self, NonNull},
@@ -142,8 +143,10 @@ impl CustomerTable {
                     self.name_index_.unlock_bucket(index);
                     None
                 },
-                Some(mut tuples) => {
+                Some(tuples) => {
                     assert_eq!(tuples.len() > 0 , true);
+                    let (front, back) = tuples.as_slices();
+                    let mut tuples = [front, back].concat();
                     tuples.sort_unstable_by(|a, b| a.3.cmp(&b.3));
                     
                     let i = tuples.len()/2;
@@ -213,9 +216,11 @@ impl NewOrderTable {
         let idx_key = (entry.no_w_id, entry.no_d_id);
 
         self.wd_index_.insert_index(idx_key.clone(),p_key);
-        
+       
+
         self.table_.push_raw(entry);
         self.wd_index_.unlock_bucket(&idx_key);
+
     }
 
     pub fn update_wd_index(&self, arc: &Arc<Row<NewOrder, (i32, i32, i32)>>)
@@ -254,11 +259,11 @@ impl NewOrderTable {
 
                 Some(vecs) => {
                     assert_eq!(vecs.len()> 0, true);
-                    let min_no = vecs.iter()
-                        .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
-                        .expect("wd_index should not be empty");
-                        
-                    let ret =self.table_.retrieve(min_no, (min_no.0 * wh_num + min_no.1) as usize);
+                   // let min_no = vecs.iter()
+                   //     .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
+                   //     .expect("wd_index should not be empty");
+                    let min_no = vecs[0];    
+                    let ret =self.table_.retrieve(&min_no, (min_no.0 * wh_num + min_no.1) as usize);
                     self.wd_index_.unlock_bucket(index);
                     ret
                 }
@@ -300,7 +305,7 @@ impl NewOrderTable {
                     .position(|&x| x.2==o_id) //w_id, d_id, o_id
                     .expect("delete:no_id should not be empty");
 
-                let removed = v.swap_remove(idx);
+                let removed = v.remove(idx).unwrap();
                 assert_eq!(removed.2 == o_id, true);
                 self.wd_index_.unlock_bucket(&(w_id, d_id));
             }
@@ -362,6 +367,8 @@ impl OrderLineTable {
     {
         let ol = arc.get_data();
         let idx_key = (ol.ol_w_id, ol.ol_d_id, ol.ol_o_id);
+       // warn!("[-][ORDERLINE-INDEX] Updating Orderline index: {}, {}, {} => {:?}",
+       //       ol.ol_w_id, ol.ol_d_id, ol.ol_o_id, ol.primary_key());
         self.order_index_.insert_index(idx_key.clone(), ol.primary_key());
         self.order_index_.unlock_bucket(&idx_key);
     }
@@ -387,7 +394,7 @@ impl OrderLineTable {
                 Vec::new()
             },
             Some(ids) => {
-                let ret = ids.iter()
+               let ret = ids.iter()
                     .filter_map(|id| self.retrieve(id))
                     .collect::<Vec<_>>();
 
@@ -407,18 +414,27 @@ impl OrderLineTable {
                 match self.order_index_.find_one_bucket(&key) {
                     None=> {}, 
                     Some(v) => {
-                        ids.append(&mut v.clone());
-
+                        ids.append(&mut v.clone().into());
                     }
                 }
                 self.order_index_.unlock_bucket(&key);
             }
 
             let arcs = ids.iter()
-                .filter_map(|id| self.table_.retrieve(id, (id.0 * wh_num + id.1) as usize))
+                .filter_map(|id| self.retrieve(id))
+               // .map(|id| {
+               //     match self.retrieve(id) {
+               //         None => {
+               //            // println!("{:#?}", self.table_.get_bucket((id.0 * wh_num + id.1) as usize));
+               //            // println!("{:#?}", self.order_index_);
+               //             panic!("find_range: not found {:?}", id);
+               //         },
+               //         Some(arc) => arc
+               //     }
+               // })
                 .collect::<Vec<_>>();
 
-            assert_eq!(arcs.len(), ids.len());
+            //assert_eq!(arcs.len(), ids.len());
             arcs
         }
 
@@ -537,8 +553,7 @@ where K: Hash + Eq + Debug,
       V: Debug,
 {
     pub fn new(f: Box<Fn(&K)->usize>) -> SecIndex<K, V> 
-    {
-        SecIndex {
+    { SecIndex {
             buckets_ : Vec::new(),
             get_bucket_: f,
         }
@@ -568,12 +583,12 @@ where K: Hash + Eq + Debug,
         self.buckets_[(self.get_bucket_)(key)].unlock();
     }
 
-    pub fn find_one_bucket(&self, key: &K) ->  Option<&Vec<V>> 
+    pub fn find_one_bucket(&self, key: &K) ->  Option<&VecDeque<V>> 
     {
         self.buckets_[(self.get_bucket_)(key)].find_many(key)
     }
 
-    pub fn find_one_bucket_mut(&self, key: &K) ->  Option<&mut Vec<V>> 
+    pub fn find_one_bucket_mut(&self, key: &K) ->  Option<&mut VecDeque<V>> 
     {
         self.buckets_[(self.get_bucket_)(key)].find_many_mut(key)
     }
@@ -605,7 +620,7 @@ where K: Hash + Eq + Debug,
       V: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SecIndex not formatted",)
+        write!(f, "{:#?}", self.buckets_)
     }
 }
 
@@ -614,7 +629,7 @@ struct SecIndexBucket<K, V>
 where K: Hash+ Eq+ Debug,
       V: Debug
 {
-    index_ : UnsafeCell<HashMap<K, Vec<V>>>,
+    index_ : UnsafeCell<HashMap<K, VecDeque<V>>>,
     lock_ : AtomicBool,
 }
 
@@ -630,12 +645,12 @@ where K: Hash+Eq+Debug,
         }
     }
 
-    pub fn index(&self) -> &HashMap<K, Vec<V>> {
+    pub fn index(&self) -> &HashMap<K, VecDeque<V>> {
         self.lock(); /* Spin locks */
         unsafe { self.index_.get().as_ref().unwrap() }
     }
 
-    pub fn index_mut(&self) -> &mut HashMap<K, Vec<V>> {
+    pub fn index_mut(&self) -> &mut HashMap<K, VecDeque<V>> {
         self.lock();
         unsafe { self.index_.get().as_mut().unwrap() }
     }
@@ -651,23 +666,34 @@ where K: Hash+Eq+Debug,
     fn insert_index(&self, key: K, val : V) {
         let ids = self.index_mut()
             .entry(key)
-            .or_insert_with(|| Vec::new());
+            .or_insert_with(|| VecDeque::new());
 
-        ids.push(val);
+        ids.push_back(val);
+
         
         /* Delay unlock until the data is pushed */
     }
     
     /* FIXME: Allocating new arrays? */
-    fn find_many(&self, key: &K) -> Option<&Vec<V>> {
+    fn find_many(&self, key: &K) -> Option<&VecDeque<V>> {
         self.index().get(key)
     }
 
-    fn find_many_mut(&self, key: &K) -> Option<&mut Vec<V>> {
+    fn find_many_mut(&self, key: &K) -> Option<&mut VecDeque<V>> {
         self.index_mut().get_mut(key)
     }
 }
 
+impl<K, V> Debug for SecIndexBucket<K, V>
+where K: Hash + Eq + Debug,
+      V: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {
+            write!(f, "{:?}", self.index_.get().as_ref().unwrap())
+        }
+    }
+}
 
 
 //pub type  OrderLineTable = Table<OrderLine, (i32, i32, i32, i32)>;
@@ -816,7 +842,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
    // }
 
     pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<Entry, Index>{
-        &self.buckets[bkt_idx]
+        info!("------------[TABLE] getting bucket {}-------", bkt_idx);
+        &self.buckets[bkt_idx % self.bucket_num]
     }
 }
 
@@ -856,7 +883,6 @@ where Entry: 'static + Key<Index> + Clone +Debug,
 //}
 
 /* FIXME: can we avoid the copy */
-#[derive(Debug)]
 pub struct Bucket<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone,
@@ -1030,6 +1056,20 @@ unsafe impl<Entry, Index> Send for Bucket<Entry, Index>
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone,
 {}
+
+impl<Entry, Index> Debug for Bucket<Entry, Index>
+where Entry: 'static + Key<Index> + Clone+Debug,
+      Index: Eq+Hash + Clone + Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+       //try locks ?
+        unsafe {
+            let rows = self.rows.get().as_ref().unwrap();
+            let map = self.index.get().as_ref().unwrap();
+            write!(f, "{:#?}\n{:#?}", rows, map)
+        }
+    }
+}
 
 pub struct Row<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone+Debug,

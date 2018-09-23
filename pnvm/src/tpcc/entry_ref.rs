@@ -591,6 +591,7 @@ impl  TRef for OrderLineRef  {
                 let bucket_idx = self.bucket_idx_.unwrap();
                 table.orderline.get_bucket(bucket_idx).set_version(row.get_version());
                 table.orderline.get_bucket(bucket_idx).push(row.clone());
+                 info!("[{:?}] [ORDERLINE-INDEX] Inserting for {:?}", id, row);
                 table.orderline.update_order_index(&row);
             },
             None => {
@@ -621,7 +622,7 @@ impl  TRef for OrderLineRef  {
         if self.table_ref_.is_none() {
             self.inner_.check(vers, tid)
         } else {
-            true
+            true //FIXME: what if deleted
         }
     }
     fn box_clone(&self) -> Box<dyn TRef> {

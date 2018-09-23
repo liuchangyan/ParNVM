@@ -528,7 +528,7 @@ fn new_order(tx: &mut TransactionOCC,
              (Numeric::new(1, 1, 0) - c_discount);
             
          //println!("{}", s_dist);
-         info!("[{:?}][TXN-NEWORDER] PUSHING ORDERLINE  {:?}", tid, o_id);
+         info!("[{:?}][TXN-NEWORDER] PUSHING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
          tables.orderline.push(tx, 
                                OrderLine {
                                    ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, ol_number: i as i32 + 1, ol_i_id: item_ids[i],
