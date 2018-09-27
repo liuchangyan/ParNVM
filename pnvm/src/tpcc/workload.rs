@@ -771,7 +771,20 @@ fn orderstatus(tx: &mut TransactionOCC,
 
     let c_id = tx.read::<Customer>(c_row).c_id;
     //TODO:
-    let o_row = tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)).expect("order tempty").into_table_ref(None, None);
+   // let o_row = tables.order
+   //     .retrieve_by_cid(&(c_w_id, c_d_id, c_id))
+   //     .expect(format!("order tempty {:?}", (c_w_id,c_d_id, c_id)).as_str())
+   //     .into_table_ref(None, None);
+    let o_row = match tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)) {
+        None => {
+            tx.should_abort();
+            warn!("retrieve_by_cid:: corrupted");
+            return;
+        },
+        Some(o_row) => {
+            o_row.into_table_ref(None, None)
+        }
+    };
 
     let o_id = tx.read::<Order>(o_row).o_id;
     info!("[{:?}][ORDER-STATUS] GET ORDER FROM CUSTOMER [w_d: {}-{}, o_id: {}, c_id: {}]", tid, c_w_id, c_d_id,o_id, c_id);
@@ -804,7 +817,9 @@ pub fn delivery(tx: &mut TransactionOCC,
             let no_o_id = tx.read::<NewOrder>(no_row).no_o_id;
             //TODO:
             info!("[{:?}][DELIVERY] DELETING NEWORDER [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
-            tables.neworder.delete(tx, &(w_id, d_id, no_o_id), tables);
+            if !tables.neworder.delete(tx, &(w_id, d_id, no_o_id), tables) {
+                tx.should_abort();
+            }
 
             info!("[{:?}][DELIVERY] RETRIEVING ORDER  [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
             let o_row = tables.order.retrieve(&(w_id, d_id, no_o_id)).expect("order empty").into_table_ref(None, None);

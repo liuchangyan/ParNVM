@@ -124,6 +124,7 @@ pub enum AbortReason {
     Error,
     User,
     FailedLocking,
+    IndexErr, 
 }
 
 #[derive(Debug)]

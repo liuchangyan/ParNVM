@@ -270,11 +270,11 @@ impl NewOrderTable {
             }
         }
     
-    pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>)
+    pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
     {
         let wh_num = num_warehouse_get();
         let bucket_idx = index.0 * wh_num + index.1;
-        self.table_.delete(tx, index, tables, bucket_idx as usize);
+        self.table_.delete(tx, index, tables, bucket_idx as usize)
     }
 
 
@@ -291,6 +291,7 @@ impl NewOrderTable {
 
     //Holding on bucket lock
     pub fn delete_index(&self, arc : &Arc<Row<NewOrder, (i32, i32,i32)>>)
+        -> bool
     {
         let no = arc.get_data();
         let index  = no.primary_key();
@@ -301,13 +302,19 @@ impl NewOrderTable {
                 panic!("NewOrderTable::delete_index : missing index");
             },
             Some(mut v) => {
-                let idx = v.iter()
-                    .position(|&x| x.2==o_id) //w_id, d_id, o_id
-                    .expect("delete:no_id should not be empty");
-
-                let removed = v.remove(idx).unwrap();
-                assert_eq!(removed.2 == o_id, true);
-                self.wd_index_.unlock_bucket(&(w_id, d_id));
+                match v.iter().position(|&x| x.2 == o_id) {
+                    None => {
+                        warn!("delete_index:: no id {:?}", (w_id, d_id, o_id));
+                        self.wd_index_.unlock_bucket(&(w_id, d_id));
+                        false
+                    },
+                    Some(idx) => {
+                        let removed = v.remove(idx).unwrap();
+                        assert_eq!(removed.2 == o_id, true);
+                        self.wd_index_.unlock_bucket(&(w_id, d_id));
+                        true
+                    }
+                }
             }
         }
     }
@@ -528,7 +535,10 @@ impl OrderTable {
                         .max_by(|a, b| a.2.cmp(&b.2))
                         .expect("retrieve_by_cid: empty ids");
 
-                    let ret = self.table_.retrieve(max_pos, (max_pos.0 * wh_num + max_pos.1) as usize);
+                    let ret = self.retrieve(max_pos);
+                    if ret.is_none() {
+                        println!("retrieve_by_cid: none {:?}", max_pos);
+                    }
                     self.cus_index_.unlock_bucket(key);
                     ret
                 }
@@ -807,17 +817,24 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
 
-    pub fn delete(&self, tx: &mut TransactionOCC, index: &Index, tables: &Arc<Tables>, bucket_idx: usize)
+    pub fn delete(&self, tx: &mut TransactionOCC, index: &Index, tables: &Arc<Tables>, bucket_idx: usize) -> bool
         where Arc<Row<Entry, Index>> : BucketDeleteRef
     {
         let bucket_idx = bucket_idx % self.bucket_num;
-        let row = self.buckets[bucket_idx].retrieve(index).expect("delete: no element").clone();
+        let row = match self.buckets[bucket_idx].retrieve(index){
+            None => { 
+                warn!("tx_delete: no element {:?}", index);
+                return false;
+            },
+            Some(row) => row
+        };
         let table_ref = row.into_delete_table_ref(
             bucket_idx,
             tables.clone(),
             );
         let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
         tag.set_write(); //FIXME: better way?
+        true
     }
 
     pub fn push_raw(&self, entry: Entry) 

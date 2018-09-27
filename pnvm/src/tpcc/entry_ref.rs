@@ -393,8 +393,10 @@ impl  TRef for NewOrderRef  {
                         let row = self.inner_.clone();
                         let bucket_idx = self.bucket_idx_.expect("no bucket indx");
                         table.neworder.get_bucket(bucket_idx).set_version(row.get_version());
-                        table.neworder.delete_index(&row);
-                        table.neworder.get_bucket(bucket_idx).delete(row);
+                        //FIXME: hack so double delete allowed
+                        if table.neworder.delete_index(&row) {
+                            table.neworder.get_bucket(bucket_idx).delete(row);
+                        }
                     }
                     _ => panic!("NewOrderRef::install: RWrite has table ref")
                 }

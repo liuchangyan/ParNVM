@@ -21,6 +21,7 @@ pub struct TransactionOCC
     deps_:  HashMap<(ObjectId, i8), TTag>,
     locks_ : Vec<*const TTag>,
     txn_info_ : Arc<TxnInfo>,
+    should_abort_: bool,
 
 }
 
@@ -30,7 +31,9 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn try_commit(&mut self) -> bool {
-        self.state_ = TxState::COMMITTED;
+        if self.should_abort_ {
+            return self.abort(AbortReason::IndexErr);
+        }
 
         //Stage 1: lock [TODO: Bounded lock or try_lock syntax]
         if !self.lock() {
@@ -98,6 +101,7 @@ impl TransactionOCC
             deps_: HashMap::with_capacity(32),
             locks_: Vec::with_capacity(32),
             txn_info_: Arc::new(TxnInfo::new(tid_)),
+            should_abort_ : false,
         }
     }
 
@@ -107,6 +111,10 @@ impl TransactionOCC
 
     pub fn txn_info(&self) -> &Arc<TxnInfo>  {
         &self.txn_info_
+    }
+
+    pub fn should_abort(&mut self) {
+        self.should_abort_ = true;
     }
 
     pub fn abort(&mut self, _: AbortReason) -> bool {
@@ -162,6 +170,7 @@ impl TransactionOCC
         //#[cfg(benchmark)]
         debug!("Tx[{:?}] is commiting", self.tid_);
         tcore::BenchmarkCounter::success();
+        self.state_ = TxState::COMMITTED;
 
         //Persist the write set logs
 
@@ -228,6 +237,7 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     fn clean_up(&mut self) {
+        self.should_abort_ = false;
         for (_, tag) in self.deps_.drain() {
             if tag.has_write() && tag.is_lock() {
                 tag.tobj_ref_.unlock();
