@@ -64,7 +64,7 @@ pub const NUM_INIT_NEXT_ORDER : i32 = 3001;
 pub const NUM_INIT_ITEM: i32 = 100_000;
 pub const NUM_INIT_CUSTOMER : i32 = 3000;
 
-pub fn prepare_workload_occ(conf: &Config, rng: &mut SmallRng) -> TablesRef {
+pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
    
     num_warehouse_set(conf.wh_num);
     num_district_set(conf.d_num);
@@ -896,16 +896,16 @@ pub fn stocklevel(tx: &mut TransactionOCC,
                
 
 
-fn urand(min:i32, max: i32, rng : &mut SmallRng) -> i32 {
+pub fn urand(min:i32, max: i32, rng : &mut SmallRng) -> i32 {
     abs(rng.gen::<i32>() % (max - min + 1)) + min
 }
 
-fn nurand(a: i32, x: i32, y: i32, rng : &mut SmallRng) -> i32 {
+pub fn nurand(a: i32, x: i32, y: i32, rng : &mut SmallRng) -> i32 {
     (((abs(rng.gen::<i32>() % a) | (abs(rng.gen::<i32>() % (y - x + 1)) + x)) + 42)
      % (y - x + 1)) + x
 }
 
-fn urandexcept(min: i32, max: i32, v: i32, rng : &mut SmallRng) -> i32 {
+pub fn urandexcept(min: i32, max: i32, v: i32, rng : &mut SmallRng) -> i32 {
     if max <= min {
          return min;
     }
@@ -918,7 +918,7 @@ fn urandexcept(min: i32, max: i32, v: i32, rng : &mut SmallRng) -> i32 {
 }
 
 
-fn rand_a_string(len_low: usize, len_high: usize, rng : &mut SmallRng) -> String {
+pub fn rand_a_string(len_low: usize, len_high: usize, rng : &mut SmallRng) -> String {
     let len = urand(len_low as i32, len_high as i32, rng) as usize;
     rng
         .sample_iter(&Alphanumeric)
@@ -926,7 +926,7 @@ fn rand_a_string(len_low: usize, len_high: usize, rng : &mut SmallRng) -> String
         .collect::<String>()
 }
 
-fn rand_n_string(low : i32, high : i32, rng: &mut SmallRng) -> String 
+pub fn rand_n_string(low : i32, high : i32, rng: &mut SmallRng) -> String 
 {
     let len = urand(low , high, rng) as usize;
     Uniform::new(0, 10)
@@ -936,11 +936,11 @@ fn rand_n_string(low : i32, high : i32, rng: &mut SmallRng) -> String
         .collect::<String>()
 }
 
-fn rand_zip(rng: &mut SmallRng) -> String {
+pub fn rand_zip(rng: &mut SmallRng) -> String {
     format!("{}11111", urand(0, 9999, rng))
 }
 
-fn rand_numeric(low : f64,
+pub fn rand_numeric(low : f64,
                 high: f64, 
                 len : usize, 
                 precision: usize, 
@@ -953,7 +953,7 @@ fn rand_numeric(low : f64,
 
 
 
-fn rand_data(low : i32, high : i32, rng : &mut SmallRng ) -> String {
+pub fn rand_data(low : i32, high : i32, rng : &mut SmallRng ) -> String {
     let len = urand(low, high, rng);
     let has_original = urand(1, 10, rng) == 1;
 
@@ -971,7 +971,7 @@ fn rand_data(low : i32, high : i32, rng : &mut SmallRng ) -> String {
 }
 
 
-fn rand_last_name(c_id : i32, rng: &mut SmallRng) -> String {
+pub fn rand_last_name(c_id : i32, rng: &mut SmallRng) -> String {
     let mut c = if c_id <= 1000 {
         urand(0,999,rng)
     } else  {
@@ -986,7 +986,7 @@ fn rand_last_name(c_id : i32, rng: &mut SmallRng) -> String {
 }
 
 
-fn last_name_of(idx : i32) -> &'static str {
+pub fn last_name_of(idx : i32) -> &'static str {
     match idx {
         0 => "BAR",
         1 => "OUGHT",
@@ -1002,6 +1002,6 @@ fn last_name_of(idx : i32) -> &'static str {
     }
 }
 
-fn gen_now() -> i32 {
+pub fn gen_now() -> i32 {
     time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32
 }

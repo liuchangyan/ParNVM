@@ -17,6 +17,7 @@ use std::{
     thread,
     default::Default,
     ptr::NonNull,
+    any::Any,
 };
 
 #[cfg(feature="pmem")]
@@ -31,6 +32,9 @@ use log;
 
 #[cfg(feature = "profile")]
 use flame;
+
+const OPERATION_CODE_RW :i8 = 2;
+
 
 #[derive(Clone, Debug)]
 pub struct TransactionParBase {
@@ -89,11 +93,13 @@ pub struct TransactionParOCC
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
     wait_:      Option<PieceOCC>,
+    //inputs_ :   Vec<Box<Any>>,
+    outputs_ :  Vec<Box<Any>>,
 
     #[cfg(feature="pmem")]
     records_ :     Vec<(Option<*mut u8>, Layout)>,
     
-    tags_ : HashMap<ObjectId, TTag>,
+    tags_ : HashMap<(ObjectId, i8), TTag>,
     locks_ : Vec<*const TTag>,
     
 }
@@ -103,6 +109,7 @@ impl TransactionParOCC
 {
     pub fn new(pieces : Vec<PieceOCC>, id : Tid, name: String) -> TransactionParOCC {
         TransactionParOCC {
+            outputs_ : Vec::with_capacity(pieces.len()),
             all_ps_:    pieces,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             id_:        id,
@@ -115,6 +122,7 @@ impl TransactionParOCC
 
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
+            //inputs_ : Vec::with_capacity(pieces.len()),
         }
     }
 
@@ -122,6 +130,7 @@ impl TransactionParOCC
     {
         let txn_base = txn_base.clone();
         TransactionParOCC {
+            outputs_: Vec::with_capacity(txn_base.all_ps_.len()),
             all_ps_:    txn_base.all_ps_,
             name_:      txn_base.name_,
             id_:        tid,
@@ -134,11 +143,24 @@ impl TransactionParOCC
 
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
+            //inputs_: Vec::with_capacity(txn_base.all_ps.len()),
         }
     }
 
 
+    
+    pub fn add_output(&mut self, data: Box<Any>)  -> usize{
+        self.outputs_.push(data);
+        self.outputs_.len()-1
+    }
 
+    pub fn get_output<T: 'static>(&self, idx: usize) -> &T {
+        assert_eq!(idx < self.outputs_.len(), true);
+        match self.outputs_[idx].downcast_ref::<T>() {
+            Some(v) => v,
+            None => panic!("type not matched"),
+        }
+    }
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: PieceOCC) {
@@ -157,20 +179,20 @@ impl TransactionParOCC
     }
 
     /* Implement OCC interface */
-    pub fn read<'a, T:'static +Clone>(&'a mut self, tobj: &'a dyn TRef) -> &'a T {
-        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
+    pub fn read<'a, T:'static +Clone>(&'a mut self, tobj: Box<dyn TRef>) -> &'a T {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), OPERATION_CODE_RW);
         tag.add_version(tobj.get_version());
         tag.get_data()
     }
 
-    pub fn write<T: 'static + Clone>(&mut self, tobj: &dyn TRef, val : T) {
-        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
+    pub fn write<T: 'static + Clone>(&mut self, tobj: Box<dyn TRef>, val : T) {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), OPERATION_CODE_RW);
         tag.write::<T>(val);
     }
 
     #[inline(always)]
-    fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>) -> &mut TTag {
-        self.tags_.entry(*id).or_insert(TTag::new(*id, tobj_ref))
+    fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, code: i8) -> &mut TTag {
+        self.tags_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
     }
 
     

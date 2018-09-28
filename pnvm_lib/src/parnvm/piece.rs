@@ -20,7 +20,7 @@ impl Pid {
 }
 
 type FnPtr = Arc<Box<Fn(&mut TransactionPar) -> i32 + Send + Sync>>;
-type FnPtrOCC = Arc<Box<Fn(&mut TransactionParOCC) -> i32 + Send + Sync>>;
+type FnPtrOCC = Arc<Box<Fn(&mut TransactionParOCC) + Send + Sync>>;
 
 
 #[derive(Clone)]
@@ -115,7 +115,7 @@ impl PieceOCC
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&mut self, tx : &mut TransactionParOCC) -> i32 {
+    pub fn run(&mut self, tx : &mut TransactionParOCC){
         (self.callback_)(tx)
     }
 

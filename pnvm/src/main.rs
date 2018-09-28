@@ -76,6 +76,7 @@ fn main() {
         "SINGLE" => run_single(conf),
         "PNVM_OCC" => run_nvm_occ(conf),
         "TPCC_OCC" => run_occ_tpcc(conf),
+        "TPCC_NVM" => run_pc_tpcc(conf),
         _ => panic!("unknown test name"),
     }
 }
@@ -319,9 +320,79 @@ fn run_occ(conf: Config) {
 }
 
 
+fn run_pc_tpcc(conf: Config) {
+    let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
+    //FIXME: rename the function, parepare workload
+    let tables = tpcc::workload::prepare_workload(&conf, &mut rng);
+
+    let atomic_cnt = Arc::new(AtomicUsize::new(1));
+    let mut handles = vec![];
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
+
+    #[cfg(feature = "profile")]
+    flame::start("benchmark_start");
+
+    for i in 1..=conf.thread_num {
+        let conf = conf.clone();
+        let atomic_clone = atomic_cnt.clone();
+        let barrier = barrier.clone();
+        let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
+        let tables = tables.clone();
+        let duration_in_secs = conf.duration;
+        let wh_num = conf.wh_num;
+        let d_num = conf.d_num;
+
+
+        let handle = builder
+            .spawn(move || {
+                TidFac::set_thd_mask(i as u32);
+                OidFac::set_obj_mask(i as u64);
+                tpcc::workload::num_warehouse_set(wh_num);
+                tpcc::workload::num_district_set(d_num);
+                let duration = Duration::new(duration_in_secs, 0);
+                let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
+                barrier.wait();
+                let start = Instant::now();
+                BenchmarkCounter::start();
+                let w_home = (i as i32 )% wh_num +1;
+                let d_home = (i as i32) % d_num + 1;
+
+                //for j in 0..conf.round_num {
+                while start.elapsed() < duration {
+                    let tid = TidFac::get_thd_next();
+
+                    let txn_base = tpcc::pc_gen::pc_new_order_random(&tables, w_home, &mut rng);
+                    let mut tx = TransactionParOCC::new_from_base(&txn_base, tid);
+
+                    tx.execute_txn();
+                    info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
+                }
+
+                BenchmarkCounter::copy()
+            })
+        .unwrap();
+
+        handles.push(handle);
+    }
+
+    let thd_num :usize = conf.thread_num;
+    report_stat(handles, conf);
+
+    println!("count : {}", Arc::strong_count(&tables));
+   // println!("{:?}", tables);
+    
+
+
+    #[cfg(feature = "profile")]
+    {
+        flame::end("benchmark_start");
+        let mut f = File::create(format!("profile/occ.profile.{}", thd_num).as_str()).unwrap();
+        flame::dump_text_to_writer(f);
+    }
+}
 fn run_occ_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-    let tables = tpcc::workload::prepare_workload_occ(&conf, &mut rng);
+    let tables = tpcc::workload::prepare_workload(&conf, &mut rng);
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];

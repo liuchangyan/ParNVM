@@ -184,16 +184,15 @@ impl WorkloadNVMOCC
                 for (x, rw) in comb_vec.iter() {
                     let tref = TInt::new(data_map.get(&x).expect("map get panic").get().clone());
                     if *rw == 1 { /* Read */
-                        let v = tx.read::<u32>(&tref);
+                        let v = tx.read::<u32>(Box::new(tref));
                         debug!("[{:?}] Read {:?}", id, v);
                     } else {
                         let val: u32 = tx.id().into();
-                        tx.write(&tref, val);
+                        tx.write(Box::new(tref), val);
                         debug!("[{:?}] Write {:?}", id, val);
                     }
                 }
 
-                1
             };
 
             let piece = PieceOCC::new(
