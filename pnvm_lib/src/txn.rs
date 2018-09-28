@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
-use tcore::{self, ObjectId, TTag};
+use tcore::{self, ObjectId, TTag, TRef};
 
 //lazy_static! {
 //    static ref TXN_RUNNING: Arc<RwLock<HashMap<Tid, bool>>> =
@@ -39,6 +39,18 @@ thread_local! {
 //    fn notrans_read(tobj: &TObject<T>) -> T;
 //    fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool;
 //}
+
+
+pub trait Transaction {
+    fn try_commit(&mut self) -> bool;
+    fn read<'b, T: 'static + Clone>(&'b mut self, Box<dyn TRef>) -> &'b T;
+    fn write<T:'static + Clone>(&mut self, Box<dyn TRef>, T);
+    fn id(&self) -> Tid ;
+    fn txn_info(&self) -> &Arc<TxnInfo>;
+    fn should_abort(&mut self);
+    fn retrieve_tag(&mut self, &ObjectId, Box<dyn TRef>, i8) -> &mut TTag;
+
+}
 
 
 #[derive(PartialEq, Copy, Clone, Debug, Eq, Hash)]

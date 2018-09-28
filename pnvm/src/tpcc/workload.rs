@@ -443,7 +443,7 @@ fn new_order(tx: &mut TransactionOCC,
              now: i32)
 
 {
-    let tid = tx.commit_id();
+    let tid = tx.id();
     let wh_num = num_warehouse_get();
     let warehouse_ref = tables.warehouse.retrieve(&w_id, w_id as usize).unwrap().into_table_ref(None, None);
     //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
@@ -625,7 +625,7 @@ fn payment(tx: &mut TransactionOCC,
            rng : &mut SmallRng)
 {
     let wh_num = num_warehouse_get();
-    let tid = tx.commit_id();
+    let tid = tx.id();
     /* RW Warehouse */
     let warehouse_row = tables.warehouse.retrieve(&w_id, w_id as usize).expect("warehouse empty").into_table_ref(None, None);
     let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
@@ -747,7 +747,7 @@ fn orderstatus(tx: &mut TransactionOCC,
                )
 {
 
-    let tid = tx.commit_id();
+    let tid = tx.id();
     let c_row = match c_id {
         Some(c_id) => {
             tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
@@ -804,7 +804,7 @@ pub fn delivery(tx: &mut TransactionOCC,
             o_carrier_id: i32,
             )
 {
-    let tid = tx.commit_id();    
+    let tid = tx.id();    
     info!("[{:?}][DELIVERY STARTs]", tid);
     let NUM_INIT_DISTRICT = num_district_get();
     let wh_num = num_warehouse_get();
@@ -864,7 +864,7 @@ pub fn stocklevel(tx: &mut TransactionOCC,
               thd: Numeric,
               )
 {
-    let tid = tx.commit_id();
+    let tid = tx.id();
     let wh_num = num_warehouse_get();
     let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
     let mut d = tx.read::<District>(d_row).clone();

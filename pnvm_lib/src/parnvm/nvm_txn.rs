@@ -191,7 +191,7 @@ impl TransactionParOCC
     }
 
     #[inline(always)]
-    fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, code: i8) -> &mut TTag {
+    pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, code: i8) -> &mut TTag {
         self.tags_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
     }
 

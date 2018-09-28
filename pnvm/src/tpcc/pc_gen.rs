@@ -47,7 +47,7 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
         qty[i] = urand(1, 10, rng);
     }
 
-    pc_new_order(tables, w_id, d_id, c_id, ol_cnt, &supware, &itemid, &qty, now)
+    pc_new_order(tables, w_id, d_id, c_id, ol_cnt, supware.to_vec(), itemid.to_vec(), qty.to_vec(), now)
     }
 
 
@@ -57,9 +57,9 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
         d_id: i32,
         c_id: i32,
         ol_cnt: i32,
-        src_whs : &[i32],
-        item_ids: &[i32],
-        qty: &[i32],
+        _src_whs :Vec<i32>,
+        _item_ids: Vec<i32>,
+        qty: Vec<i32>,
         now: i32)
         -> TransactionParBaseOCC
         { 
@@ -82,6 +82,7 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
             };
 
             /* Read Warehouse */
+            let tables = _tables.clone();
             let new_order_2 = move |tx: &mut TransactionParOCC| {
                 let warehouse_ref = tables.warehouse.retrieve(&w_id, w_id as usize)
                     .unwrap().into_table_ref(None, None);
@@ -93,9 +94,10 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
 
 
             /* Insert NewOrder */
+            let tables = _tables.clone();
             let new_order_3 = move |tx: &mut TransactionParOCC| {
                 let o_id =  tx.get_output::<i32>(0).clone();
-                tables.neworder.push(tx,
+                tables.neworder.push_pc(tx,
                                      NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id },
                                      &tables);
 
@@ -103,9 +105,11 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
 
 
             /* Read Customer and Insert Order */
+            let src_whs = _src_whs.clone();
+            let tables = _tables.clone();
             let new_order_4 = move |tx: &mut TransactionParOCC| {
-                let tid = tx.id();
-                let o_id =tx.get_output::<i32>(0);
+                let tid = tx.id().clone();
+                let o_id =tx.get_output::<i32>(0).clone();
 
                 let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id))
                     .unwrap().into_table_ref(None, None);
@@ -121,9 +125,9 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
                 }
 
                 info!("[{:?}][TXN-NEWORDER] Push ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
-                tables.order.push(tx,
+                tables.order.push_pc(tx,
                                   Order {
-                                      o_id: *o_id, o_d_id: d_id, o_w_id: w_id, 
+                                      o_id: o_id, o_d_id: d_id, o_w_id: w_id, 
                                       o_c_id: c_id, o_entry_d: now,
                                       o_carrier_id: 0, 
                                       o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
@@ -135,6 +139,8 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
 
 
             /* Item LOOP */
+            let item_ids = _item_ids.clone();
+            let tables = _tables.clone();
             let new_order_5 = move |tx: &mut TransactionParOCC| {
                 let mut i_price_arr = Vec::with_capacity(ol_cnt as usize);
                 for i in 0..ol_cnt as usize {
@@ -151,13 +157,16 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
 
 
             /* Stock LOOP  & OrderLine LOOP*/
+            let src_whs = _src_whs.clone();
+            let item_ids = _item_ids.clone();
+            let tables = _tables.clone();
             let new_order_6= move |tx: &mut TransactionParOCC| {
-                let tid = tx.id();
+                let tid = tx.id().clone();
                 let w_tax =  tx.get_output::<Numeric>(2).clone();
                 let d_tax = tx.get_output::<Numeric>(1).clone();
                 let i_price_arr = tx.get_output::<Vec<Numeric>>(4).clone();
                 let c_discount = tx.get_output::<Numeric>(3).clone();
-                let o_id =tx.get_output::<i32>(0);
+                let o_id =tx.get_output::<i32>(0).clone();
 
                 for i in 0..ol_cnt as usize {
                     let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), (src_whs[i] as usize)).unwrap().into_table_ref(None, None);
@@ -199,9 +208,9 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
 
                     //println!("{}", s_dist);
                     info!("[{:?}][TXN-NEWORDER] PUSHING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
-                    tables.orderline.push(tx, 
+                    tables.orderline.push_pc(tx, 
                                           OrderLine {
-                                              ol_o_id: *o_id, ol_d_id: d_id, ol_w_id: w_id, 
+                                              ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, 
                                               ol_number: i as i32 + 1, ol_i_id: item_ids[i],
                                               ol_supply_w_id: src_whs[i], ol_delivery_d: 0,
                                               ol_quantity: qty, ol_amount: ol_amount,

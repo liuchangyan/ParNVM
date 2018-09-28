@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use txn::{self, AbortReason, Tid,  TxState, TxnInfo};
+use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
 //use plog;
 use tcore::{self, ObjectId, TTag, TRef, BoxRef};
@@ -26,11 +26,11 @@ pub struct TransactionOCC
 }
 
 const OPERATION_CODE_RW: i8 = 2;
-impl TransactionOCC
+impl Transaction for TransactionOCC
 {
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn try_commit(&mut self) -> bool {
+     fn try_commit(&mut self) -> bool {
         if self.should_abort_ {
             return self.abort(AbortReason::IndexErr);
         }
@@ -57,7 +57,7 @@ impl TransactionOCC
     //    tag.add_version(tobj.get_version());
     //    tag.get_data()
     //}
-    pub fn read<'b, T:'static + Clone>(&'b mut self, tref: Box<dyn TRef>) -> &'b T 
+     fn read<'b, T:'static + Clone>(&'b mut self, tref: Box<dyn TRef>) -> &'b T 
     {
         //let tref = tobj.clone().into_box_ref();
         
@@ -70,7 +70,7 @@ impl TransactionOCC
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
+     fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
     {
         //let tref = tobj.clone().into_box_ref();
         let id = *tref.get_id();
@@ -78,7 +78,29 @@ impl TransactionOCC
         tag.write::<T>(val);
     }
 
+     fn id(&self) -> Tid {
+        self.tid_
+    }
 
+     fn txn_info(&self) -> &Arc<TxnInfo>  {
+        &self.txn_info_
+    }
+
+     fn should_abort(&mut self) {
+        self.should_abort_ = true;
+    }
+
+    #[cfg_attr(feature = "profile", flame)]
+    #[inline(always)]
+     fn retrieve_tag(&mut self,
+                        id: &ObjectId, 
+                        tobj_ref: Box<dyn TRef>,
+                        code: i8
+                        ) 
+        -> &mut TTag
+        {
+            self.deps_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
+        }
     /*Non TransactionOCC Functions*/
    // fn notrans_read(tobj: &TObject<T>) -> T {
    //     //let tobj = Arc::clone(tobj);
@@ -105,17 +127,6 @@ impl TransactionOCC
         }
     }
 
-    pub fn commit_id(&self) -> Tid {
-        self.tid_
-    }
-
-    pub fn txn_info(&self) -> &Arc<TxnInfo>  {
-        &self.txn_info_
-    }
-
-    pub fn should_abort(&mut self) {
-        self.should_abort_ = true;
-    }
 
     pub fn abort(&mut self, _: AbortReason) -> bool {
         debug!("Tx[{:?}] is aborting.", self.tid_);
@@ -128,7 +139,7 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
-        let me  = self.commit_id();
+        let me  = self.id();
         //FIXME: this is hacky! allocate an vector large enough so that no move of reference
         //let mut locks_ : Vec<&TTag> =  Vec::with_capacity(64);
         for tag in self.deps_.values_mut() {
@@ -156,7 +167,7 @@ impl TransactionOCC
             if !tag.has_read() {
                 continue;
             }
-            if !tag.check(tag.vers_, self.commit_id().into())  {
+            if !tag.check(tag.vers_, self.id().into())  {
                 warn!("{:?} CHECKED FAILED ---- EXPECT: {}, BUT: {}", self.tid_, tag.get_version(), tag.vers_);
                 return false;
             }
@@ -193,7 +204,7 @@ impl TransactionOCC
         self.persist_commit();
 
         //Clean up local data structures.
-        //txn::mark_commit(self.commit_id());
+        //txn::mark_commit(self.id());
         self.clean_up();
         true
     }
@@ -202,14 +213,14 @@ impl TransactionOCC
    // #[cfg_attr(feature = "profile", flame)]
    // fn persist_commit(&self) {
    //     //FIXME:: Can it be async?
-   //     plog::persist_txn(self.commit_id().into());
+   //     plog::persist_txn(self.id().into());
    // }
 
    // #[cfg(feature = "pmem")]
    // #[cfg_attr(feature = "profile", flame)]
    // fn persist_log(&self) {
    //     let mut logs = vec![];
-   //     let id = self.commit_id();
+   //     let id = self.id();
    //     for tag in self.deps_.values() {
    //         if tag.has_write() {
    //             logs.push(tag.make_log(id));
@@ -223,13 +234,13 @@ impl TransactionOCC
    // #[cfg_attr(feature = "profile", flame)]
    // fn persist_data(&self) {
    //     for tag in self.deps_.values() {
-   //         tag.persist_data(self.commit_id());
+   //         tag.persist_data(self.id());
    //     }
    // }
 
     #[cfg_attr(feature = "profile", flame)]
     fn install_data(&mut self) {
-        let id = self.commit_id();
+        let id = self.id();
         for tag in self.deps_.values_mut() {
             tag.commit_data(id);
         }
@@ -248,15 +259,4 @@ impl TransactionOCC
     }
 
 
-    #[cfg_attr(feature = "profile", flame)]
-    #[inline(always)]
-    pub fn retrieve_tag(&mut self,
-                        id: &ObjectId, 
-                        tobj_ref: Box<dyn TRef>,
-                        code: i8
-                        ) 
-        -> &mut TTag
-        {
-            self.deps_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
-        }
 }

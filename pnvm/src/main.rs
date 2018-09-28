@@ -270,7 +270,7 @@ fn run_occ(conf: Config) {
                         }
                         for map in maps.iter() {
                             for read in read_keys.iter() {
-                                let id = tx.commit_id();
+                                let id = tx.id();
                                 let tref = map.get(&read).unwrap().get();
                                 //let val = tx.read(&tobj);
                                 let val = tx.read::<u32>(tref.clone().into_box_ref());
@@ -279,8 +279,8 @@ fn run_occ(conf: Config) {
 
                             for write in write_keys.iter() {
                                 let tref = map.get(&write).unwrap().get();
-                                let val :u32 = tx.commit_id().into();
-                                debug!("[{:?}] Write {:?}", tx.commit_id(), val);
+                                let val :u32 = tx.id().into();
+                                debug!("[{:?}] Write {:?}", tx.id(), val);
                                 tx.write(tref.clone().into_box_ref(), val);
                             }
                         }
