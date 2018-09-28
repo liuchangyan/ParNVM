@@ -27,7 +27,7 @@ type FnPtrOCC = Arc<Box<Fn(&mut TransactionParOCC) -> i32 + Send + Sync>>;
 pub struct Piece {
     callback_: FnPtr,
     pid_:      Pid,
-    tname_:    String,
+    tname_:    String, /* FIXME: use str */
     title_:    &'static str,
     rank_:       usize,
     //R/W sets?
