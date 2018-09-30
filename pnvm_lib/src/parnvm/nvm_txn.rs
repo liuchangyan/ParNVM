@@ -83,7 +83,7 @@ pub struct TransactionPar
     records_ :     Vec<(Option<*mut u8>, Layout)>,
 }
 
-#[derive(Default)]
+//#[derive(Default)]
 pub struct TransactionParOCC
 {
     all_ps_:    Vec<PieceOCC>,
@@ -93,7 +93,7 @@ pub struct TransactionParOCC
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
     wait_:      Option<PieceOCC>,
-    //inputs_ :   Vec<Box<Any>>,
+    inputs_ :   Box<Any>,
     outputs_ :  Vec<Box<Any>>,
 
     #[cfg(feature="pmem")]
@@ -107,30 +107,34 @@ pub struct TransactionParOCC
 
 impl TransactionParOCC
 {
-    pub fn new(pieces : Vec<PieceOCC>, id : Tid, name: String) -> TransactionParOCC {
-        TransactionParOCC {
-            outputs_ : Vec::with_capacity(pieces.len()),
-            all_ps_:    pieces,
-            deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
-            id_:        id,
-            name_:      name,
-            status_:    TxState::EMBRYO,
-            wait_:      None,
-            txn_info_:  Arc::new(TxnInfo::new(id)),
-            #[cfg(feature="pmem")]
-            records_ :     Vec::new(),
+   // pub fn new(pieces : Vec<PieceOCC>, id : Tid, name: String) -> TransactionParOCC {
+   //     TransactionParOCC {
+   //         inputs_ : Vec::new(),
+   //         outputs_ : Vec::with_capacity(pieces.len()),
+   //         all_ps_:    pieces,
+   //         deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
+   //         id_:        id,
+   //         name_:      name,
+   //         status_:    TxState::EMBRYO,
+   //         wait_:      None,
+   //         txn_info_:  Arc::new(TxnInfo::new(id)),
+   //         #[cfg(feature="pmem")]
+   //         records_ :     Vec::new(),
 
-            tags_: HashMap::with_capacity(16),
-            locks_ : Vec::with_capacity(16),
-            //inputs_ : Vec::with_capacity(pieces.len()),
-        }
-    }
+   //         tags_: HashMap::with_capacity(16),
+   //         locks_ : Vec::with_capacity(16),
+   //         //inputs_ : Vec::with_capacity(pieces.len()),
+   //     }
+   // }
 
-    pub fn new_from_base(txn_base: &TransactionParBaseOCC, tid: Tid) -> TransactionParOCC
+    pub fn new_from_base(txn_base: &TransactionParBaseOCC, tid: Tid, inputs: Box<Any>) -> TransactionParOCC
     {
         let txn_base = txn_base.clone();
         TransactionParOCC {
+            inputs_ : inputs,
             outputs_: Vec::with_capacity(txn_base.all_ps_.len()),
+
+
             all_ps_:    txn_base.all_ps_,
             name_:      txn_base.name_,
             id_:        tid,
@@ -163,6 +167,13 @@ impl TransactionParOCC
         match self.outputs_[idx].downcast_ref::<T>() {
             Some(v) => v,
             None => panic!("type not matched"),
+        }
+    }
+
+    pub fn get_input<T: 'static>(&self) -> &T {
+        match self.inputs_.downcast_ref::<T>() {
+            Some(v) => v,
+            None => panic!("input type not match")
         }
     }
 

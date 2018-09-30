@@ -182,7 +182,7 @@ fn run_nvm_occ(conf: Config) {
                         flame::start(format!("start_txn - {:?}", tid));
                     }
 
-                    let mut tx = TransactionParOCC::new_from_base(&thread_txn_base, tid);
+                    let mut tx = TransactionParOCC::new_from_base(&thread_txn_base, tid, Box::new(1));
 
                     tx.execute_txn();
 
@@ -349,10 +349,13 @@ fn run_pc_tpcc(conf: Config) {
                 OidFac::set_obj_mask(i as u64);
                 tpcc::workload::num_warehouse_set(wh_num);
                 tpcc::workload::num_district_set(d_num);
+                let txn_base = tpcc::pc_gen::pc_new_order_base(&tables);
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
                 let start = Instant::now();
+                
+                
                 BenchmarkCounter::start();
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
@@ -360,9 +363,10 @@ fn run_pc_tpcc(conf: Config) {
                 //for j in 0..conf.round_num {
                 while start.elapsed() < duration {
                     let tid = TidFac::get_thd_next();
-
-                    let txn_base = tpcc::pc_gen::pc_new_order_random(&tables, w_home, &mut rng);
-                    let mut tx = TransactionParOCC::new_from_base(&txn_base, tid);
+                    
+                    let inputs = tpcc::pc_gen::pc_new_order_input(w_home, &mut rng);
+                    //FIXME: pass by ref rather than box it
+                    let mut tx = TransactionParOCC::new_from_base(&txn_base, tid, Box::new(inputs));
 
                     tx.execute_txn();
                     info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
