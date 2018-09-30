@@ -437,7 +437,8 @@ fn run_occ_tpcc(conf: Config) {
 
                     while {
                         info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
-                        if j > 55 {
+                        //if j > 55 {
+                        if true {
                             tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
                         } else if j < 4 {
                             tpcc::workload::orderstatus_random(tx, &tables, w_home, &mut rng);

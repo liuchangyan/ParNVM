@@ -77,8 +77,8 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
                 district.d_next_o_id = o_id +1;
                 tx.write(district_ref, district);
 
-                assert_eq!(tx.add_output(Box::new(o_id)), 0);
-                assert_eq!(tx.add_output(Box::new(d_tax)), 1);
+               tx.add_output(Box::new(o_id), 0);
+               tx.add_output(Box::new(d_tax), 1);
             };
 
             /* Read Warehouse */
@@ -89,7 +89,7 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
                 //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
                 let w_tax :Numeric = tx.read::<Warehouse>(warehouse_ref).w_tax;
 
-                assert_eq!(tx.add_output(Box::new(w_tax)), 2);
+               tx.add_output(Box::new(w_tax), 2);
             };
 
 
@@ -115,7 +115,7 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
                     .unwrap().into_table_ref(None, None);
                 let c_discount = tx.read::<Customer>(customer_ref).c_discount;
 
-                assert_eq!(tx.add_output(Box::new(c_discount)), 3);
+               tx.add_output(Box::new(c_discount), 3);
 
                 let mut all_local :i64 = 1;
                 for i in 0..ol_cnt as usize {
@@ -151,7 +151,7 @@ pub fn pc_new_order_random(tables: &Arc<Tables>, w_home: i32, rng: &mut SmallRng
                     let i_price = tx.read::<Item>(item_ref).i_price;
                     i_price_arr.push(i_price);
                 }
-                assert_eq!(tx.add_output(Box::new(i_price_arr)),4);
+                tx.add_output(Box::new(i_price_arr), 4);
             };
 
 

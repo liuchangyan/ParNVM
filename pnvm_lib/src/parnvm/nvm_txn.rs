@@ -149,9 +149,13 @@ impl TransactionParOCC
 
 
     
-    pub fn add_output(&mut self, data: Box<Any>)  -> usize{
-        self.outputs_.push(data);
-        self.outputs_.len()-1
+    pub fn add_output(&mut self, data: Box<Any>, idx: usize){
+        if idx >= self.outputs_.len() {
+            self.outputs_.push(data);
+            assert_eq!(idx, self.outputs_.len()-1);
+        } else {
+            self.outputs_[idx] = data;
+        }
     }
 
     pub fn get_output<T: 'static>(&self, idx: usize) -> &T {
@@ -197,13 +201,16 @@ impl TransactionParOCC
 
     
     fn add_dep(&mut self) {
+        let me : u32 = self.id().into();
         for (_, tag) in self.tags_.iter() {
             let txn_info = tag.tobj_ref_.get_writer_info();
             if !txn_info.has_commit() {
                 let id : u32= txn_info.id().into();
-                if !self.deps_.contains_key(&id) {
-                    self.deps_.insert(id, txn_info);
-                } 
+                if me != id { /* Do not add myself into it */
+                    if !self.deps_.contains_key(&id) {
+                        self.deps_.insert(id, txn_info);
+                    } 
+                }
             }
         }
     }
@@ -307,7 +314,7 @@ impl TransactionParOCC
         for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_commit() && !dep.has_done(cur_rank) {
-                    warn!("waiting waiting for {:?}", dep.id());
+                    warn!("{:?} waiting waiting for {:?}", self.id(), dep.id());
                 } else {
                     break;
                 }
