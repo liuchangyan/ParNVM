@@ -264,7 +264,10 @@ impl TransactionParOCC
         let txn_info = self.txn_info().clone();
         for tag in self.tags_.values_mut() {
             tag.commit_data(id);
-            tag.tobj_ref_.set_writer_info(txn_info.clone()); 
+            //FIXME: only write tag needs to update writer info
+            if tag.has_write() {
+                tag.tobj_ref_.set_writer_info(txn_info.clone()); 
+            }
         }
     }
 
