@@ -339,6 +339,146 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
     }
 
 
+    /*   ********************************
+     *   OrderStock 
+     *   ********************************/
+
+    pub struct OrderStockInput {
+        w_id: i32,
+        d_id: i32,
+        c_last: Option<String>,
+        c_id: Option<i32>,
+    }
+
+    pub fn pc_orderstock_input(w_home:i32, rng: &mut SmallRng)
+        -> OrderStockInput
+        {
+            
+            let d_id = urand(1, 10, rng);
+            let w_id = w_home;
+
+            let y = urand(1, 100, rng);
+            let (c_last, c_id ) = if y <= 60 {
+                (Some(rand_last_name(nurand(255, 0, 999, rng),rng)), None)
+            } else {
+                (None, Some(nurand(1023, 1, 3000, rng)))
+            };
+
+            OrderStockInput {
+                d_id : d_id,
+                w_id : w_id, 
+                c_last: c_last,
+                c_id : c_id, 
+            }
+        }
+
+    pub fn pc_orderstatus_base(_tables: &Arc<Tables>) 
+        -> TransactionParBaseOCC 
+        {
+           /* Read Cus and Read Order */ 
+            let tables = _tables.clone();
+            let orderstatus_cus_ord = move | tx: &mut TransactionParOCC |  {
+                let (c_id, c_last, c_w_id, c_d_id, d_id, w_id) = {
+                    let input = tx.get_input::<OrderStockInput>();
+                    let c_id = input.c_id.as_ref().cloned();
+                    let c_last = input.c_last.as_ref().cloned();
+                    let c_w_id = input.w_id;
+                    let c_d_id = input.d_id;
+                    let d_id = input.d_id;
+                    let w_id = input.w_id;
+
+                    (c_id, c_last, c_w_id, c_d_id, d_id, w_id)
+                };
+
+                let tid = tx.id().clone();
+                let c_row = match c_id {
+                    Some(c_id) => {
+                        tables.customer.retrieve(&(c_w_id, c_d_id, c_id))
+                            .expect("customer by id empty")
+                            .into_table_ref(None, None)
+                    },
+
+                    None => {
+                        assert!(c_last.is_some());
+                        info!("[{:?}][ORDER-STATUS] Getting by Name {:?}", 
+                              tid, c_last);
+                        let c_last = c_last.unwrap();
+                        match tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id)) {
+                            None=> {
+                                warn!("[{:?}][ORDER-STATUS] No found Name {:?}", tid, c_last);
+                                tx.should_abort();
+                                return;
+                            }
+                            Some(arc) => arc.into_table_ref(None, None)
+                        }
+
+                    }
+                };
+
+                let c_id = tx.read::<Customer>(c_row).c_id;
+                let o_row = match tables.order.retrieve_by_cid(&(c_w_id, c_d_id, c_id)) {
+                    None => {
+                        tx.should_abort();
+                        warn!("retrieve_by_cid:: corrupted");
+                        return;
+                    },
+                    Some(o_row) => {
+                        o_row.into_table_ref(None, None)
+                    }
+                };
+
+                let o_id = tx.read::<Order>(o_row).o_id;
+                info!("[{:?}][ORDER-STATUS] GET ORDER FROM CUSTOMER [w_d: {}-{}, o_id: {}, c_id: {}]", 
+                      tid, c_w_id, c_d_id,o_id, c_id);
+
+                tx.add_output(Box::new(o_id), 0);
+            };
+
+
+
+            /* RW Orderline */
+            let tables = _tables.clone();
+            let orderstatus_ol = move | tx: &mut TransactionParOCC |  {
+                let ( c_w_id, c_d_id) = {
+                    let input = tx.get_input::<OrderStockInput>();
+                    let c_w_id = input.w_id;
+                    let c_d_id = input.d_id;
+                    (c_w_id, c_d_id)
+                };
+
+                let o_id = *tx.get_output::<i32>(0);
+                let ol_arcs = tables.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
+
+                for ol_arc in ol_arcs {
+                    let ol_row = ol_arc.into_table_ref(None, None);
+                    let ol = tx.read::<OrderLine>(ol_row);
+                }
+
+            };
+
+
+
+            let p1 = PieceOCC::new(
+                Pid::new(0),
+                String::from("orderstaus"),
+                Arc::new(Box::new(orderstatus_cus_ord)),
+                "orderstauts_cus_ord",
+                3);
+
+            let p2 = PieceOCC::new(
+                Pid::new(1),
+                String::from("orderstatus"),
+                Arc::new(Box::new(orderstatus_ol)),
+                "orderstatus_ol",
+                5);
+
+
+
+            let pieces = vec![p2, p1];
+
+            TransactionParBaseOCC::new(pieces, String::from("orderstatus"))
+        }
+
 
 
     /*   ********************************
