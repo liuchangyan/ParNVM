@@ -144,11 +144,34 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
         };
 
+        /* Item LOOP */
+        let tables = _tables.clone();
+        let new_order_4 = move |tx: &mut TransactionParOCC| {
+            let (ol_cnt, item_ids) = {
+                let input = tx.get_input::<NewOrderInput>();
+                let ol_cnt = input.ol_cnt_;
+                let item_ids = input.itemid_.clone();
+                ( ol_cnt, item_ids)
+            };
+
+
+            let mut i_price_arr = Vec::with_capacity(ol_cnt as usize);
+            for i in 0..ol_cnt as usize {
+                let id = item_ids[i];
+                let item_arc = tables.item.retrieve(&id, id as usize ).unwrap();
+                let item_ref = item_arc.into_table_ref(None, None);
+                //println!("READ : ITEM : {:?}", item_ref.get_id());
+                let i_price = tx.read::<Item>(item_ref).i_price;
+                i_price_arr.push(i_price);
+            }
+            tx.add_output(Box::new(i_price_arr), 3);
+        };
+
 
         /* Read Customer and Insert Order */
         let tables = _tables.clone();
-        let new_order_4 = move |tx: &mut TransactionParOCC| {
-            let (w_id, d_id, ol_cnt, now, c_id, src_whs) = {
+        let new_order_5 = move |tx: &mut TransactionParOCC| {
+            let (w_id, d_id, ol_cnt, now, c_id, src_whs, item_ids, qty) = {
                 let input = tx.get_input::<NewOrderInput>();
                 let w_id = input.w_id_;
                 let d_id = input.d_id_;
@@ -156,18 +179,22 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 let now = input.now_;
                 let c_id = input.c_id_;
                 let src_whs = input.supware_.clone();
-                (w_id, d_id, ol_cnt, now, c_id, src_whs)
+                let item_ids = input.itemid_.clone();
+                let qty = input.qty_.clone();
+                (w_id, d_id, ol_cnt, now, c_id, src_whs, item_ids, qty)
             };
 
 
             let tid = tx.id().clone();
+            let w_tax =  tx.get_output::<Numeric>(2).clone();
+            let d_tax = tx.get_output::<Numeric>(1).clone();
+            let i_price_arr = tx.get_output::<Vec<Numeric>>(3).clone();
             let o_id =tx.get_output::<i32>(0).clone();
 
             let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id))
                 .unwrap().into_table_ref(None, None);
             let c_discount = tx.read::<Customer>(customer_ref).c_discount;
 
-            tx.add_output(Box::new(c_discount), 3);
 
             let mut all_local :i64 = 1;
             for i in 0..ol_cnt as usize {
@@ -186,55 +213,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                                      o_all_local: Numeric::new(all_local, 1, 0)
                                  },
                                  &tables);
-        };
 
-
-
-        /* Item LOOP */
-        let tables = _tables.clone();
-        let new_order_5 = move |tx: &mut TransactionParOCC| {
-            let (ol_cnt, item_ids) = {
-                let input = tx.get_input::<NewOrderInput>();
-                let ol_cnt = input.ol_cnt_;
-                let item_ids = input.itemid_.clone();
-                ( ol_cnt, item_ids)
-            };
-
-
-            let mut i_price_arr = Vec::with_capacity(ol_cnt as usize);
-            for i in 0..ol_cnt as usize {
-                let id = item_ids[i];
-                let item_arc = tables.item.retrieve(&id, id as usize ).unwrap();
-                let item_ref = item_arc.into_table_ref(None, None);
-                //println!("READ : ITEM : {:?}", item_ref.get_id());
-                let i_price = tx.read::<Item>(item_ref).i_price;
-                i_price_arr.push(i_price);
-            }
-            tx.add_output(Box::new(i_price_arr), 4);
-        };
-
-
-
-        /* Stock LOOP  & OrderLine LOOP*/
-        let tables = _tables.clone();
-        let new_order_6= move |tx: &mut TransactionParOCC| {
-            let ( ol_cnt, w_id, d_id, item_ids, src_whs, qty) = {
-                let input = tx.get_input::<NewOrderInput>();
-                let ol_cnt = input.ol_cnt_;
-                let w_id = input.w_id_;
-                let d_id = input.d_id_;
-                let item_ids = input.itemid_.clone();
-                let src_whs = input.supware_.clone();
-                let qty = input.qty_.clone();
-                ( ol_cnt, w_id, d_id, item_ids, src_whs, qty)
-            };
-
-            let tid = tx.id().clone();
-            let w_tax =  tx.get_output::<Numeric>(2).clone();
-            let d_tax = tx.get_output::<Numeric>(1).clone();
-            let i_price_arr = tx.get_output::<Vec<Numeric>>(4).clone();
-            let c_discount = tx.get_output::<Numeric>(3).clone();
-            let o_id =tx.get_output::<i32>(0).clone();
 
             for i in 0..ol_cnt as usize {
                 let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), (src_whs[i] as usize)).unwrap().into_table_ref(None, None);
@@ -286,8 +265,12 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                                          },
                                          &tables);
             }
-
         };
+
+
+
+
+
 
         let p1 = PieceOCC::new(
             Pid::new(0),
@@ -325,14 +308,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             "neworder-4-cb",
             4);
 
-        let p6 = PieceOCC::new(
-            Pid::new(5),
-            String::from("neworder"),
-            Arc::new(Box::new(new_order_6)),
-            "neworder-5-cb",
-            5);
 
-        let pieces = vec![p6, p5, p4, p3, p2, p1];
+        let pieces = vec![p5, p4, p3, p2, p1];
 
         TransactionParBaseOCC::new(pieces, String::from("neworder"))
 
@@ -340,18 +317,137 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
 
     /*   ********************************
-     *   OrderStock 
+     *   Delivery 
      *   ********************************/
 
-    pub struct OrderStockInput {
+    /* Not used */
+    pub struct DeliveryInput {
+        delivery: i32
+    }
+
+    pub fn pc_delivery_input(_w_id: i32, rng: &mut SmallRng) -> DeliveryInput {
+        DeliveryInput{
+            delivery : 0
+        }
+    }
+
+
+    pub fn pc_delivery_base(_tables: &Arc<Tables>, w_id: i32, o_carrier_id: i32) 
+        -> TransactionParBaseOCC
+    {
+        let num_dis = num_district_get();
+        let num_wh = num_warehouse_get();
+
+        /* NewOrder transaction */
+        let tables = _tables.clone();
+        let delivery_no = move | tx: &mut TransactionParOCC |  {
+            let tid = tx.id().clone();
+            let mut no_o_id_arr = Vec::with_capacity(num_dis as usize);
+            for d_id in 1..=num_dis {
+                let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
+                if no_arc.is_some() {
+                    let no_row = no_arc.unwrap().into_table_ref(None, None);
+                    let no_o_id = tx.read::<NewOrder>(no_row).no_o_id;
+                    //TODO:
+                    info!("[{:?}][DELIVERY] DELETING NEWORDER [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
+                    if !tables.neworder.delete_pc(tx, &(w_id, d_id, no_o_id), &tables) {
+                        tx.should_abort();
+                        return;
+                    }
+
+                    no_o_id_arr.push(Some(no_o_id));
+                } else {
+                    no_o_id_arr.push(None);
+                }
+            }
+
+            tx.add_output(Box::new(no_o_id_arr), 0);
+        };
+
+
+        let tables = _tables.clone();
+        let deliver_or_ol_cu = move | tx: &mut TransactionParOCC | {
+            let tid = tx.id().clone();
+            let no_o_id_arr = tx.get_output::<Vec<Option<i32>>>(0).clone();
+            assert_eq!(no_o_id_arr.len(), num_dis as usize);
+
+            for d_id in 1..=num_dis {
+                let i : usize = d_id as usize-1;
+                assert_eq!(i >= 0, true);
+                match no_o_id_arr[i] {
+                    Some(no_o_id) => {
+                        info!("[{:?}][DELIVERY] RETRIEVING ORDER  [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
+                        let o_row = tables.order.retrieve(&(w_id, d_id, no_o_id)).expect("order empty").into_table_ref(None, None);
+                        let mut o = tx.read::<Order>(o_row.box_clone()).clone();
+                        let o_id = o.o_id;
+                        let o_c_id = o.o_c_id;
+
+                        o.o_carrier_id = o_carrier_id;
+                        tx.write(o_row, o);
+
+
+                        let ol_arcs = tables.orderline.find_by_oid(&(w_id, d_id, o_id));
+                        let now = gen_now();
+                        let mut ol_amount_sum = Numeric::new(0, 6, 2);
+                        for ol_arc in ol_arcs {
+                            let ol_row = ol_arc.into_table_ref(None, None);
+                            let mut ol = tx.read::<OrderLine>(ol_row.box_clone()).clone();
+                            ol_amount_sum += ol.ol_amount;
+
+                            ol.ol_delivery_d = now;
+                            info!("[{:?}][DELIVERY] UPDATEING ORDERLINE [OL_AMOUNT_SUM: {:?}]", tid, ol_amount_sum);
+                            tx.write(ol_row, ol);
+                        }
+
+
+                        let c_row = tables.customer.retrieve(&(w_id, d_id, o_c_id)).expect("deliver::customer not empty").into_table_ref(None, None);
+                        let mut c = tx.read::<Customer>(c_row.box_clone()).clone();
+                        c.c_balance += ol_amount_sum;
+                        c.c_delivery_cnt += Numeric::new(1, 4, 0);
+
+                        info!("[{:?}][DELIVERY] UPDATEING CUSTOEMR [CID: {}, DELIVERY_CNT: {:?}]", tid, o_c_id, c.c_delivery_cnt);
+                        tx.write(c_row, c);
+                    },
+                    None => {}
+                }
+            }
+        };
+
+        let p1 = PieceOCC::new(
+            Pid::new(0),
+            String::from("delivery"),
+            Arc::new(Box::new(delivery_no)),
+            "delivery_no",
+            2);
+
+        let p2 = PieceOCC::new(
+            Pid::new(1),
+            String::from("delivery"),
+            Arc::new(Box::new(deliver_or_ol_cu)),
+            "deliver_or_ol_cu",
+            4);
+
+        let pieces = vec![p2, p1];
+
+        TransactionParBaseOCC::new(pieces, String::from("delivery"))
+
+
+    }
+
+
+    /*   ********************************
+     *   OrderStatus
+     *   ********************************/
+
+    pub struct OrderStatusInput {
         w_id: i32,
         d_id: i32,
         c_last: Option<String>,
         c_id: Option<i32>,
     }
 
-    pub fn pc_orderstock_input(w_home:i32, rng: &mut SmallRng)
-        -> OrderStockInput
+    pub fn pc_orderstatus_input(w_home:i32, rng: &mut SmallRng)
+        -> OrderStatusInput
         {
             
             let d_id = urand(1, 10, rng);
@@ -364,7 +460,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 (None, Some(nurand(1023, 1, 3000, rng)))
             };
 
-            OrderStockInput {
+            OrderStatusInput {
                 d_id : d_id,
                 w_id : w_id, 
                 c_last: c_last,
@@ -377,9 +473,9 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
         {
            /* Read Cus and Read Order */ 
             let tables = _tables.clone();
-            let orderstatus_cus_ord = move | tx: &mut TransactionParOCC |  {
+            let orderstatus_cus_ord_ol = move | tx: &mut TransactionParOCC |  {
                 let (c_id, c_last, c_w_id, c_d_id, d_id, w_id) = {
-                    let input = tx.get_input::<OrderStockInput>();
+                    let input = tx.get_input::<OrderStatusInput>();
                     let c_id = input.c_id.as_ref().cloned();
                     let c_last = input.c_last.as_ref().cloned();
                     let c_w_id = input.w_id;
@@ -431,50 +527,23 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 info!("[{:?}][ORDER-STATUS] GET ORDER FROM CUSTOMER [w_d: {}-{}, o_id: {}, c_id: {}]", 
                       tid, c_w_id, c_d_id,o_id, c_id);
 
-                tx.add_output(Box::new(o_id), 0);
-            };
-
-
-
-            /* RW Orderline */
-            let tables = _tables.clone();
-            let orderstatus_ol = move | tx: &mut TransactionParOCC |  {
-                let ( c_w_id, c_d_id) = {
-                    let input = tx.get_input::<OrderStockInput>();
-                    let c_w_id = input.w_id;
-                    let c_d_id = input.d_id;
-                    (c_w_id, c_d_id)
-                };
-
-                let o_id = *tx.get_output::<i32>(0);
                 let ol_arcs = tables.orderline.find_by_oid(&(c_w_id, c_d_id, o_id));
 
                 for ol_arc in ol_arcs {
                     let ol_row = ol_arc.into_table_ref(None, None);
                     let ol = tx.read::<OrderLine>(ol_row);
                 }
-
             };
-
-
 
             let p1 = PieceOCC::new(
                 Pid::new(0),
                 String::from("orderstaus"),
-                Arc::new(Box::new(orderstatus_cus_ord)),
-                "orderstauts_cus_ord",
-                3);
-
-            let p2 = PieceOCC::new(
-                Pid::new(1),
-                String::from("orderstatus"),
-                Arc::new(Box::new(orderstatus_ol)),
-                "orderstatus_ol",
-                5);
+                Arc::new(Box::new(orderstatus_cus_ord_ol)),
+                "orderstauts_cus_ord_ol",
+                4);
 
 
-
-            let pieces = vec![p2, p1];
+            let pieces = vec![p1];
 
             TransactionParBaseOCC::new(pieces, String::from("orderstatus"))
         }

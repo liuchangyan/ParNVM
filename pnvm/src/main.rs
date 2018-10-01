@@ -349,18 +349,21 @@ fn run_pc_tpcc(conf: Config) {
                 OidFac::set_obj_mask(i as u64);
                 tpcc::workload::num_warehouse_set(wh_num);
                 tpcc::workload::num_district_set(d_num);
-                let new_order_base = tpcc::pc_gen::pc_new_order_base(&tables);
-                let payment_base = tpcc::pc_gen::pc_payment_base(&tables);
 
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
                 let start = Instant::now();
                 
-                
-                BenchmarkCounter::start();
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
+                let new_order_base = tpcc::pc_gen::pc_new_order_base(&tables);
+                let payment_base = tpcc::pc_gen::pc_payment_base(&tables);
+                let orderstatus_base = tpcc::pc_gen::pc_orderstatus_base(&tables);
+                let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
+                let delivery_base = tpcc::pc_gen::pc_delivery_base(&tables, w_home, o_carrier_id);
+                
+                BenchmarkCounter::start();
 
                 //for j in 0..conf.round_num {
                 while start.elapsed() < duration {
@@ -369,14 +372,27 @@ fn run_pc_tpcc(conf: Config) {
                     
                     //FIXME: pass by ref rather than box it
                     let mut tx = match j {
-                        0...55 => {
+                        12...55 => {
                             let inputs = tpcc::pc_gen::pc_new_order_input(w_home, &mut rng);
                             TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
                         },
-                        _ => {
+                        0...4 => {
+                            let inputs = tpcc::pc_gen::pc_orderstatus_input(w_home, &mut rng);
+                            TransactionParOCC::new_from_base(&orderstatus_base, tid, Box::new(inputs))
+                        },
+                        4...8 => {
+                            let inputs = tpcc::pc_gen::pc_delivery_input(w_home, &mut rng);
+                            TransactionParOCC::new_from_base(&delivery_base, tid, Box::new(inputs))
+                        },
+                        8...12 => {
+                            let inputs = tpcc::pc_gen::pc_new_order_input(w_home, &mut rng);
+                            TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
+                        },
+                        12...100 => {
                             let inputs = tpcc::pc_gen::pc_payment_input(w_home, &mut rng);
                             TransactionParOCC::new_from_base(&payment_base, tid, Box::new(inputs))
-                        }
+                        },
+                        _ => panic!("invalid tx mix")
                     };
 
                     tx.execute_txn();
