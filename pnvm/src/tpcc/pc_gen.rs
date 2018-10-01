@@ -10,8 +10,7 @@ use std::{
     time,
     sync::{Arc},
     any::Any,
-
-
+    str,
 };
 
 use rand::rngs::SmallRng;
@@ -200,7 +199,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 let item_ids = input.itemid_.clone();
                 ( ol_cnt, item_ids)
             };
-            
+
 
             let mut i_price_arr = Vec::with_capacity(ol_cnt as usize);
             for i in 0..ol_cnt as usize {
@@ -338,3 +337,270 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
         TransactionParBaseOCC::new(pieces, String::from("neworder"))
 
     }
+
+
+
+
+    /*   ********************************
+     *   Payment 
+     *   ********************************/
+
+
+    pub struct PaymentInput {
+        w_id: i32,
+        d_id: i32,
+        c_w_id : i32,
+        c_d_id : i32,
+        h_amount : Numeric,
+        h_date: i32,
+        c_last: Option<String>,
+        c_id: Option<i32>,
+    }
+
+
+    pub fn pc_payment_input(w_home: i32, rng: &mut SmallRng) 
+        -> PaymentInput
+        {
+            let NUM_WAREHOUSES = num_warehouse_get();
+            let NUM_DISTRICT = num_district_get();
+
+            let w_id = w_home;
+            let d_id = urand(1, NUM_DISTRICT, rng);
+
+            let x = urand(1, 100, rng);
+            let y = urand(1, 100, rng);
+
+            let c_w_id : i32;
+            let c_d_id : i32;
+
+            if NUM_WAREHOUSES == 1 || x <= 85 {
+                //85% paying throuhg won house
+                c_w_id = w_id;
+                c_d_id = d_id;
+            } else {
+                //15% paying from remote  warehouse
+                c_w_id =  urandexcept(1, NUM_WAREHOUSES, w_id, rng);
+                assert!(c_w_id != w_id);
+                c_d_id = urand(1, 10, rng);
+            }
+
+            let h_amount = rand_numeric(1.00, 5000.00, 10, 2, rng);
+            let h_date = gen_now();     
+
+            let (c_last, c_id ) = if y <= 60 {
+                (Some(rand_last_name(nurand(255, 0, 999, rng),rng)), None)
+            } else {
+                (None, Some(nurand(1023, 1, 3000, rng)))
+            };
+
+            PaymentInput {
+                w_id,
+                d_id,
+                c_w_id,
+                c_d_id,
+                h_amount,
+                h_date,
+                c_last,
+                c_id,
+            }
+        }
+
+
+    pub fn pc_payment_base(
+        _tables: &Arc<Tables>
+    ) 
+        -> TransactionParBaseOCC 
+        {
+
+            let wh_num = num_warehouse_get();
+
+            /* RW Warehouse */ 
+            let tables = _tables.clone();
+            let payment_wh = move | tx: &mut TransactionParOCC | 
+            {
+                let (w_id, h_amount) = {
+                    let input = tx.get_input::<PaymentInput>();
+                    let w_id = input.w_id;
+                    let h_amount = input.h_amount;
+                    (w_id, h_amount)
+                };
+
+                let tid = tx.id().clone();
+                let warehouse_row = tables.warehouse.retrieve(&w_id, w_id as usize).expect("warehouse empty").into_table_ref(None, None);
+                let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
+                let w_name = warehouse.w_name.clone();
+                warehouse.w_ytd = warehouse.w_ytd +  h_amount;
+                info!("[{:?}][TXN-PAYMENT] Update Warehouse::YTD {:?}", tid, warehouse.w_ytd);
+                tx.write(warehouse_row, warehouse);
+                
+                tx.add_output(Box::new(w_name), 0);
+
+            };
+
+
+            /* RW District */
+            let tables = _tables.clone();
+            let payment_dis = move | tx: &mut TransactionParOCC | 
+            {
+                let (w_id, d_id, h_amount) = {
+                    let input = tx.get_input::<PaymentInput>();
+                    let w_id = input.w_id;
+                    let h_amount = input.h_amount;
+                    let d_id = input.d_id;
+                    (w_id, d_id, h_amount)
+                };
+
+                let tid = tx.id().clone();
+
+
+                let district_row = tables.district.retrieve(&(w_id, d_id),(w_id * wh_num + d_id) as usize ).expect("district empty").into_table_ref(None, None);
+                let mut district = tx.read::<District>(district_row.box_clone()).clone();
+                let d_name = district.d_name.clone();
+                district.d_ytd = district.d_ytd + h_amount;
+                info!("[{:?}][TXN-PAYMENT] Update District::YTD\t  {:?}", tid, district.d_ytd);
+                tx.write(district_row,district);
+                tx.add_output(Box::new(d_name), 1);
+            };
+
+
+            /* RW Customer */
+            let tables = _tables.clone();
+            let payment_cus = move | tx: &mut TransactionParOCC | 
+            {
+                let (c_id, c_last, c_w_id, c_d_id, h_amount, d_id, w_id) = {
+                    let input = tx.get_input::<PaymentInput>();
+                    let c_id = input.c_id.as_ref().cloned();
+                    let c_last = input.c_last.as_ref().cloned();
+                    let c_w_id = input.c_w_id;
+                    let c_d_id = input.c_d_id;
+                    let h_amount = input.h_amount;
+                    let d_id = input.d_id;
+                    let w_id = input.w_id;
+
+                    (c_id, c_last, c_w_id, c_d_id, h_amount, d_id, w_id)
+                };
+
+                let tid = tx.id().clone();
+
+                let c_row = match c_id {
+                    Some(c_id) => {
+                        /* Case 1 , by C_ID*/
+                        info!("[{:?}][TXN-PAYMENT] Getting by id {:?}", 
+                              tid, c_id);
+                        tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
+                    }, 
+                    None => {
+                        assert!(c_last.is_some());
+                        info!("[{:?}][TXN-PAYMENT] Getting by Name {:?}", 
+                              tid, c_last);
+                        let c_last = c_last.unwrap();
+                        match tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id)) {
+                            None=> {
+                                warn!("[{:?}][TXN-PAYMENT] No found Name {:?}", tid, c_last);
+                                tx.should_abort();
+                                return;
+                            }
+                            Some(arc) => arc.into_table_ref(None, None)
+                        }
+                    }
+                };
+
+                let mut c = tx.read::<Customer>(c_row.box_clone()).clone();
+                info!("[{:?}][TXN-PAYMENT] Read Customer\n\t  {:?}", tid, c);
+                c.c_balance -= h_amount;
+                c.c_ytd_payment += h_amount;
+                c.c_payment_cnt += Numeric::new(1, 4, 0);
+                let c_id = c.c_id;
+                let c_credit = c.c_credit.clone(); 
+                let c_credit = str::from_utf8(&c_credit).unwrap();
+                match c_credit {
+                    "BC" => {
+                        let new_data_str =  format!("|{},{},{},{},{},{}|",
+                                                    c.c_id, c.c_d_id, c.c_w_id, d_id, w_id, h_amount.as_string());
+                        let len = new_data_str.len();
+                        let new_data = new_data_str.as_bytes();
+                        c.c_data.rotate_right(len);
+                        c.c_data[0..len].copy_from_slice(new_data);
+                    },
+                    _ => {},
+                }
+                info!("[{:?}][TXN-PAYMENT] Updating Customer\n\t  {:?}", tid, c);
+                tx.write(c_row, c);
+
+                tx.add_output(Box::new(c_id), 2);
+            };
+
+
+
+            /* W History */
+            let tables = _tables.clone();
+            let payment_his = move | tx: &mut TransactionParOCC | 
+            {
+                let (c_w_id, c_d_id, h_amount, d_id, w_id, h_date) = {
+                    let input = tx.get_input::<PaymentInput>();
+                    let c_w_id = input.c_w_id;
+                    let c_d_id = input.c_d_id;
+                    let w_id = input.w_id;
+                    let d_id = input.d_id;
+                    let h_amount = input.h_amount;
+                    let h_date = input.h_date;
+
+                    (c_w_id, c_d_id, h_amount, d_id, w_id, h_date)
+                };
+
+                let tid = tx.id().clone();
+                let w_name = tx.get_output::<[u8;10]>(0).clone();
+                let d_name = tx.get_output::<[u8;10]>(1).clone();
+                let c_id =  tx.get_output::<i32>(2).clone();
+
+                let h_data = format!("{}    {}", str::from_utf8(&w_name).unwrap(), str::from_utf8(&d_name).unwrap());
+                info!("[{:?}][TXN-PAYMENT] Inserting History::HDATA\t  {:?}", tid, h_data);
+                tables.history.push_pc(tx,
+                                    History::new(
+                                        c_id,
+                                        c_d_id,
+                                        c_w_id,
+                                        d_id,
+                                        w_id,
+                                        h_date,
+                                        h_amount,
+                                        h_data,
+                                        ),
+                                        &tables);
+
+
+            };
+
+            let p1 = PieceOCC::new(
+                Pid::new(0),
+                String::from("payment"),
+                Arc::new(Box::new(payment_wh)),
+                "payment_wh",
+                1);
+
+            let p2 = PieceOCC::new(
+                Pid::new(1),
+                String::from("payment"),
+                Arc::new(Box::new(payment_dis)),
+                "payment_dis",
+                1);
+
+            let p3 = PieceOCC::new(
+                Pid::new(2),
+                String::from("payment"),
+                Arc::new(Box::new(payment_cus)),
+                "payment_cus",
+                3);
+
+            let p4 = PieceOCC::new(
+                Pid::new(3),
+                String::from("payment"),
+                Arc::new(Box::new(payment_his)),
+                "payment_his",
+                6);
+            let pieces = vec![p4, p3, p2, p1];
+
+            TransactionParBaseOCC::new(pieces, String::from("payment"))
+
+        }
+

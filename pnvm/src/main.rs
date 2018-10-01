@@ -349,7 +349,9 @@ fn run_pc_tpcc(conf: Config) {
                 OidFac::set_obj_mask(i as u64);
                 tpcc::workload::num_warehouse_set(wh_num);
                 tpcc::workload::num_district_set(d_num);
-                let txn_base = tpcc::pc_gen::pc_new_order_base(&tables);
+                let new_order_base = tpcc::pc_gen::pc_new_order_base(&tables);
+                let payment_base = tpcc::pc_gen::pc_payment_base(&tables);
+
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
@@ -363,10 +365,19 @@ fn run_pc_tpcc(conf: Config) {
                 //for j in 0..conf.round_num {
                 while start.elapsed() < duration {
                     let tid = TidFac::get_thd_next();
+                    let j : u32= rng.gen::<u32>() % 100;
                     
-                    let inputs = tpcc::pc_gen::pc_new_order_input(w_home, &mut rng);
                     //FIXME: pass by ref rather than box it
-                    let mut tx = TransactionParOCC::new_from_base(&txn_base, tid, Box::new(inputs));
+                    let mut tx = match j {
+                        0...55 => {
+                            let inputs = tpcc::pc_gen::pc_new_order_input(w_home, &mut rng);
+                            TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
+                        },
+                        _ => {
+                            let inputs = tpcc::pc_gen::pc_payment_input(w_home, &mut rng);
+                            TransactionParOCC::new_from_base(&payment_base, tid, Box::new(inputs))
+                        }
+                    };
 
                     tx.execute_txn();
                     info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);

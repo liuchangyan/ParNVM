@@ -98,34 +98,34 @@ pub struct TransactionParOCC
 
     #[cfg(feature="pmem")]
     records_ :     Vec<(Option<*mut u8>, Layout)>,
-    
+
     tags_ : HashMap<(ObjectId, i8), TTag>,
     locks_ : Vec<*const TTag>,
-    
+    early_abort_ : bool,
 }
 
 
 impl TransactionParOCC
 {
-   // pub fn new(pieces : Vec<PieceOCC>, id : Tid, name: String) -> TransactionParOCC {
-   //     TransactionParOCC {
-   //         inputs_ : Vec::new(),
-   //         outputs_ : Vec::with_capacity(pieces.len()),
-   //         all_ps_:    pieces,
-   //         deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
-   //         id_:        id,
-   //         name_:      name,
-   //         status_:    TxState::EMBRYO,
-   //         wait_:      None,
-   //         txn_info_:  Arc::new(TxnInfo::new(id)),
-   //         #[cfg(feature="pmem")]
-   //         records_ :     Vec::new(),
+    // pub fn new(pieces : Vec<PieceOCC>, id : Tid, name: String) -> TransactionParOCC {
+    //     TransactionParOCC {
+    //         inputs_ : Vec::new(),
+    //         outputs_ : Vec::with_capacity(pieces.len()),
+    //         all_ps_:    pieces,
+    //         deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
+    //         id_:        id,
+    //         name_:      name,
+    //         status_:    TxState::EMBRYO,
+    //         wait_:      None,
+    //         txn_info_:  Arc::new(TxnInfo::new(id)),
+    //         #[cfg(feature="pmem")]
+    //         records_ :     Vec::new(),
 
-   //         tags_: HashMap::with_capacity(16),
-   //         locks_ : Vec::with_capacity(16),
-   //         //inputs_ : Vec::with_capacity(pieces.len()),
-   //     }
-   // }
+    //         tags_: HashMap::with_capacity(16),
+    //         locks_ : Vec::with_capacity(16),
+    //         //inputs_ : Vec::with_capacity(pieces.len()),
+    //     }
+    // }
 
     pub fn new_from_base(txn_base: &TransactionParBaseOCC, tid: Tid, inputs: Box<Any>) -> TransactionParOCC
     {
@@ -147,12 +147,13 @@ impl TransactionParOCC
 
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
+            early_abort_ : false,
             //inputs_: Vec::with_capacity(txn_base.all_ps.len()),
         }
     }
 
 
-    
+
     pub fn add_output(&mut self, data: Box<Any>, idx: usize){
         if idx >= self.outputs_.len() {
             self.outputs_.push(data);
@@ -177,6 +178,14 @@ impl TransactionParOCC
         }
     }
 
+    pub fn should_abort(&mut self) {
+        warn!(
+            "execute_piece::[{:?}] Early Aborting",
+            self.id()
+        );
+        self.early_abort_ = true;            
+    }
+
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: PieceOCC) {
         info!(
@@ -184,7 +193,7 @@ impl TransactionParOCC
             self.id(),
             &piece
         );
-        
+
         while {
             //Any states created in the run must be reset
             piece.run(self);
@@ -210,7 +219,7 @@ impl TransactionParOCC
         self.tags_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
     }
 
-    
+
     fn add_dep(&mut self) {
         let me : u32 = self.id().into();
         for (_, tag) in self.tags_.iter() {
@@ -266,7 +275,7 @@ impl TransactionParOCC
 
         //Clean up local data structures.
         self.clean_up();
-        
+
         true
     }
 
@@ -335,7 +344,7 @@ impl TransactionParOCC
             }
         }
     }
-    
+
     pub fn cur_rank(&self) -> usize {
         self.txn_info_.rank()
     }
@@ -345,20 +354,25 @@ impl TransactionParOCC
     pub fn execute_txn(&mut self) {
         self.status_ = TxState::ACTIVE;
 
-        while let Some(piece) = self.get_next_piece() {
+        while let Some(piece) = self.get_next_piece()  {
             self.wait_deps_start();
             self.execute_piece(piece);
+
+            if self.early_abort_ {
+                self.abort();
+                return;
+            }
 
             #[cfg(feature = "pmem")]
             self.persist_data();
         }
-        
+
 
         //Commit
         self.wait_deps_commit();
         self.commit();
     }
-    
+
     #[cfg(feature = "pmem")]
     pub fn add_record(&mut self, ptr: Option<*mut u8>, layout: Layout) {
         self.records_.push((ptr, layout));
@@ -379,11 +393,11 @@ impl TransactionParOCC
 
     #[cfg(feature="pmem")]
     pub fn persist_data(&mut self) {
-       for (ptr, layout) in self.records_.drain() {
+        for (ptr, layout) in self.records_.drain() {
             if let Some(ptr) = ptr {
                 pnvm_sys::flush(ptr, layout.clone());
             }
-       }
+        }
     }
 
     pub fn update_rank(&self, rank: usize) {
@@ -451,6 +465,13 @@ impl TransactionParOCC
             self.persist_txn();
             self.status_ = TxState::PERSIST;
         }
+    }
+
+    pub fn abort(&mut self) {
+        self.clean_up();
+        self.txn_info_.commit();
+        self.status_ = TxState::ABORTED;
+        tcore::BenchmarkCounter::abort();
     }
 
     #[cfg(feature = "pmem")]
@@ -562,7 +583,7 @@ impl TransactionPar
             }
         }
     }
-    
+
     pub fn cur_rank(&self) -> usize {
         self.txn_info_.rank()
     }
@@ -579,13 +600,13 @@ impl TransactionPar
             #[cfg(feature = "pmem")]
             self.persist_data();
         }
-        
+
 
         //Commit
         self.wait_deps_commit();
         self.commit();
     }
-    
+
     #[cfg(feature = "pmem")]
     pub fn add_record(&mut self, ptr: Option<*mut u8>, layout: Layout) {
         self.records_.push((ptr, layout));
@@ -606,11 +627,11 @@ impl TransactionPar
 
     #[cfg(feature="pmem")]
     pub fn persist_data(&mut self) {
-       for (ptr, layout) in self.records_.drain() {
+        for (ptr, layout) in self.records_.drain() {
             if let Some(ptr) = ptr {
                 pnvm_sys::flush(ptr, layout.clone());
             }
-       }
+        }
     }
 
     #[cfg_attr(feature = "profile", flame)]
@@ -620,7 +641,7 @@ impl TransactionPar
             self.id(),
             &piece
         );
-        
+
         piece.run(self);
         self.commit()
     }
