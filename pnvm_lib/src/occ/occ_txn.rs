@@ -129,7 +129,7 @@ impl TransactionOCC
 
 
     pub fn abort(&mut self, _: AbortReason) -> bool {
-        debug!("Tx[{:?}] is aborting.", self.tid_);
+        warn!("Tx[{:?}] is aborting.", self.tid_);
         //#[cfg(benchmark)]
         tcore::BenchmarkCounter::abort();
         self.state_ = TxState::ABORTED;

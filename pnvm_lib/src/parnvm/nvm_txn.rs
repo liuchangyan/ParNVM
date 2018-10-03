@@ -188,7 +188,7 @@ impl TransactionParOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: PieceOCC) {
-        info!(
+        warn!(
             "execute_piece::[{:?}] Running piece - {:?}",
             self.id(),
             &piece
@@ -228,6 +228,7 @@ impl TransactionParOCC
                 let id : u32= txn_info.id().into();
                 if me != id { /* Do not add myself into it */
                     if !self.deps_.contains_key(&id) {
+                        warn!("add_dep:: {:?} will wait on {:?}", me, id);
                         self.deps_.insert(id, txn_info);
                     } 
                 }
@@ -332,18 +333,18 @@ impl TransactionParOCC
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn wait_deps_start(&self) {
-        let cur_rank = self.cur_rank();
+    pub fn wait_deps_start(&self, to_run_rank: usize) {
         for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
-                if !dep.has_commit() && !dep.has_done(cur_rank) {
-                    warn!("{:?} waiting waiting for {:?}", self.id(), dep.id());
+                if !dep.has_commit() && !dep.has_done(to_run_rank) {
+                    warn!("{:?} waiting  for {:?} start", self.id(), dep.id());
                 } else {
                     break;
                 }
             }
         }
     }
+
 
     pub fn cur_rank(&self) -> usize {
         self.txn_info_.rank()
@@ -355,7 +356,7 @@ impl TransactionParOCC
         self.status_ = TxState::ACTIVE;
 
         while let Some(piece) = self.get_next_piece()  {
-            self.wait_deps_start();
+            self.wait_deps_start(piece.rank());
             self.execute_piece(piece);
 
             if self.early_abort_ {
@@ -576,7 +577,7 @@ impl TransactionPar
         for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
                 if !dep.has_commit() && !dep.has_done(cur_rank) {
-                    warn!("waiting waiting for {:?}", dep.id());
+                    warn!("waiting for {:?} start", dep.id());
                 } else {
                     break;
                 }

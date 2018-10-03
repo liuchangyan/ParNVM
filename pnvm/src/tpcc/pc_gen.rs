@@ -87,7 +87,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
         /* Read & Write District */
         let tables = _tables.clone();
-        let new_order_1 = move |tx: &mut TransactionParOCC| {
+        let new_order_dis = move |tx: &mut TransactionParOCC| {
             let (w_id, d_id) = {
                 let input = tx.get_input::<NewOrderInput>();
                 let w_id = input.w_id_;
@@ -110,7 +110,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
         /* Read Warehouse */
         let tables = _tables.clone();
-        let new_order_2 = move |tx: &mut TransactionParOCC| {
+        let new_order_wh = move |tx: &mut TransactionParOCC| {
             let (w_id, d_id) = {
                 let input = tx.get_input::<NewOrderInput>();
                 let w_id = input.w_id_;
@@ -129,7 +129,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
         /* Insert NewOrder */
         let tables = _tables.clone();
-        let new_order_3 = move |tx: &mut TransactionParOCC| {
+        let new_order_no = move |tx: &mut TransactionParOCC| {
             let (w_id, d_id) = {
                 let input = tx.get_input::<NewOrderInput>();
                 let w_id = input.w_id_;
@@ -146,7 +146,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
         /* Item LOOP */
         let tables = _tables.clone();
-        let new_order_4 = move |tx: &mut TransactionParOCC| {
+        let new_order_item = move |tx: &mut TransactionParOCC| {
             let (ol_cnt, item_ids) = {
                 let input = tx.get_input::<NewOrderInput>();
                 let ol_cnt = input.ol_cnt_;
@@ -170,7 +170,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
         /* Read Customer and Insert Order */
         let tables = _tables.clone();
-        let new_order_5 = move |tx: &mut TransactionParOCC| {
+        let new_order_cus_o_st_ol = move |tx: &mut TransactionParOCC| {
             let (w_id, d_id, ol_cnt, now, c_id, src_whs, item_ids, qty) = {
                 let input = tx.get_input::<NewOrderInput>();
                 let w_id = input.w_id_;
@@ -275,38 +275,38 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
         let p1 = PieceOCC::new(
             Pid::new(0),
             String::from("neworder"),
-            Arc::new(Box::new(new_order_1)),
-            "neworder-0-cb",
+            Arc::new(Box::new(new_order_dis)),
+            "neworder-dis",
             1);
 
         let p2 = PieceOCC::new(
             Pid::new(1),
             String::from("neworder"),
-            Arc::new(Box::new(new_order_2)),
-            "neworder-1-cb",
-            1);
+            Arc::new(Box::new(new_order_wh)),
+            "neworder-wh",
+            2);
 
         let p3 = PieceOCC::new(
             Pid::new(2),
             String::from("neworder"),
-            Arc::new(Box::new(new_order_3)),
-            "neworder-2-cb",
-            2);
+            Arc::new(Box::new(new_order_no)),
+            "neworder-no",
+            3);
 
         let p4 = PieceOCC::new(
             Pid::new(3),
             String::from("neworder"),
-            Arc::new(Box::new(new_order_4)),
-            "neworder-3-cb",
-            3);
+            Arc::new(Box::new(new_order_item)),
+            "neworder-item",
+            4);
 
 
         let p5 = PieceOCC::new(
             Pid::new(4),
             String::from("neworder"),
-            Arc::new(Box::new(new_order_5)),
-            "neworder-4-cb",
-            4);
+            Arc::new(Box::new(new_order_cus_o_st_ol)),
+            "neworder-cus-order-stock-ol",
+            5);
 
 
         let pieces = vec![p5, p4, p3, p2, p1];
@@ -315,6 +315,77 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
     }
 
+    /*   ********************************
+     *   Stock Level 
+     *   ********************************/
+
+    pub fn pc_stocklevel_base(_tables: &Arc<Tables>, w_id:i32, d_id:i32, thd:Numeric)
+        -> TransactionParBaseOCC
+    {
+
+
+        let wh_num = num_warehouse_get();
+        /* R District */
+        let tables = _tables.clone();
+        let stocklevel_dis= move | tx: &mut TransactionParOCC |  {
+            let tid = tx.id().clone();    
+            let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize)
+                .unwrap().into_table_ref(None, None);
+            let mut d = tx.read::<District>(d_row).clone();
+            let d_next_o_id = d.d_next_o_id;
+            info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);
+
+            tx.add_output(Box::new(d_next_o_id), 0);
+        };
+
+
+        
+        /* R Ol Stock */
+        let tables = _tables.clone();
+        let stocklevel_ol_stock= move | tx: &mut TransactionParOCC |  {
+            let d_next_o_id = *tx.get_output::<i32>(0);
+            let tid = tx.id().clone(); 
+
+            let ol_arcs = tables.orderline.find_range(w_id, d_id, d_next_o_id - 20, d_next_o_id);
+
+            let mut ol_i_ids = vec![];
+            for ol_arc in ol_arcs {
+                let ol_row = ol_arc.into_table_ref(None, None);
+                let ol = tx.read::<OrderLine>(ol_row);
+                ol_i_ids.push(ol.ol_i_id);
+                info!("[{:?}][STOCK-LEVEL] RECENT ORDER LINE [W_D: {}-{}, OL_I_ID: {}]", tid, w_id, d_id, ol.ol_i_id);
+            }
+
+            let mut low_stock = 0;
+            for ol_i_id in ol_i_ids.into_iter() {
+                let stock_row = tables.stock.retrieve(&(w_id, ol_i_id), w_id as usize).expect("no stock").into_table_ref(None,None);
+
+                let stock = tx.read::<Stock>(stock_row);
+                info!("[{:?}][STOCK-LEVEL] STOCK LEVEL CHECK [W_ID:{}, ol_i_id: {}, stock_level: {:?}]", tid, w_id, ol_i_id, stock.s_quantity);
+                if stock.s_quantity < thd {
+                    low_stock+=1;
+                }
+            }
+        };
+
+        let p1 = PieceOCC::new(
+            Pid::new(0),
+            String::from("stocklevel"),
+            Arc::new(Box::new(stocklevel_dis)),
+            "stocklevel_dis",
+            1);
+
+        let p2 = PieceOCC::new(
+            Pid::new(1),
+            String::from("stocklevel"),
+            Arc::new(Box::new(stocklevel_ol_stock)),
+            "stocklevel_ol_stock",
+            5);
+
+        let pieces = vec![p2, p1];
+
+        TransactionParBaseOCC::new(pieces, String::from("stocklevel"))
+    }
 
     /*   ********************************
      *   Delivery 
@@ -418,14 +489,14 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             String::from("delivery"),
             Arc::new(Box::new(delivery_no)),
             "delivery_no",
-            2);
+            3);
 
         let p2 = PieceOCC::new(
             Pid::new(1),
             String::from("delivery"),
             Arc::new(Box::new(deliver_or_ol_cu)),
             "deliver_or_ol_cu",
-            4);
+            5);
 
         let pieces = vec![p2, p1];
 
@@ -540,7 +611,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 String::from("orderstaus"),
                 Arc::new(Box::new(orderstatus_cus_ord_ol)),
                 "orderstauts_cus_ord_ol",
-                4);
+                5);
 
 
             let pieces = vec![p1];
@@ -623,28 +694,6 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
             let wh_num = num_warehouse_get();
 
-            /* RW Warehouse */ 
-            let tables = _tables.clone();
-            let payment_wh = move | tx: &mut TransactionParOCC | 
-            {
-                let (w_id, h_amount) = {
-                    let input = tx.get_input::<PaymentInput>();
-                    let w_id = input.w_id;
-                    let h_amount = input.h_amount;
-                    (w_id, h_amount)
-                };
-
-                let tid = tx.id().clone();
-                let warehouse_row = tables.warehouse.retrieve(&w_id, w_id as usize).expect("warehouse empty").into_table_ref(None, None);
-                let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
-                let w_name = warehouse.w_name.clone();
-                warehouse.w_ytd = warehouse.w_ytd +  h_amount;
-                info!("[{:?}][TXN-PAYMENT] Update Warehouse::YTD {:?}", tid, warehouse.w_ytd);
-                tx.write(warehouse_row, warehouse);
-                
-                tx.add_output(Box::new(w_name), 0);
-
-            };
 
 
             /* RW District */
@@ -668,9 +717,32 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 district.d_ytd = district.d_ytd + h_amount;
                 info!("[{:?}][TXN-PAYMENT] Update District::YTD\t  {:?}", tid, district.d_ytd);
                 tx.write(district_row,district);
-                tx.add_output(Box::new(d_name), 1);
+                tx.add_output(Box::new(d_name), 0);
             };
 
+
+            /* RW Warehouse */ 
+            let tables = _tables.clone();
+            let payment_wh = move | tx: &mut TransactionParOCC | 
+            {
+                let (w_id, h_amount) = {
+                    let input = tx.get_input::<PaymentInput>();
+                    let w_id = input.w_id;
+                    let h_amount = input.h_amount;
+                    (w_id, h_amount)
+                };
+
+                let tid = tx.id().clone();
+                let warehouse_row = tables.warehouse.retrieve(&w_id, w_id as usize).expect("warehouse empty").into_table_ref(None, None);
+                let mut warehouse = tx.read::<Warehouse>(warehouse_row.box_clone()).clone();
+                let w_name = warehouse.w_name.clone();
+                warehouse.w_ytd = warehouse.w_ytd +  h_amount;
+                info!("[{:?}][TXN-PAYMENT] Update Warehouse::YTD {:?}", tid, warehouse.w_ytd);
+                tx.write(warehouse_row, warehouse);
+                
+                tx.add_output(Box::new(w_name), 1);
+
+            };
 
             /* RW Customer */
             let tables = _tables.clone();
@@ -758,8 +830,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 };
 
                 let tid = tx.id().clone();
-                let w_name = tx.get_output::<[u8;10]>(0).clone();
-                let d_name = tx.get_output::<[u8;10]>(1).clone();
+                let d_name = tx.get_output::<[u8;10]>(0).clone();
+                let w_name = tx.get_output::<[u8;10]>(1).clone();
                 let c_id =  tx.get_output::<i32>(2).clone();
 
                 let h_data = format!("{}    {}", str::from_utf8(&w_name).unwrap(), str::from_utf8(&d_name).unwrap());
@@ -783,23 +855,23 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             let p1 = PieceOCC::new(
                 Pid::new(0),
                 String::from("payment"),
-                Arc::new(Box::new(payment_wh)),
-                "payment_wh",
+                Arc::new(Box::new(payment_dis)),
+                "payment_dis",
                 1);
 
             let p2 = PieceOCC::new(
                 Pid::new(1),
                 String::from("payment"),
-                Arc::new(Box::new(payment_dis)),
-                "payment_dis",
-                1);
+                Arc::new(Box::new(payment_wh)),
+                "payment_wh",
+                2);
 
             let p3 = PieceOCC::new(
                 Pid::new(2),
                 String::from("payment"),
                 Arc::new(Box::new(payment_cus)),
                 "payment_cus",
-                3);
+                5);
 
             let p4 = PieceOCC::new(
                 Pid::new(3),

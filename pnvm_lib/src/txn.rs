@@ -186,7 +186,7 @@ impl TxnInfo {
     }
 
     pub fn has_done(&self, rank: usize) -> bool {
-        self.rank_.load(Ordering::SeqCst) > rank
+        self.rank_.load(Ordering::SeqCst) >= rank
     }
 
     pub fn has_lock(&self) -> bool {
