@@ -617,17 +617,27 @@ fn report_stat(
             Err(_) => warn!("thread panics"),
         }
     }
-    //let total_time =  start.elapsed() - spin_time;
+
+
     println!(
-        "{},{},{}, {}, {}, {}, {}, {:?}, {}",
+        "{},{},{}, {}, {:?}",
         conf.thread_num,
-        conf.obj_num,
-        conf.set_size,
-        conf.zipf_coeff,
-        conf.pc_num,
+        conf.wh_num,
         total_success,
         total_abort,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
-        total_new_order,
         )
+    //let total_time =  start.elapsed() - spin_time;
+   // println!(
+   //     "{},{},{}, {}, {}, {}, {}, {:?}, {}",
+   //     conf.thread_num,
+   //     conf.obj_num,
+   //     conf.set_size,
+   //     conf.zipf_coeff,
+   //     conf.pc_num,
+   //     total_success,
+   //     total_abort,
+   //     total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+   //     total_new_order,
+   //     )
 }

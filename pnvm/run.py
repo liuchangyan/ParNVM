@@ -15,13 +15,14 @@ micro_bench_config = {
         #"zipf": np.linspace(0.000001, 1.0, num=10),
         "zipf" : [0.9],
         "name": 'TPCC_NVM',
-        "wh_num" : [1, 2, 4, 8],
+        "wh_num" : [1, 4, 8, 16],
         "round_num": 100000,
 }
 out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/output.csv"), "w+")
 
 def print_header():
-    out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,new_order\n")
+    # out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,new_order\n")
+    out_fd.write("thread_num,wh_num,success,abort,total_time\n")
     out_fd.flush()
 
 def run():
