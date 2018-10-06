@@ -185,8 +185,8 @@ impl TransactionOCC
 
         //Persist the write set logs
 
-        #[cfg(feature = "pmem")]
-        self.persist_log();
+        //#[cfg(feature = "pmem")]
+        //self.persist_log();
 
 
         //Install write sets into the underlying data
@@ -194,14 +194,14 @@ impl TransactionOCC
 
 
         //Persist the data
-        #[cfg(feature = "pmem")]
-        self.persist_data();
+        //#[cfg(feature = "pmem")]
+        //self.persist_data();
 
 
 
         //Persist commit the transaction
-        #[cfg(feature = "pmem")]
-        self.persist_commit();
+        //#[cfg(feature = "pmem")]
+        //self.persist_commit();
 
         //Clean up local data structures.
         //txn::mark_commit(self.id());

@@ -338,6 +338,7 @@ dependencies = [
  "num 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "pnvm_lib 0.1.0",
+ "pnvm_sys 0.1.0",
  "rand 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "zipf 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

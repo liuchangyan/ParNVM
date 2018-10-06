@@ -258,20 +258,20 @@ impl TransactionParOCC
 
     fn commit_piece(&mut self, rank: usize) -> bool {
         tcore::BenchmarkCounter::success_piece();
-        #[cfg(feature = "pmem")]
-        self.persist_log();
+        //#[cfg(feature = "pmem")]
+        //self.persist_log();
 
 
         //Install write sets into the underlying data
         self.install_data();
 
         //Persist the data
-        #[cfg(feature = "pmem")]
-        self.persist_data();
+        //#[cfg(feature = "pmem")]
+        //self.persist_data();
 
         //Persist commit the transaction
-        #[cfg(feature = "pmem")]
-        self.persist_commit();
+        //#[cfg(feature = "pmem")]
+        //self.persist_commit();
 
         self.update_rank(rank);
 
@@ -365,8 +365,8 @@ impl TransactionParOCC
                 return;
             }
 
-            #[cfg(feature = "pmem")]
-            self.persist_data();
+            //#[cfg(feature = "pmem")]
+            //self.persist_data();
         }
 
 
@@ -393,14 +393,14 @@ impl TransactionParOCC
         plog::persist_log(logs);
     }
 
-    #[cfg(feature="pmem")]
-    pub fn persist_data(&mut self) {
-        for (ptr, layout) in self.records_.drain() {
-            if let Some(ptr) = ptr {
-                pnvm_sys::flush(ptr, layout.clone());
-            }
-        }
-    }
+    //#[cfg(feature="pmem")]
+    //pub fn persist_data(&mut self) {
+    //    for (ptr, layout) in self.records_.drain() {
+    //        if let Some(ptr) = ptr {
+    //            pnvm_sys::flush(ptr, layout.clone());
+    //        }
+    //    }
+    //}
 
     pub fn update_rank(&self, rank: usize) {
         self.txn_info_.done(rank);
@@ -599,8 +599,8 @@ impl TransactionPar
             self.wait_deps_start();
             self.execute_piece(piece);
 
-            #[cfg(feature = "pmem")]
-            self.persist_data();
+            //#[cfg(feature = "pmem")]
+            //self.persist_data();
         }
 
 
@@ -627,14 +627,14 @@ impl TransactionPar
         plog::persist_log(logs);
     }
 
-    #[cfg(feature="pmem")]
-    pub fn persist_data(&mut self) {
-        for (ptr, layout) in self.records_.drain() {
-            if let Some(ptr) = ptr {
-                pnvm_sys::flush(ptr, layout.clone());
-            }
-        }
-    }
+   // #[cfg(feature="pmem")]
+   // pub fn persist_data(&mut self) {
+   //     for (ptr, layout) in self.records_.drain() {
+   //         if let Some(ptr) = ptr {
+   //             pnvm_sys::flush(ptr, layout.clone());
+   //         }
+   //     }
+   // }
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn execute_piece(&mut self, mut piece: Piece) {

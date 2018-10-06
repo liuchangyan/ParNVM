@@ -5,6 +5,7 @@ authors = ["Ricky Chen Xu <xuchen@u.nus.edu>"]
 
 [dependencies]
 pnvm_lib = {path = "../pnvm_lib"}
+pnvm_sys = {path = "../pnvm_sys"}
 log = "0.4"
 env_logger = "0.4"
 rand = "0.5"

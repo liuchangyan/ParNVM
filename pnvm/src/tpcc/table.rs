@@ -1,5 +1,6 @@
 
 use alloc::alloc::Layout;
+use pnvm_sys;
 
 use std::{
     sync::atomic::{AtomicUsize, Ordering, AtomicBool},
@@ -68,25 +69,6 @@ impl CustomerTable {
         }
     }
 
-   // pub fn push(&self, tx: &mut TransactionOCC, entry: Customer, tables :&Arc<Tables>)
-   //     where Arc<Row<Customer, (i32, i32, i32)>> : BucketPushRef
-   //     {
-   //         self.table_.push(tx, entry, tables);
-   //     }
-
-
-   // fn name_index(&self) -> &HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
-   // {
-   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-   //     unsafe { self.name_index_.get().as_ref().unwrap() }
-   // }
-
-
-   // fn name_index_mut(&self) -> &mut HashMap<(String, i32, i32), Vec<(i32, i32, i32)>>
-   // {
-   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-   //     unsafe { self.name_index_.get().as_mut().unwrap() }
-   // }
 
     pub fn push_raw(&self, entry: Customer) 
     {
@@ -205,18 +187,6 @@ impl NewOrderTable {
     }
 
 
-   // fn wd_index(&self) -> &HashMap<(i32, i32), Vec<(i32, i32,i32)>>
-   // {
-   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-   //     unsafe { self.wd_index_.get().as_ref().unwrap() }
-   // }
-
-   // fn wd_index_mut(&self) -> &mut HashMap<(i32, i32), Vec<(i32, i32, i32)>> 
-   // {
-   //     while self.lock_.compare_and_swap(false, true, Ordering::SeqCst) {}
-   //     unsafe {self.wd_index_.get().as_mut().unwrap() }
-   // }
-
     pub fn push_raw(&self, entry: NewOrder)
     {
         let p_key = entry.primary_key();
@@ -266,9 +236,6 @@ impl NewOrderTable {
 
                 Some(vecs) => {
                     assert_eq!(vecs.len()> 0, true);
-                   // let min_no = vecs.iter()
-                   //     .min_by(|(_xw, _xd, xo), (_yw, _yd, yo) | xo.cmp(yo))
-                   //     .expect("wd_index should not be empty");
                     let min_no = vecs[0];    
                     let ret =self.table_.retrieve(&min_no, (min_no.0 * wh_num + min_no.1) as usize);
                     self.wd_index_.unlock_bucket(index);
@@ -291,16 +258,6 @@ impl NewOrderTable {
         self.table_.delete_pc(tx, index, tables, bucket_idx as usize)
     }
 
-   // pub fn delete_raw(index: &(i32, i32, i32))
-   // {
-   //     self.delete_index(*index);
-   //     self.delete_entry(*index);
-   // }
-
-   // fn delete_entry(index : (i32, i32, i32)) 
-   // {
-   //     self.table_.delete_raw(&index); 
-   // }
 
     //Holding on bucket lock
     pub fn delete_index(&self, arc : &Arc<Row<NewOrder, (i32, i32,i32)>>)
@@ -805,6 +762,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 //
 //}
 
+const PMEM_DIR_ROOT : &str = "/home/v-xuc/ParNVM/data/";
 
 
 impl<Entry, Index> Table<Entry, Index> 
@@ -820,6 +778,18 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         for _ in 0..num {
             buckets.push(Bucket::with_capacity(bkt_size));
         }
+
+
+        /* Get the persistent memory */
+        #[cfg(feature = "pmem")]
+        {
+            let mut path = String::from(PMEM_DIR_ROOT);
+            let size = bkt_size * num * mem::size_of::<Entry>();
+            path.push_str(name);
+            
+            let pmem_root = pnvm_sys::mmap_file(path, size);
+        }
+
 
         Table {
             buckets,

@@ -1,4 +1,5 @@
 #![feature(alloc, allocator_api)]
+#![feature(ptr_internals)]
 extern crate libc;
 
 #[cfg(not(any(feature = "profile", feature = "unstable")))]
@@ -29,9 +30,11 @@ use std::{
     str,
     string::String,
     thread,
+    ptr::Unique,
 };
 
 const LPREFIX: &'static str = "pnvm_sys::";
+const PMEM_FILE_CREATE : c_int = 1;
 
 /* *************
  * Exposed APIS
@@ -56,6 +59,8 @@ pub fn drain() {
     unsafe {pmem_drain()};
 }
 
+
+
 //pub fn persist_single(addr : *const c_void, size : usize) {
 //    trace!("persit_single::(addr : {:p}, size : {})", addr, size);
 //    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_single(addr, size));
@@ -77,6 +82,37 @@ pub fn init() {
     PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().check());
 }
+
+ pub fn mmap_file(path: String, len: usize) -> *mut u8 
+{
+    let path = CString::new(path).unwrap();    
+    let pathp = path.as_ptr();
+
+    let mut mapped_len : Unique<usize> = Unique::empty();
+    let mut is_pmem: Unique<c_int> = Unique::empty();
+
+    let ret = unsafe {
+        pmem_map_file(pathp, len, PMEM_FILE_CREATE, 0666, 
+                  mapped_len.as_ptr(), 
+                  is_pmem.as_ptr())
+    };
+    
+    if(!mapped_len.as_ptr().is_null()) {
+        unsafe{ println!("mapped_len is {}", mapped_len.as_ref())};
+    } else {
+        println!("mapped_len is null");
+    }
+
+    if(!is_pmem.as_ptr().is_null()) {
+        unsafe { println!("is_pmem: {}", is_pmem.as_ref())};
+    } else {
+        println!("is_pmeme is null");
+    }
+
+    ret as *mut u8
+
+}
+
 
 /* *****************
  *   Mappings
@@ -104,7 +140,6 @@ extern "C" {
     pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_persist(addr: *const c_void, len: usize);
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
-
 }
 
 #[link(name = "pmemlog")]

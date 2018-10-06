@@ -487,20 +487,21 @@ impl TTag
         self.tobj_ref_.write(val);
         self.has_write_ = true; 
     }
-
+    
+    //FIXME: pmem flush
     #[cfg(feature = "pmem")]
     pub fn persist_data(&self, _: Tid) {
         if !self.has_write() {
             return;
         }
-        pnvm_sys::flush(self.tobj_ref_.get().get_ptr() as *mut u8, Layout::new::<T>());
+        //pnvm_sys::flush(self.tobj_ref_.get().get_ptr() as *mut u8, Layout::new::<T>());
     }
 
     #[cfg(feature = "pmem")]
     pub fn make_log(&self, id: Tid) -> PLog {
         PLog::new(
-            self.tobj_ref_.get().get_ptr() as *mut u8,
-            self.tobj_ref_.get().get_layout(),
+            self.tobj_ref_.get_ptr() as *mut u8,
+            self.tobj_ref_.get_layout(),
             id,
         )
     }
