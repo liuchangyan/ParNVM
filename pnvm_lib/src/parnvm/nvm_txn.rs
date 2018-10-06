@@ -251,12 +251,13 @@ impl TransactionParOCC
     }
 
     fn abort_piece(&mut self, _ : AbortReason) -> bool {
+        tcore::BenchmarkCounter::abort_piece();
         self.clean_up();
         false
     }
 
     fn commit_piece(&mut self, rank: usize) -> bool {
-
+        tcore::BenchmarkCounter::success_piece();
         #[cfg(feature = "pmem")]
         self.persist_log();
 

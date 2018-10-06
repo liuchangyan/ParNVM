@@ -564,7 +564,7 @@ impl OrderTable {
 
                     let ret = self.retrieve(max_pos);
                     if ret.is_none() {
-                        println!("retrieve_by_cid: none {:?}", max_pos);
+                        warn!("retrieve_by_cid: none {:?}", max_pos);
                     }
                     self.cus_index_.unlock_bucket(key);
                     ret

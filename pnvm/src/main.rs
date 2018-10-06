@@ -506,7 +506,6 @@ fn run_occ_tpcc(conf: Config) {
     let thd_num :usize = conf.thread_num;
     report_stat(handles, conf);
 
-    println!("count : {}", Arc::strong_count(&tables));
    // println!("{:?}", tables);
     
 
@@ -598,6 +597,8 @@ fn report_stat(
     ) {
     let mut total_abort = 0;
     let mut total_success = 0;
+    let mut total_pc_abort = 0;
+    let mut total_pc_success = 0;
     let mut total_time = time::Duration::new(0, 0);
     
 
@@ -609,9 +610,9 @@ fn report_stat(
             Ok(per_thd) => {
                 total_success += per_thd.success_cnt;
                 total_abort += per_thd.abort_cnt;
-
+                total_pc_abort += per_thd.abort_piece_cnt;
+                total_pc_success += per_thd.success_piece_cnt;
                 total_new_order += per_thd.new_order_cnt;
-
                 total_time = std::cmp::max(total_time, per_thd.duration);
             }
             Err(_) => warn!("thread panics"),
@@ -620,11 +621,13 @@ fn report_stat(
 
 
     println!(
-        "{},{},{}, {}, {:?}",
+        "{}, {}, {},{},{}, {}, {:?}",
         conf.thread_num,
         conf.wh_num,
         total_success,
         total_abort,
+        total_pc_success,
+        total_pc_abort,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
         )
     //let total_time =  start.elapsed() - spin_time;

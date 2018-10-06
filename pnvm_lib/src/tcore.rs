@@ -49,6 +49,8 @@ thread_local!{
 //#[cfg(benchmark)]
 #[derive(Copy, Clone, Debug)]
 pub struct BenchmarkCounter {
+    pub success_piece_cnt: u32,
+    pub abort_piece_cnt:   u32,
     pub success_cnt: u32,
     pub abort_cnt:   u32,
     pub new_order_cnt : u32,
@@ -62,6 +64,8 @@ impl BenchmarkCounter {
         BenchmarkCounter {
             success_cnt: 0,
             abort_cnt:   0,
+            success_piece_cnt: 0, 
+            abort_piece_cnt: 0,
             new_order_cnt : 0,
             start:    time::Instant::now(),
             duration: time::Duration::default(),
@@ -72,6 +76,20 @@ impl BenchmarkCounter {
     pub fn success() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).success_cnt += 1;
+        });
+    }
+
+    #[inline(always)]
+    pub fn success_piece() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).success_piece_cnt += 1;
+        });
+    }
+
+    #[inline(always)]
+    pub fn abort_piece() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).abort_piece_cnt += 1;
         });
     }
 
