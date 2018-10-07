@@ -129,7 +129,12 @@ impl  TRef for WarehouseRef {
             }
         }
     }
+    
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
@@ -215,6 +220,11 @@ impl  TRef for DistrictRef  {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
             }
         }
+    }
+
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
     }
 
     fn get_ptr(&self) -> *mut u8 {
@@ -305,6 +315,10 @@ impl  TRef for CustomerRef  {
         }
     }
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
@@ -454,6 +468,10 @@ impl  TRef for NewOrderRef  {
     fn box_clone(&self) -> Box<dyn TRef> {
         Box::new(self.clone())
     }
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
 
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
@@ -543,6 +561,10 @@ impl  TRef for OrderRef  {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
@@ -631,6 +653,10 @@ impl  TRef for OrderLineRef  {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
@@ -716,6 +742,10 @@ impl  TRef for ItemRef  {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
@@ -802,6 +832,10 @@ impl  TRef for HistoryRef  {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
@@ -885,6 +919,10 @@ impl  TRef for StockRef  {
         Box::new(self.clone())
     }
 
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8 {
+        self.inner_.get_pmem_addr() as *mut u8
+    }
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }

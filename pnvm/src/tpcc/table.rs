@@ -3,7 +3,7 @@ use alloc::alloc::Layout;
 use pnvm_sys;
 
 use std::{
-    sync::atomic::{AtomicUsize, Ordering, AtomicBool},
+    sync::atomic::{AtomicUsize, Ordering, AtomicBool, AtomicPtr},
     sync::{Arc,RwLock},
     collections::{
         HashMap,
@@ -922,6 +922,9 @@ where Entry: 'static + Key<Index> + Clone +Debug,
 //        
 //    }
 //}
+//
+
+const PMEM_PAGE_ENTRY_NUM: usize = 1024;
 
 /* FIXME: can we avoid the copy */
 pub struct Bucket<Entry, Index> 
@@ -934,6 +937,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     vers_ : TVersion,
     #[cfg(feature = "pmem")]
     pmem_root_ : Vec<NonNull<Entry>>,
+    pmem_cap_ : usize,
+
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
@@ -959,14 +964,17 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
+
+            #[cfg(feature="pmem")]
             pmem_root_: Vec::new(), 
+            pmem_cap_: PMEM_PAGE_ENTRY_NUM,
         };
 
         /* Get the persistent memory */
         #[cfg(feature = "pmem")]
         {
             let mut path = String::from(PMEM_DIR_ROOT);
-            let size = cap *  mem::size_of::<Entry>();
+            let size = PMEM_PAGE_ENTRY_NUM  *  mem::size_of::<Entry>();
             //path.push_str(name);
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 
@@ -979,6 +987,9 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         bucket
     }
 
+    /* Insert a row. 
+     * It is guaranteed that no data race is possible by the contention algo
+     * */
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
         debug!("[PUSH ROW] : {:?}", *row_arc);
         assert_eq!(self.vers_.get_count() > 0 , true);
@@ -986,20 +997,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let idx_elem = row_arc.get_data().primary_key();
         unsafe {
             let mut rows = self.rows.get().as_mut().unwrap();
-            rows.push(row_arc);
+            rows.push(row_arc.clone());
             let mut idx_map = self.index.get().as_mut().unwrap();
             idx_map.insert(idx_elem, self.len() -1);
 
-                
-            //FIXME: should not be here
-           // #[cfg(feature = "pmem")]
-           // {
-           //     let pmemaddr = self.get_pmem_base(self.len()-1);
-
-           //     pnvm_sys::memcpy_persist(pmemaddr as *mut u8, 
-           //                              row_arc.get_ptr(), 
-           //                              mem::size_of::<Entry>());
-           // }
+            #[cfg(feature = "pmem")]
+            row_arc.set_pmem_addr(self.get_pmem_addr(self.len() -1));
         }
     }
 
@@ -1019,11 +1022,28 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let idx_elem = entry.primary_key();
         unsafe {
             let mut rows = self.rows.get().as_mut().unwrap();
-            rows.push(Arc::new(Row::new(entry)));
             let mut idx_map = self.index.get().as_mut().unwrap();
+            let arc = Arc::new(Row::new(entry));
+            rows.push(arc.clone());
             idx_map.insert(idx_elem, self.len()-1);
+            #[cfg(feature="pmem")]
+            arc.set_pmem_addr(self.get_pmem_addr(self.len()-1));
         }
     }
+
+    #[cfg(feature ="pmem")]
+    fn get_pmem_addr(&self, idx : usize) -> *mut Entry {
+        if idx >= self.pmem_cap_ {
+            //TODO: resize 
+            panic!("TODO resize");
+        } else {
+            let pmem_page_id = idx / PMEM_PAGE_ENTRY_NUM;
+            unsafe {self.pmem_root_[pmem_page_id].as_ptr().offset((idx % PMEM_PAGE_ENTRY_NUM) as isize)
+            }
+        }
+
+    }
+
 
     pub fn retrieve(&self, index_elem: &Index) -> Option<Arc<Row<Entry, Index>>> { 
         //Check out of bound
@@ -1151,6 +1171,9 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     vers_: TVersion,
     id_ : ObjectId,
     index_ : Index,
+
+    #[cfg(feature = "pmem")]
+    pmem_addr_ : AtomicPtr<Entry>,
 }
 
 impl<Entry, Index> Debug for Row<Entry, Index> 
@@ -1219,6 +1242,9 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             vers_: TVersion::default(), /* FIXME: this can carry txn info */
             id_ : OidFac::get_obj_next(),
             index_ : key, 
+            
+            #[cfg(feature= "pmem")]
+            pmem_addr_: AtomicPtr::default(),
         }
     }
 
@@ -1230,9 +1256,21 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             vers_ : TVersion::new_with_info(txn_info),
             id_ : OidFac::get_obj_next(),
             index_ : key,
+
+            #[cfg(feature= "pmem")]
+            pmem_addr_: AtomicPtr::default(),
         }
     }
 
+
+    #[cfg(feature="pmem")]
+    pub fn set_pmem_addr(&self, addr : *mut Entry) {
+        self.pmem_addr_.store(addr, Ordering::SeqCst);        
+    }
+
+    pub fn get_pmem_addr(&self) -> *mut Entry {
+        self.pmem_addr_.load(Ordering::SeqCst)
+    }
 
     #[inline(always)]
     pub fn get_data(&self) -> &Entry {

@@ -193,6 +193,10 @@ impl TRef for TInt {
         }
     }
 
+    fn get_pmem_addr(&self) -> *mut u8 {
+        panic!("TInt::get_pmem_addr(): not implemented");
+    }
+
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }

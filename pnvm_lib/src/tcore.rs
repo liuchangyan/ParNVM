@@ -155,6 +155,9 @@ pub trait TRef : fmt::Debug{
     fn get_writer_info(&self) -> Arc<TxnInfo>;
     fn set_writer_info(&mut self, Arc<TxnInfo>);
     fn get_name(&self) -> String;
+
+    #[cfg(feature = "pmem")]
+    fn get_pmem_addr(&self) -> *mut u8;
 }
 
 
@@ -494,6 +497,11 @@ impl TTag
         if !self.has_write() {
             return;
         }
+
+        let pmemaddr = self.tobj_ref_.get_pmem_addr();
+        pnvm_sys::memcpy_persist(pmemaddr,
+                                 self.tobj_ref_.get_ptr(),
+                                 self.tobj_ref_.get_layout().size());
         //pnvm_sys::flush(self.tobj_ref_.get().get_ptr() as *mut u8, Layout::new::<T>());
     }
 

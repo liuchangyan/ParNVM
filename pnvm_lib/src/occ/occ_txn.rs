@@ -6,7 +6,7 @@ use std::{
 
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
-//use plog;
+use plog;
 use tcore::{self, ObjectId, TTag, TRef, BoxRef};
 use tbox::TBox;
 
@@ -183,25 +183,23 @@ impl TransactionOCC
         tcore::BenchmarkCounter::success();
         self.state_ = TxState::COMMITTED;
 
-        //Persist the write set logs
 
-        //#[cfg(feature = "pmem")]
-        //self.persist_log();
 
 
         //Install write sets into the underlying data
         self.install_data();
 
+        //Persist the write set logs
+        #[cfg(feature = "pmem")]
+        self.persist_log();
 
         //Persist the data
-        //#[cfg(feature = "pmem")]
-        //self.persist_data();
-
-
+        #[cfg(feature = "pmem")]
+        self.persist_data();
 
         //Persist commit the transaction
-        //#[cfg(feature = "pmem")]
-        //self.persist_commit();
+        #[cfg(feature = "pmem")]
+        self.persist_commit();
 
         //Clean up local data structures.
         //txn::mark_commit(self.id());
@@ -209,34 +207,32 @@ impl TransactionOCC
         true
     }
 
-   // #[cfg(feature = "pmem")]
-   // #[cfg_attr(feature = "profile", flame)]
-   // fn persist_commit(&self) {
-   //     //FIXME:: Can it be async?
-   //     plog::persist_txn(self.id().into());
-   // }
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn persist_commit(&self) {
+        //FIXME:: Can it be async?
+        plog::persist_txn(self.id().into());
+    }
 
-   // #[cfg(feature = "pmem")]
-   // #[cfg_attr(feature = "profile", flame)]
-   // fn persist_log(&self) {
-   //     let mut logs = vec![];
-   //     let id = self.id();
-   //     for tag in self.deps_.values() {
-   //         if tag.has_write() {
-   //             logs.push(tag.make_log(id));
-   //         }
-   //     }
+    #[cfg(feature = "pmem")]
+    fn persist_log(&self) {
+        let mut logs = vec![];
+        let id = self.id();
+        for tag in self.deps_.values() {
+            if tag.has_write() {
+                logs.push(tag.make_log(id));
+            }
+        }
 
-   //     plog::persist_log(logs);
-   // }
+        plog::persist_log(logs);
+    }
 
-   // #[cfg(feature = "pmem")]
-   // #[cfg_attr(feature = "profile", flame)]
-   // fn persist_data(&self) {
-   //     for tag in self.deps_.values() {
-   //         tag.persist_data(self.id());
-   //     }
-   // }
+    #[cfg(feature = "pmem")]
+    fn persist_data(&self) {
+        for tag in self.deps_.values() {
+            tag.persist_data(self.id());
+        }
+    }
 
     #[cfg_attr(feature = "profile", flame)]
     fn install_data(&mut self) {
