@@ -924,7 +924,7 @@ where Entry: 'static + Key<Index> + Clone +Debug,
 //}
 //
 
-const PMEM_PAGE_ENTRY_NUM: usize = 1024;
+const PMEM_PAGE_ENTRY_NUM: usize = 1 << 10;
 
 /* FIXME: can we avoid the copy */
 pub struct Bucket<Entry, Index> 
@@ -1275,7 +1275,9 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     pub fn set_pmem_addr(&self, addr : *mut Entry) {
         self.pmem_addr_.store(addr, Ordering::SeqCst);        
     }
+    
 
+    #[cfg(feature="pmem")]
     pub fn get_pmem_addr(&self) -> *mut Entry {
         self.pmem_addr_.load(Ordering::SeqCst)
     }

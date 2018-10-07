@@ -487,7 +487,7 @@ fn run_occ_tpcc(conf: Config) {
 
                         let res = tx.try_commit();
                         
-                        if res && j % 2 == 0 {
+                        if res && j > 55  {
                             BenchmarkCounter::new_order_done();
                         }
 

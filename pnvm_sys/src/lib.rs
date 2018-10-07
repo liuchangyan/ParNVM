@@ -103,18 +103,20 @@ pub fn init() {
     };
 
     if(!mapped_len.as_ptr().is_null()) {
-        unsafe{ info!("[pmem_map_file]: mapped_len is {}", mapped_len.as_ref())};
+        unsafe {assert_eq!(mapped_len.as_ref(), &len)};
+        //unsafe{ debug!("[pmem_map_file]: mapped_len is {}", mapped_len.as_ref())};
     } else {
         panic!("[pmem_map_file]:mapped_len is null");
     }
 
     if(!is_pmem.as_ptr().is_null()) {
-        unsafe { println!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
+        unsafe { assert_eq!(is_pmem.as_ref(), &1)};
+        //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
     } else {
         panic!("[pmem_map_file]: is_pmeme is null");
     }
     
-    println!("mmap_file(): {:p}", ret);
+    debug!("mmap_file(): {:p}", ret);
     ret as *mut u8
 
 }
