@@ -183,9 +183,6 @@ impl TransactionOCC
         tcore::BenchmarkCounter::success();
         self.state_ = TxState::COMMITTED;
 
-
-
-
         //Install write sets into the underlying data
         self.install_data();
 

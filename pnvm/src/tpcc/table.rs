@@ -10,7 +10,7 @@ use std::{
         hash_map::RandomState,
         VecDeque,
     },
-    cell::UnsafeCell,
+    cell::{RefCell, UnsafeCell},
     ptr::{self, NonNull},
     hash::{self,Hash, BuildHasher, Hasher},
     fmt::{self, Debug},
@@ -936,8 +936,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     id_ : ObjectId,
     vers_ : TVersion,
     #[cfg(feature = "pmem")]
-    pmem_root_ : Vec<NonNull<Entry>>,
-    pmem_cap_ : usize,
+    pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
+    pmem_cap_ : AtomicUsize,
 
 }
 
@@ -966,8 +966,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             vers_ : TVersion::default(),
 
             #[cfg(feature="pmem")]
-            pmem_root_: Vec::new(), 
-            pmem_cap_: PMEM_PAGE_ENTRY_NUM,
+            pmem_root_: RefCell::new(Vec::new()),
+            pmem_cap_: AtomicUsize::new(PMEM_PAGE_ENTRY_NUM),
         };
 
         /* Get the persistent memory */
@@ -982,7 +982,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
                 panic!("Bucket::with_capacity(): failed, len: {}", size);
             }
 
-            bucket.pmem_root_.push( NonNull::new(pmem_root).unwrap());
+            bucket.pmem_root_.borrow_mut().push( NonNull::new(pmem_root).unwrap());
         }
         bucket
     }
@@ -1033,13 +1033,21 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
     #[cfg(feature ="pmem")]
     fn get_pmem_addr(&self, idx : usize) -> *mut Entry {
-        if idx >= self.pmem_cap_ {
+        if idx >= self.pmem_cap_.load(Ordering::SeqCst) {
             //TODO: resize 
-            panic!("TODO resize");
-        } else {
-            let pmem_page_id = idx / PMEM_PAGE_ENTRY_NUM;
-            unsafe {self.pmem_root_[pmem_page_id].as_ptr().offset((idx % PMEM_PAGE_ENTRY_NUM) as isize)
-            }
+            let path = String::from(PMEM_DIR_ROOT);
+            let size = PMEM_PAGE_ENTRY_NUM * mem::size_of::<Entry>();
+            let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
+
+            self.pmem_root_.borrow_mut().push(NonNull::new(pmem_root).unwrap());
+            self.pmem_cap_.fetch_add(PMEM_PAGE_ENTRY_NUM, Ordering::SeqCst);
+        } 
+        
+        let pmem_page_id = idx / PMEM_PAGE_ENTRY_NUM;
+        let roots = self.pmem_root_.borrow();
+        unsafe {
+            roots[pmem_page_id].as_ptr()
+                .offset((idx % PMEM_PAGE_ENTRY_NUM) as isize)
         }
 
     }
