@@ -569,38 +569,38 @@ impl OidFac {
 /*
  * Persistent Memory Allocator
  */
-#[cfg(feature = "pmem")]
-static mut G_PMEM_ALLOCATOR: PMem = PMem {
-    kind: 0 as *mut MemKind,
-    size: 0,
-};
-
-#[cfg(feature = "pmem")]
-fn get_pmem_allocator() -> PMem {
-    unsafe {
-        if G_PMEM_ALLOCATOR.kind as u32 == 0 {
-            G_PMEM_ALLOCATOR =
-                PMem::new_bytes_with_nul_unchecked(PMEM_FILE_DIR_BYTES, PMEM_DEFAULT_SIZE);
-        }
-        G_PMEM_ALLOCATOR
-    }
-}
-
-#[cfg(feature = "pmem")]
-pub struct GPMem;
-
-#[cfg(feature = "pmem")]
-unsafe impl GlobalAlloc for GPMem {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let mut pmem = get_pmem_allocator();
-        pmem.alloc(layout).unwrap()
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        let mut pmem = get_pmem_allocator();
-        pmem.dealloc(ptr, layout)
-    }
-}
+//#[cfg(feature = "pmem")]
+//static mut G_PMEM_ALLOCATOR: PMem = PMem {
+//    kind: 0 as *mut MemKind,
+//    size: 0,
+//};
+//
+//#[cfg(feature = "pmem")]
+//fn get_pmem_allocator() -> PMem {
+//    unsafe {
+//        if G_PMEM_ALLOCATOR.kind as u32 == 0 {
+//            G_PMEM_ALLOCATOR =
+//                PMem::new_bytes_with_nul_unchecked(PMEM_FILE_DIR_BYTES, PMEM_DEFAULT_SIZE);
+//        }
+//        G_PMEM_ALLOCATOR
+//    }
+//}
+//
+//#[cfg(feature = "pmem")]
+//pub struct GPMem;
+//
+//#[cfg(feature = "pmem")]
+//unsafe impl GlobalAlloc for GPMem {
+//    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+//        let mut pmem = get_pmem_allocator();
+//        pmem.alloc(layout).unwrap()
+//    }
+//
+//    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+//        let mut pmem = get_pmem_allocator();
+//        pmem.dealloc(ptr, layout)
+//    }
+//}
 
 
 

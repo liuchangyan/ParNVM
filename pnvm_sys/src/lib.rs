@@ -1,5 +1,6 @@
 #![feature(alloc, allocator_api)]
 #![feature(ptr_internals)]
+#![feature(box_into_raw_non_null)]
 extern crate libc;
 
 #[cfg(not(any(feature = "profile", feature = "unstable")))]
@@ -30,11 +31,15 @@ use std::{
     str,
     string::String,
     thread,
-    ptr::Unique,
+    ptr::NonNull,
 };
 
 const LPREFIX: &'static str = "pnvm_sys::";
-const PMEM_FILE_CREATE : c_int = 1;
+const PMEM_FILE_CREATE : c_int = 1 << 0;
+const PMEM_FILE_EXCL:   c_int = 1<<1;
+const PMEM_FILE_SPARSE : c_int = 1<<2;
+const PMEM_FILE_TMPFILE: c_int = 1<<3;
+
 
 /* *************
  * Exposed APIS
@@ -88,29 +93,35 @@ pub fn init() {
     let path = CString::new(path).unwrap();    
     let pathp = path.as_ptr();
 
-    let mut mapped_len : Unique<usize> = Unique::empty();
-    let mut is_pmem: Unique<c_int> = Unique::empty();
-
-    let ret = unsafe {
-        pmem_map_file(pathp, len, PMEM_FILE_CREATE, 0666, 
-                  mapped_len.as_ptr(), 
-                  is_pmem.as_ptr())
-    };
+    let mut mapped_len : NonNull<usize> = Box::into_raw_non_null(Box::new(0));
+    let mut is_pmem: NonNull<c_int> = Box::into_raw_non_null(Box::new(0));
     
+    let ret = unsafe {
+        pmem_map_file(pathp, len, PMEM_FILE_CREATE | PMEM_FILE_TMPFILE, 0777, 
+                      mapped_len.as_ptr(), 
+                      is_pmem.as_ptr())
+    };
+
     if(!mapped_len.as_ptr().is_null()) {
-        unsafe{ println!("mapped_len is {}", mapped_len.as_ref())};
+        unsafe{ info!("[pmem_map_file]: mapped_len is {}", mapped_len.as_ref())};
     } else {
-        println!("mapped_len is null");
+        panic!("[pmem_map_file]:mapped_len is null");
     }
 
     if(!is_pmem.as_ptr().is_null()) {
-        unsafe { println!("is_pmem: {}", is_pmem.as_ref())};
+        unsafe { println!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
     } else {
-        println!("is_pmeme is null");
+        panic!("[pmem_map_file]: is_pmeme is null");
     }
-
+    
+    println!("mmap_file(): {:p}", ret);
     ret as *mut u8
 
+}
+
+pub fn memcpy_persist(pmemaddr: *mut u8, src: *mut u8, len: usize) 
+{
+    unsafe {pmem_memcpy_persist(pmemaddr as *mut c_void, src as *mut c_void, len)};
 }
 
 
@@ -140,6 +151,8 @@ extern "C" {
     pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_persist(addr: *const c_void, len: usize);
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
+
+    pub fn pmem_memcpy_persist(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
 }
 
 #[link(name = "pmemlog")]

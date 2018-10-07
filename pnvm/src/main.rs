@@ -57,9 +57,9 @@ use pnvm_lib::{
     txn::*,
 };
 
-#[cfg(feature = "pmem")]
-#[global_allocator]
-static GLOBAL: GPMem = GPMem;
+//#[cfg(feature = "pmem")]
+//#[global_allocator]
+//static GLOBAL: GPMem = GPMem;
 
 
 //use std::alloc::{System, GlobalAlloc};

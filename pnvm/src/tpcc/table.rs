@@ -780,15 +780,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         }
 
 
-        /* Get the persistent memory */
-        #[cfg(feature = "pmem")]
-        {
-            let mut path = String::from(PMEM_DIR_ROOT);
-            let size = bkt_size * num * mem::size_of::<Entry>();
-            path.push_str(name);
-            
-            let pmem_root = pnvm_sys::mmap_file(path, size);
-        }
 
 
         Table {
@@ -905,7 +896,7 @@ where Entry: 'static + Key<Index> + Clone +Debug,
         let mut buckets = Vec::with_capacity(16);
 
         for _ in 0..16{
-            buckets.push(Bucket::new());
+            buckets.push(Bucket::with_capacity(1024));
         }
         
         Table {
@@ -941,32 +932,51 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
     vers_ : TVersion,
+    #[cfg(feature = "pmem")]
+    pmem_root_ : Vec<NonNull<Entry>>,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash+ Clone,
 {
-    pub fn new() -> Bucket<Entry, Index> {
-        Bucket {
-            rows: UnsafeCell::new(Vec::new()),
-            index: UnsafeCell::new(HashMap::new()),
+   // pub fn new() -> Bucket<Entry, Index> {
+   //     Bucket {
+   //         rows: UnsafeCell::new(Vec::new()),
+   //         index: UnsafeCell::new(HashMap::new()),
 
-            id_ : OidFac::get_obj_next(),
-            vers_ : TVersion::default(),
-        }
-    }
+   //         id_ : OidFac::get_obj_next(),
+   //         vers_ : TVersion::default(),
+   //         pmem_root_: 
+   //     }
+   // }
 
     pub fn with_capacity(cap: usize) -> Bucket<Entry, Index> 
     {
-        Bucket {
+        let mut bucket = Bucket {
             rows: UnsafeCell::new(Vec::with_capacity(cap)),
             index: UnsafeCell::new(HashMap::with_capacity(cap)),
 
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
-        }
+            pmem_root_: Vec::new(), 
+        };
 
+        /* Get the persistent memory */
+        #[cfg(feature = "pmem")]
+        {
+            let mut path = String::from(PMEM_DIR_ROOT);
+            let size = cap *  mem::size_of::<Entry>();
+            //path.push_str(name);
+            let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
+
+            if pmem_root.is_null() {
+                panic!("Bucket::with_capacity(): failed, len: {}", size);
+            }
+
+            bucket.pmem_root_.push( NonNull::new(pmem_root).unwrap());
+        }
+        bucket
     }
 
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
@@ -979,6 +989,17 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             rows.push(row_arc);
             let mut idx_map = self.index.get().as_mut().unwrap();
             idx_map.insert(idx_elem, self.len() -1);
+
+                
+            //FIXME: should not be here
+           // #[cfg(feature = "pmem")]
+           // {
+           //     let pmemaddr = self.get_pmem_base(self.len()-1);
+
+           //     pnvm_sys::memcpy_persist(pmemaddr as *mut u8, 
+           //                              row_arc.get_ptr(), 
+           //                              mem::size_of::<Entry>());
+           // }
         }
     }
 
