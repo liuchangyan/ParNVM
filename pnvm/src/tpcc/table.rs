@@ -938,6 +938,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     #[cfg(feature = "pmem")]
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
     pmem_cap_ : AtomicUsize,
+    pmem_per_size_ : usize,
 
 }
 
@@ -967,14 +968,15 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
             #[cfg(feature="pmem")]
             pmem_root_: RefCell::new(Vec::new()),
-            pmem_cap_: AtomicUsize::new(PMEM_PAGE_ENTRY_NUM),
+            pmem_cap_: AtomicUsize::new(cap),
+            pmem_per_size_ : cap,
         };
 
         /* Get the persistent memory */
         #[cfg(feature = "pmem")]
         {
             let mut path = String::from(PMEM_DIR_ROOT);
-            let size = PMEM_PAGE_ENTRY_NUM  *  mem::size_of::<Entry>();
+            let size =  cap *  mem::size_of::<Entry>();
             //path.push_str(name);
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 
@@ -1036,18 +1038,21 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         if idx >= self.pmem_cap_.load(Ordering::SeqCst) {
             //TODO: resize 
             let path = String::from(PMEM_DIR_ROOT);
-            let size = PMEM_PAGE_ENTRY_NUM * mem::size_of::<Entry>();
+            let size = self.pmem_per_size_ * mem::size_of::<Entry>();
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 
             self.pmem_root_.borrow_mut().push(NonNull::new(pmem_root).unwrap());
-            self.pmem_cap_.fetch_add(PMEM_PAGE_ENTRY_NUM, Ordering::SeqCst);
+            /* Exponential increase the cap here */
+            self.pmem_cap_.fetch_add(self.pmem_per_size_, Ordering::SeqCst);
         } 
         
-        let pmem_page_id = idx / PMEM_PAGE_ENTRY_NUM;
+        //Find pmem_page_id
+        
+        let pmem_page_id = idx / self.pmem_per_size_;
         let roots = self.pmem_root_.borrow();
         unsafe {
             roots[pmem_page_id].as_ptr()
-                .offset((idx % PMEM_PAGE_ENTRY_NUM) as isize)
+                .offset((idx % self.pmem_per_size_) as isize)
         }
 
     }
