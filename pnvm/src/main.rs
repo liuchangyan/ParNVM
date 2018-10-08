@@ -71,6 +71,10 @@ fn main() {
 
     let conf = util::read_env();
     warn!("{:?}", conf);
+
+    #[cfg(feature = "pmem")]
+    println!("PMEM on");
+
     match conf.test_name.as_ref() {
         "OCC" => run_occ(conf),
 //        "PNVM" => run_nvm(conf),
@@ -514,6 +518,7 @@ fn run_occ_tpcc(conf: Config) {
     #[cfg(feature = "profile")]
     {
         flame::end("benchmark_start");
+        
         let mut f = File::create(format!("profile/occ.profile.{}", thd_num).as_str()).unwrap();
         flame::dump_text_to_writer(f);
     }

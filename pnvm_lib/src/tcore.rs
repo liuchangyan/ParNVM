@@ -273,7 +273,7 @@ impl TVersion {
     }
 
     //What if the last writer is own? -> Extension
-    #[cfg_attr(feature = "profile", flame)]
+    //#[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
     pub fn get_version(&self) -> u32 {
         self.last_writer_.load(Ordering::Acquire)
@@ -463,7 +463,7 @@ impl TTag
     }
 
 
-    #[cfg_attr(feature = "profile", flame)]
+    //#[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
     pub fn has_write(&self) -> bool {
         self.has_write_
@@ -474,7 +474,7 @@ impl TTag
         !self.has_write()
     }
 
-    #[cfg_attr(feature = "profile", flame)]
+    //#[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
     pub fn add_version(&mut self, vers: u32) {
         self.vers_ = vers;
@@ -499,10 +499,9 @@ impl TTag
         }
 
         let pmemaddr = self.tobj_ref_.get_pmem_addr();
-        pnvm_sys::memcpy_persist(pmemaddr,
+        pnvm_sys::memcpy_nodrain(pmemaddr,
                                  self.tobj_ref_.get_ptr(),
                                  self.tobj_ref_.get_layout().size());
-        //pnvm_sys::flush(self.tobj_ref_.get().get_ptr() as *mut u8, Layout::new::<T>());
     }
 
     #[cfg(feature = "pmem")]

@@ -13,6 +13,8 @@ use tbox::TBox;
 #[cfg(feature = "profile")]
 use flame;
 
+use pnvm_sys;
+
 pub struct TransactionOCC
 {
 
@@ -29,7 +31,7 @@ const OPERATION_CODE_RW: i8 = 2;
 impl Transaction for TransactionOCC
 {
 
-    #[cfg_attr(feature = "profile", flame)]
+     #[cfg_attr(feature = "profile", flame)]
      fn try_commit(&mut self) -> bool {
         if self.should_abort_ {
             return self.abort(AbortReason::IndexErr);
@@ -51,7 +53,6 @@ impl Transaction for TransactionOCC
         true
     }
 
-    #[cfg_attr(feature = "profile", flame)]
     //pub fn read<'b, T:'static>(&'b mut self, tobj: &'b dyn TRef) -> &'b T {
     //    let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
     //    tag.add_version(tobj.get_version());
@@ -69,7 +70,7 @@ impl Transaction for TransactionOCC
     }
 
 
-    #[cfg_attr(feature = "profile", flame)]
+    //#[cfg_attr(feature = "profile", flame)]
      fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
     {
         //let tref = tobj.clone().into_box_ref();
@@ -90,7 +91,7 @@ impl Transaction for TransactionOCC
         self.should_abort_ = true;
     }
 
-    #[cfg_attr(feature = "profile", flame)]
+    //#[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
      fn retrieve_tag(&mut self,
                         id: &ObjectId, 
@@ -128,6 +129,7 @@ impl TransactionOCC
     }
 
 
+    #[cfg_attr(feature = "profile", flame)]
     pub fn abort(&mut self, _: AbortReason) -> bool {
         warn!("Tx[{:?}] is aborting.", self.tid_);
         //#[cfg(benchmark)]
@@ -208,10 +210,12 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     fn persist_commit(&self) {
         //FIXME:: Can it be async?
+        pnvm_sys::drain();
         plog::persist_txn(self.id().into());
     }
 
     #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
     fn persist_log(&self) {
         let mut logs = vec![];
         let id = self.id();
@@ -225,6 +229,7 @@ impl TransactionOCC
     }
 
     #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&self) {
         for tag in self.deps_.values() {
             tag.persist_data(self.id());

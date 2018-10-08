@@ -126,6 +126,10 @@ pub fn memcpy_persist(pmemaddr: *mut u8, src: *mut u8, len: usize)
     unsafe {pmem_memcpy_persist(pmemaddr as *mut c_void, src as *mut c_void, len)};
 }
 
+pub fn memcpy_nodrain(pmemaddr: *mut u8, src: *mut u8, len: usize) 
+{
+    unsafe {pmem_memcpy_nodrain(pmemaddr as *mut c_void, src as *mut c_void, len)};
+}
 
 /* *****************
  *   Mappings
@@ -155,6 +159,7 @@ extern "C" {
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
 
     pub fn pmem_memcpy_persist(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
+    pub fn pmem_memcpy_nodrain(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
 }
 
 #[link(name = "pmemlog")]

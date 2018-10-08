@@ -779,9 +779,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             buckets.push(Bucket::with_capacity(bkt_size));
         }
 
-
-
-
         Table {
             buckets,
             bucket_num : num,
