@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Ricky Chen Xu <xuchen@u.nus.edu>"]
 
 [dependencies]
-pnvm_sys = { path = "../pnvm_sys"}
+pnvm_sys = { path = "../pnvm_sys", optional=true}
 log = {version = "0.4"}
 env_logger = "0.4"
 lazy_static = "1.0"
@@ -22,4 +22,4 @@ flamer = {version = "^0.2.3", optional = true}
 [features]
 profile = ["pnvm_sys/profile", "flamer", "flame"]
 unstable = ["pnvm_sys/unstable"]
-pmem = []
+pmem = ["pnvm_sys"]

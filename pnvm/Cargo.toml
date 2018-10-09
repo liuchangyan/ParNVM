@@ -5,7 +5,7 @@ authors = ["Ricky Chen Xu <xuchen@u.nus.edu>"]
 
 [dependencies]
 pnvm_lib = {path = "../pnvm_lib"}
-pnvm_sys = {path = "../pnvm_sys"}
+pnvm_sys = {path = "../pnvm_sys", optional=true}
 log = "0.4"
 env_logger = "0.4"
 rand = "0.5"
@@ -19,4 +19,4 @@ parking_lot = {version = "0.6", features = ["nightly"]}
 [features]
 profile = ["pnvm_lib/profile", "flame"]
 unstable = ["pnvm_lib/unstable"]
-pmem = ["pnvm_lib/pmem"]
+pmem = ["pnvm_lib/pmem", "pnvm_sys"]

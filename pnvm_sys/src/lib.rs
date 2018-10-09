@@ -135,6 +135,7 @@ pub fn memcpy_nodrain(pmemaddr: *mut u8, src: *mut u8, len: usize)
  *   Mappings
  * ****************/
 
+
 #[link(name = "pmem")]
 extern "C" {
     pub fn pmem_check_version(major_required: c_uint, minor_required: c_uint) -> *const c_char;

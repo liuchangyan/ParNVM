@@ -1,7 +1,6 @@
 
 use super::dep::*;
 use super::piece::*;
-use plog::{self, PLog};
 use txn::{self, *};
 use tcore::{self, *};
 
@@ -20,13 +19,13 @@ use std::{
 };
 
 #[cfg(feature="pmem")]
-use core::alloc::Layout;
+use {core::alloc::Layout, plog::{self, PLog}};
+#[cfg(feature="pmem")]
 extern crate pnvm_sys;
 
 
-use parking_lot::RwLock;
-
-use evmap::{self, ReadHandle, ShallowCopy, WriteHandle};
+//use parking_lot::RwLock;
+//use evmap::{self, ReadHandle, ShallowCopy, WriteHandle};
 use log;
 
 #[cfg(feature = "profile")]

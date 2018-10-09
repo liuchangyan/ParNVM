@@ -4,6 +4,8 @@
 #![feature(box_into_raw_non_null)]
 
 extern crate pnvm_lib;
+
+#[cfg(feature = "pmem")]
 extern crate pnvm_sys;
 
 #[cfg(feature = "profile")]

@@ -1,4 +1,7 @@
+
+#[cfg(feature = "pmem")]
 use plog::PLog;
+
 use std::fmt::{Debug, Formatter, Result};
 use std::sync::Arc;
 use txn::Tid;
@@ -154,6 +157,7 @@ impl DataRecord {
     }
 
     //FIXME: can it be self here?
+#[cfg(feature = "pmem")]
     pub fn as_log(&self, id: Tid) -> PLog {
         PLog::new(self.ptr, self.layout.clone(), id)
     }

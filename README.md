@@ -1,3 +1,8 @@
+### Running ### 
+1) Install Rust and its other tools with rustup 
+curl https://sh.rustup.rs -sSf | sh
+
+
 ### DOC ###
 [Algo_Draft](doc/Algo_Draft.md)  
 

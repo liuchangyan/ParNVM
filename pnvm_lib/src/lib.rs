@@ -9,6 +9,8 @@
 #![feature(raw_vec_internals)]
 #![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
 #![cfg_attr(feature = "profile", plugin(flamer))]
+
+#[cfg(feature = "pmem")]
 extern crate pnvm_sys;
 extern crate alloc;
 
@@ -32,7 +34,10 @@ extern crate evmap;
 extern crate parking_lot;
 
 pub mod conf;
+
+#[cfg(feature = "pmem")]
 pub mod plog;
+
 pub mod tbox;
 pub mod tcore;
 pub mod txn;

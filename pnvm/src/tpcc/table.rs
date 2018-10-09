@@ -1,5 +1,6 @@
-
 use alloc::alloc::Layout;
+
+#[cfg(feature="pmem")]
 use pnvm_sys;
 
 use std::{

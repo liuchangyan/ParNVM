@@ -6,14 +6,15 @@ use std::{
 
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
-use plog;
+#[cfg(feature = "pmem")]
+use {plog, pnvn_sys};
+
 use tcore::{self, ObjectId, TTag, TRef, BoxRef};
 use tbox::TBox;
 
 #[cfg(feature = "profile")]
 use flame;
 
-use pnvm_sys;
 
 pub struct TransactionOCC
 {
