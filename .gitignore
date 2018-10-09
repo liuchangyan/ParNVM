@@ -19,3 +19,4 @@ perf.*
 # pmem dir
 /data
 
+pnvm/Settings.toml

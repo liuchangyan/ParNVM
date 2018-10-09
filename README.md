@@ -1,6 +1,35 @@
-### Running ### 
+### Building and Running ### 
 1) Install Rust and its other tools with rustup 
-curl https://sh.rustup.rs -sSf | sh
+`curl https://sh.rustup.rs -sSf | sh`
+    - Install with the **nightly** version by choosing a customized installation 
+
+2) Go to the pnvm project root and build the project
+`git clone https://github.com/githubxxcc/ParNVM.git`
+`cd ParNVM && git checkout demo`
+`cd pnvm && cargo +nightly build --release --features unstable'
+
+3) Create the config file and run the application 
+`cp Settings.toml.sample Settings.toml`
+`cargo +nightly run --release --features unstable`
+
+Some Options for running TPCC workload
+```
+TEST_NAME="TPCC_NVM" | "TPCC_OCC" // For ppnvm or ppnvm contention management 
+
+WH_NUM: warehouse number 
+```
+
+Sample output from the program: 
+```
+/* Running TPCC_OCC */
+1, 1, 12389, 0, 5000
+//thread_num, wh_num, txn_success, txn_abort, duration in mili second
+
+/* Running TPCC_NVM"
+1, 1, 128908, 0, 0 ,0, 5000
+//thread_num, wh_num, txn_success, txn_abort, pc_success, pc_abort, duration in mili second
+
+```
 
 
 ### DOC ###
