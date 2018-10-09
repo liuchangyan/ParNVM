@@ -1,3 +1,11 @@
+//************************************************
+//Entry types defnitions
+//
+//Types: 
+//- Warehouse
+//- NewOrder
+//- ....
+
 use numeric::Numeric;
 use std::{
     hash::Hash, sync::Arc,

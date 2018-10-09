@@ -5,3 +5,4 @@ pub mod numeric;
 pub mod entry_ref;
 pub mod workload;
 pub mod pc_gen;
+pub mod tpcc_tables;

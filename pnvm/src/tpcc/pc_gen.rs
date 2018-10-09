@@ -1,10 +1,18 @@
 
 
+//******************************
+//Generating pieces for the TPCC workload 
+//
+//Funcs:
+//- input generators and transaction base generators
+//******************************
+
 
 use super::workload::*;
 use super::numeric::*;
 use super::entry::*;
 use super::table::*;
+use super::tpcc_tables::*;
 
 use std::{
     time,
@@ -43,14 +51,14 @@ impl TPCCInput for NewOrderInput {
 pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng) 
     -> NewOrderInput
 {
-    let NUM_WAREHOUSES = num_warehouse_get();
-    let NUM_DISTRICT = num_district_get();
+    let num_wh = num_warehouse_get();
+    let num_dis = num_district_get();
 
 
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
-    //let w_id = urand(1, NUM_WAREHOUSES, rng);
+    //let w_id = urand(1, num_wh, rng);
     let w_id = w_home;
-    let d_id = urand(1, NUM_DISTRICT, rng);
+    let d_id = urand(1, num_dis, rng);
     let c_id = nurand(1023, 1, 3000, rng);
     let ol_cnt = urand(5, 15, rng);
 
@@ -63,7 +71,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
         supware[i] = if true {
             w_id
         } else {
-            urandexcept(1, NUM_WAREHOUSES, w_id, rng)
+            urandexcept(1, num_wh, w_id, rng)
         };
         itemid[i] = nurand(8191, 1, 100000, rng);
         qty[i] = urand(1, 10, rng);
@@ -641,11 +649,11 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
     pub fn pc_payment_input(w_home: i32, rng: &mut SmallRng) 
         -> PaymentInput
         {
-            let NUM_WAREHOUSES = num_warehouse_get();
-            let NUM_DISTRICT = num_district_get();
+            let num_wh = num_warehouse_get();
+            let num_dis = num_district_get();
 
             let w_id = w_home;
-            let d_id = urand(1, NUM_DISTRICT, rng);
+            let d_id = urand(1, num_dis, rng);
 
             let x = urand(1, 100, rng);
             let y = urand(1, 100, rng);
@@ -653,13 +661,13 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             let c_w_id : i32;
             let c_d_id : i32;
 
-            if NUM_WAREHOUSES == 1 || x <= 85 {
+            if num_wh == 1 || x <= 85 {
                 //85% paying throuhg won house
                 c_w_id = w_id;
                 c_d_id = d_id;
             } else {
                 //15% paying from remote  warehouse
-                c_w_id =  urandexcept(1, NUM_WAREHOUSES, w_id, rng);
+                c_w_id =  urandexcept(1, num_wh, w_id, rng);
                 assert!(c_w_id != w_id);
                 c_d_id = urand(1, 10, rng);
             }

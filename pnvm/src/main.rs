@@ -78,10 +78,9 @@ fn main() {
    // println!("PMEM on");
 
     match conf.test_name.as_ref() {
-        "OCC" => run_occ(conf),
-//        "PNVM" => run_nvm(conf),
+        "OCC" => run_occ_micro(conf),
         "SINGLE" => run_single(conf),
-        "PNVM_OCC" => run_nvm_occ(conf),
+        "PNVM_OCC" => run_nvm_occ_micro(conf),
         "TPCC_OCC" => run_occ_tpcc(conf),
         "TPCC_NVM" => run_pc_tpcc(conf),
         _ => panic!("unknown test name"),
@@ -153,7 +152,10 @@ fn main() {
 //    }
 //}
 //
-fn run_nvm_occ(conf: Config) {
+//
+//
+
+fn run_nvm_occ_micro(conf: Config) {
     let workload = util::TestHelper::prepare_workload_nvm_occ(&conf);
     let work = workload.work_;
     let mut handles = Vec::new();
@@ -218,7 +220,7 @@ fn run_nvm_occ(conf: Config) {
 
 }
 
-fn run_occ(conf: Config) {
+fn run_occ_micro(conf: Config) {
     let mtx = Arc::new(Mutex::new(0));
     let mut dataset = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
     let keys = dataset.keys;
@@ -327,6 +329,7 @@ fn run_occ(conf: Config) {
 }
 
 
+//Running of TPCC with PPNVM piece contention management
 fn run_pc_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     //FIXME: rename the function, parepare workload
@@ -349,7 +352,7 @@ fn run_pc_tpcc(conf: Config) {
         let wh_num = conf.wh_num;
         let d_num = conf.d_num;
 
-
+        /* Spawn worker thread */
         let handle = builder
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
@@ -375,8 +378,8 @@ fn run_pc_tpcc(conf: Config) {
                 
                 let start = Instant::now();
                 BenchmarkCounter::start();
-
-                //for j in 0..conf.round_num {
+                
+                /* Run the workload */
                 while start.elapsed() < duration {
                     let tid = TidFac::get_thd_next();
                     let j : u32= rng.gen::<u32>() % 100;
@@ -419,8 +422,6 @@ fn run_pc_tpcc(conf: Config) {
     let thd_num :usize = conf.thread_num;
     report_stat(handles, conf);
 
-    
-
 
     #[cfg(feature = "profile")]
     {
@@ -429,6 +430,8 @@ fn run_pc_tpcc(conf: Config) {
         flame::dump_text_to_writer(f);
     }
 }
+
+//Run the OCC contention management TPCC workload
 fn run_occ_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     let tables = tpcc::workload::prepare_workload(&conf, &mut rng);
@@ -473,7 +476,6 @@ fn run_occ_tpcc(conf: Config) {
                     let j : u32= rng.gen::<u32>() % 100;
 
 
-
                     while {
                         info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
                         if j > 55 {
@@ -512,10 +514,6 @@ fn run_occ_tpcc(conf: Config) {
 
     let thd_num :usize = conf.thread_num;
     report_stat(handles, conf);
-
-   // println!("{:?}", tables);
-    
-
 
     #[cfg(feature = "profile")]
     {

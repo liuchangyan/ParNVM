@@ -1,3 +1,7 @@
+//***************************************
+// Numeric types for decimal and integer
+// types with length and precision requirement
+//***************************************
 use std::cmp::{Ordering,max};
 use num::pow::pow;
 use std::ops::{Sub, Mul, Add, SubAssign,AddAssign};

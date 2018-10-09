@@ -4,6 +4,7 @@ use super::{
     entry::*,
     entry_ref::*,
     numeric::*,
+    tpcc_tables::*,
 };
 
 use util::Config;
@@ -37,7 +38,7 @@ use num::{
 
 thread_local! {
     pub static G_NUM_WAREHOUSES: Rc<RefCell<i32>> = Rc::new(RefCell::new(10));
-    pub static G_NUM_DISTRICTS : Rc<RefCell<i32>> = Rc::new(RefCell::new(8));
+    pub static G_num_disS : Rc<RefCell<i32>> = Rc::new(RefCell::new(8));
 }
 
 pub fn num_warehouse_get() -> i32 {
@@ -49,16 +50,16 @@ pub fn num_warehouse_set(x : i32) {
 }
 
 pub fn num_district_get() -> i32 {
-    G_NUM_DISTRICTS.with(|n| *n.borrow())
+    G_num_disS.with(|n| *n.borrow())
 }
 
 pub fn num_district_set(x : i32) {
-    G_NUM_DISTRICTS.with(|n| *n.borrow_mut() = x);
+    G_num_disS.with(|n| *n.borrow_mut() = x);
 }
 
 
-//pub static mut NUM_INIT_DISTRICT :i32 = 10;
-//pub static mut NUM_WAREHOUSES : i32 = 8;
+//pub static mut num_dis :i32 = 10;
+//pub static mut num_wh : i32 = 8;
 pub const NUM_INIT_ORDER: i32 = 3000;
 pub const NUM_INIT_NEXT_ORDER : i32 = 3001;
 pub const NUM_INIT_ITEM: i32 = 100_000;
@@ -69,13 +70,13 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     num_warehouse_set(conf.wh_num);
     num_district_set(conf.d_num);
     
-    let NUM_WAREHOUSES = num_warehouse_get();
-    let NUM_INIT_DISTRICT = num_district_get();
-    let total_wd : usize = (NUM_WAREHOUSES * NUM_INIT_DISTRICT) as usize;
+    let num_wh = num_warehouse_get();
+    let num_dis = num_district_get();
+    let total_wd : usize = (num_wh * num_dis) as usize;
 
     let mut tables = Tables {
-        warehouse: Table::new_with_buckets(NUM_WAREHOUSES as usize, conf.wh_num as usize, "warehouse"),
-        district: Table::new_with_buckets(total_wd, NUM_INIT_DISTRICT as usize, "district"),
+        warehouse: Table::new_with_buckets(num_wh as usize, conf.wh_num as usize, "warehouse"),
+        district: Table::new_with_buckets(total_wd, num_dis as usize, "district"),
         customer: CustomerTable::new_with_buckets(total_wd, 1024, "customer"),
         neworder: NewOrderTable::new_with_buckets(total_wd, 4096, "neworder"),
         order: OrderTable::new_with_buckets(total_wd, 32768, "order"),
@@ -219,8 +220,8 @@ fn fill_stock(tables: &mut Tables, _config: &Config, w_id : i32, rng: &mut Small
 
 fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut SmallRng) 
 {
-    let NUM_INIT_DISTRICT = num_district_get();
-    for d_id in 1..=NUM_INIT_DISTRICT {
+    let num_dis = num_district_get();
+    for d_id in 1..=num_dis {
         let district = District::new(
              d_id, 
              w_id,
@@ -540,12 +541,12 @@ fn new_order(tx: &mut TransactionOCC,
 }
 
 pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : i32,rng: &mut SmallRng) {
-    let NUM_WAREHOUSES = num_warehouse_get();
-    let NUM_DISTRICT = num_district_get();
+    let num_wh = num_warehouse_get();
+    let num_dis = num_district_get();
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
     //let w_id = urand(1, NUM_WAREHOUSES, rng);
     let w_id = w_home;
-    let d_id = urand(1, NUM_DISTRICT, rng);
+    let d_id = urand(1, num_dis, rng);
     let c_id = nurand(1023, 1, 3000, rng);
     let ol_cnt = urand(5, 15, rng);
 
@@ -558,7 +559,7 @@ pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : 
         supware[i] = if true {
             w_id
         } else {
-            urandexcept(1, NUM_WAREHOUSES, w_id, rng)
+            urandexcept(1, num_wh, w_id, rng)
         };
         itemid[i] = nurand(8191, 1, 100000, rng);
         qty[i] = urand(1, 10, rng);
@@ -575,12 +576,12 @@ pub fn payment_random(tx: &mut TransactionOCC,
                       ) 
 {
     //let w_id = w_home;
-    let NUM_WAREHOUSES = num_warehouse_get();
-    let NUM_DISTRICT = num_district_get();
+    let num_wh = num_warehouse_get();
+    let num_dis = num_district_get();
 
     //let w_id = urand(1, NUM_WAREHOUSES, rng);
     let w_id = w_home;
-    let d_id = urand(1, NUM_DISTRICT, rng);
+    let d_id = urand(1, num_dis, rng);
         
     let x = urand(1, 100, rng);
     let y = urand(1, 100, rng);
@@ -588,13 +589,13 @@ pub fn payment_random(tx: &mut TransactionOCC,
     let c_w_id : i32;
     let c_d_id : i32;
     
-    if NUM_WAREHOUSES == 1 || x <= 85 {
+    if num_wh == 1 || x <= 85 {
         //85% paying throuhg won house
         c_w_id = w_id;
         c_d_id = d_id;
     } else {
         //15% paying from remote  warehouse
-        c_w_id =  urandexcept(1, NUM_WAREHOUSES, w_id, rng);
+        c_w_id =  urandexcept(1, num_wh, w_id, rng);
         assert!(c_w_id != w_id);
         c_d_id = urand(1, 10, rng);
     }
@@ -806,10 +807,10 @@ pub fn delivery(tx: &mut TransactionOCC,
 {
     let tid = tx.id();    
     info!("[{:?}][DELIVERY STARTs]", tid);
-    let NUM_INIT_DISTRICT = num_district_get();
+    let num_dis = num_district_get();
     let wh_num = num_warehouse_get();
 
-    for d_id in 1..=NUM_INIT_DISTRICT {
+    for d_id in 1..=num_dis {
         //TODO:
         let no_arc = tables.neworder.retrieve_min_oid(&(w_id, d_id));
         if no_arc.is_some() {

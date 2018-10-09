@@ -1,8 +1,26 @@
+//************************************************
+//This module has concrete implementation for the 
+//TRef trait.
+//
+//Types: 
+//- WarehouseRef
+//- DistrictRef
+//- XXXXRef
+//
+//Impl: 
+//- BucketDeleteRef
+//- TableRef
+//- BucketPushRef
+//************************************************
 
 /* FIXME: this should not be needed with GAT implemented */
+/* FIXME: this should be much shorter with procedures macros, 
+ * but copy-paste is easier for now... */
+
 
 use super::entry::*;
 use super::table::*;
+use super::tpcc_tables::*;
 use pnvm_lib:: {
     tcore::*,
     tbox::*,
