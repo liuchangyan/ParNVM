@@ -72,8 +72,8 @@ fn main() {
     let conf = util::read_env();
     warn!("{:?}", conf);
 
-    #[cfg(feature = "pmem")]
-    println!("PMEM on");
+   // #[cfg(feature = "pmem")]
+   // println!("PMEM on");
 
     match conf.test_name.as_ref() {
         "OCC" => run_occ(conf),

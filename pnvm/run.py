@@ -18,7 +18,7 @@ micro_bench_config = {
         "wh_num" : [1, 2, 4, 8, 1, 4, 8, 16],
         "round_num": 100000,
 }
-out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/output.csv"), "w+")
+out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/nvm-pm-output.csv"), "w+")
 
 def print_header():
     # out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,new_order\n")

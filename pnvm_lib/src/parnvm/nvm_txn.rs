@@ -1,10 +1,9 @@
-use txn::{self, Tid, AbortReason, TxState, TxnInfo};
-use tcore::{self, ObjectId, TRef, TTag};
 
 use super::dep::*;
 use super::piece::*;
 use plog::{self, PLog};
-
+use txn::{self, *};
+use tcore::{self, *};
 
 
 use std::{
@@ -96,8 +95,8 @@ pub struct TransactionParOCC
     inputs_ :   Box<Any>,
     outputs_ :  Vec<Box<Any>>,
 
-    #[cfg(feature="pmem")]
-    records_ :     Vec<(Option<*mut u8>, Layout)>,
+    //#[cfg(feature="pmem")]
+    //records_ :     Vec<*mut u8, *mut u8,Layout)>,
 
     tags_ : HashMap<(ObjectId, i8), TTag>,
     locks_ : Vec<*const TTag>,
@@ -142,8 +141,8 @@ impl TransactionParOCC
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
             wait_:      None,
-            #[cfg(feature="pmem")]
-            records_ :     Vec::new(),
+           // #[cfg(feature="pmem")]
+           // records_ :     Vec::new(),
 
             tags_: HashMap::with_capacity(16),
             locks_ : Vec::with_capacity(16),
@@ -258,16 +257,18 @@ impl TransactionParOCC
 
     fn commit_piece(&mut self, rank: usize) -> bool {
         tcore::BenchmarkCounter::success_piece();
-        //#[cfg(feature = "pmem")]
-        //self.persist_log();
-
+       
+        #[cfg(feature = "pmem")]
+        self.persist_logs();
 
         //Install write sets into the underlying data
         self.install_data();
 
         //Persist the data
-        //#[cfg(feature = "pmem")]
-        //self.persist_data();
+        #[cfg(feature = "pmem")]
+        self.persist_data();
+        
+
 
         //Persist commit the transaction
         //#[cfg(feature = "pmem")]
@@ -279,6 +280,14 @@ impl TransactionParOCC
         self.clean_up();
 
         true
+    }
+
+    #[cfg(feature = "pmem")]
+    #[cfg_attr(feature = "profile", flame)]
+    fn persist_data(&self) {
+        for tag in self.tags_.values() {
+            tag.persist_data(*self.id());
+        }
     }
 
     fn install_data(&mut self) {
@@ -339,6 +348,7 @@ impl TransactionParOCC
             loop { /* Busy wait here */
                 if !dep.has_commit() && !dep.has_done(to_run_rank) {
                     warn!("{:?} waiting  for {:?} start", self.id(), dep.id());
+                    //Why not do log and memcpy here?
                 } else {
                     break;
                 }
@@ -375,21 +385,28 @@ impl TransactionParOCC
         self.commit();
     }
 
-    #[cfg(feature = "pmem")]
-    pub fn add_record(&mut self, ptr: Option<*mut u8>, layout: Layout) {
-        self.records_.push((ptr, layout));
-    }
+   // #[cfg(feature = "pmem")]
+   // pub fn add_record(&mut self, pmemdest: *mut u8, src: *mut u8,layout: Layout) {
+   //     self.records_.push((pmemdest, src, layout));
+   // }
 
     #[cfg(feature = "pmem")]
     #[cfg_attr(feature = "profile", flame)]
     pub fn persist_logs(&self) {
         let id = *(self.id());
-        let logs = self.records_.iter().map(|(ptr, layout)| {
-            match ptr {
-                Some(ptr) => PLog::new(*ptr, layout.clone(), id),
-                None => PLog::new_none(layout.clone(), id),
+        let mut logs = vec![];
+
+        for tag in self.tags_.values() {
+            if tag.has_write() {
+                logs.push(tag.make_log(id)); 
             }
-        }).collect();
+        }
+//        let logs = self.records_.iter().map(|(ptr, layout)| {
+//            match ptr {
+//                Some(ptr) => PLog::new(*ptr, layout.clone(), id),
+//                None => PLog::new_none(layout.clone(), id),
+//            }
+//        }).collect();
         plog::persist_log(logs);
     }
 
@@ -472,6 +489,10 @@ impl TransactionParOCC
     pub fn abort(&mut self) {
         self.clean_up();
         self.txn_info_.commit();
+
+        #[cfg(feature="pmem")]
+        self.txn_info_.persist();
+
         self.status_ = TxState::ABORTED;
         tcore::BenchmarkCounter::abort();
     }

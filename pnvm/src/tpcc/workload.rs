@@ -76,12 +76,12 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     let mut tables = Tables {
         warehouse: Table::new_with_buckets(NUM_WAREHOUSES as usize, conf.wh_num as usize, "warehouse"),
         district: Table::new_with_buckets(total_wd, NUM_INIT_DISTRICT as usize, "district"),
-        customer: CustomerTable::new_with_buckets(total_wd, 64, "customer"),
-        neworder: NewOrderTable::new_with_buckets(total_wd, 32768, "neworder"),
+        customer: CustomerTable::new_with_buckets(total_wd, 1024, "customer"),
+        neworder: NewOrderTable::new_with_buckets(total_wd, 4096, "neworder"),
         order: OrderTable::new_with_buckets(total_wd, 32768, "order"),
-        orderline: OrderLineTable::new_with_buckets(total_wd, 32768, "orderline"),
+        orderline: OrderLineTable::new_with_buckets(total_wd, 4096, "orderline"),
         item: Table::new_with_buckets(512, 256, "item"),
-        history: Table::new_with_buckets(total_wd, 128, "history"),
+        history: Table::new_with_buckets(total_wd, 1024, "history"),
         stock: Table::new_with_buckets(total_wd, 512 ,"stock"),
     };
 
