@@ -175,45 +175,6 @@ fn fill_stock(tables: &mut Tables, _config: &Config, w_id : i32, rng: &mut Small
             Numeric::new(0, 4, 0),
             rand_data(26, 50, rng),
             );
-       // let stock = Stock {
-       //     s_i_id : s_id,
-       //     s_w_id : w_id,
-       //     s_quantity : rand_numeric(10.0, 100.0, 4, 0, rng),
-       //     s_dist_01: String::from("hillo"),
-       //     s_dist_02: String::from("hillo"),
-       //     s_dist_03: String::from("hillo"),
-       //     s_dist_04: String::from("hillo"),
-       //     s_dist_05: String::from("hillo"),
-       //     s_dist_06: String::from("hillo"),
-       //     s_dist_07: String::from("hillo"),
-       //     s_dist_08: String::from("hillo"),
-       //     s_dist_09: String::from("hillo"),
-       //     s_dist_10: String::from("hillo"),
-       //     s_ytd : Numeric::new(0, 8, 0),
-       //     s_order_cnt : Numeric::new(0, 4, 0),
-       //     s_remote_cnt : Numeric::new(0, 4, 0),
-       //     s_data : rand_data(26, 50, rng),
-       // };
-        //let stock = Stock {
-        //    s_i_id : s_id,
-        //    s_w_id : w_id,
-        //    s_quantity : rand_numeric(10.0, 100.0, 4, 0, rng),
-        //    s_dist_01: rand_a_string(24, 24, rng),
-        //    s_dist_02: rand_a_string(24, 24, rng),
-        //    s_dist_03: rand_a_string(24, 24, rng),
-        //    s_dist_04: rand_a_string(24, 24, rng),
-        //    s_dist_05: rand_a_string(24, 24, rng),
-        //    s_dist_06: rand_a_string(24, 24, rng),
-        //    s_dist_07: rand_a_string(24, 24, rng),
-        //    s_dist_08: rand_a_string(24, 24, rng),
-        //    s_dist_09: rand_a_string(24, 24, rng),
-        //    s_dist_10: rand_a_string(24, 24, rng),
-        //    s_ytd : Numeric::new(0, 8, 0),
-        //    s_order_cnt : Numeric::new(0, 4, 0),
-        //    s_remote_cnt : Numeric::new(0, 4, 0),
-        //    s_data : rand_data(26, 50, rng),
-        //};
-
         tables.stock.push_raw(stock);
     }
 }
@@ -235,20 +196,6 @@ fn fill_district(tables : &mut Tables, _config : &Config, w_id : i32, rng: &mut 
              Numeric::new(30_000, 12, 2),
              NUM_INIT_NEXT_ORDER,
             );
-       // let district = District {
-       //     d_id : d_id, 
-       //     d_w_id : w_id,
-       //     d_name : rand_a_string(6, 10, rng),
-       //     d_street_1 : rand_a_string(10, 20, rng),
-       //     d_street_2 : rand_a_string(10, 20, rng),
-       //     d_city : rand_a_string(10, 20, rng),
-       //     d_state : rand_a_string(2, 2, rng),
-       //     d_zip : rand_zip(rng),
-       //     d_tax : rand_numeric(0.0, 0.20, 5, 4, rng),
-       //     d_ytd : Numeric::new(30_000, 12, 2),
-       //     d_next_o_id : NUM_INIT_NEXT_ORDER,
-       // };
-
         tables.district.push_raw(district);
 
         fill_customer(tables,  _config, w_id, d_id, rng);
@@ -379,31 +326,6 @@ fn fill_customer(tables : &mut Tables, _config : &Config , w_id :i32, d_id : i32
              rand_a_string(300, 500, rng),
            );
 
-       // let customer = Customer {
-       //     c_id : c_id,
-       //     c_d_id : d_id,
-       //     c_w_id : w_id, 
-       //     c_last : rand_last_name(c_id, rng),
-       //     c_middle : String::from("OE"),
-       //     c_first : rand_a_string(8, 16, rng),
-       //     c_street_1 : rand_a_string(10, 20, rng),
-       //     c_street_2 : rand_a_string(10, 20, rng),
-       //     c_city : rand_a_string(10, 20, rng),
-       //     c_state : rand_a_string(2, 2, rng),
-       //     c_zip: rand_zip(rng),
-       //     c_phone : rand_n_string(16, 16, rng),
-       //     c_since : timestamp,
-       //     c_credit : credit,
-       //     c_credit_lim : Numeric::new(50_000, 12, 2),
-       //     c_discount : rand_numeric(0.0, 0.5, 5, 4, rng),
-       //     c_balance : Numeric::from_str("-10.00", 12, 2).expect("invalid c_balance"),
-       //     c_ytd_payment : Numeric::from_str("10.00", 12, 2).expect("invliad c_ytd_payment"),
-       //     c_payment_cnt : Numeric::new(1, 4, 0),
-       //     c_delivery_cnt : Numeric::new(0, 4, 0),
-       //     c_data : rand_a_string(300, 500, rng),
-       // };
-        
-        //println!("PUSHING CUSTOMER {}, {}, {}, {}", c_id, w_id, d_id, customer.c_last);
         tables.customer.push_raw(customer);
 
         fill_history(tables, _config, w_id, d_id, c_id, timestamp, rng);

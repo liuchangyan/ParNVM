@@ -7,7 +7,8 @@ use chashmap::{
 use concurrent_hashmap::*;
 use std::collections::hash_map::RandomState;
 
-use super::nvm_txn::*;
+use super::nvm_txn_occ::*;
+use super::nvm_txn_2pl::*;
 use txn::TxnInfo;
 use std::sync::{
     Mutex,
@@ -141,30 +142,6 @@ where V : Debug
         }
     }
 
-   // pub fn read(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-   //     debug!("{:?} read\t{:?}", tx.id(), self);
-   //     match self.data_.try_lock() {
-   //         Ok(g) => {
-   //             self.is_write_locked.store(false, Ordering::SeqCst);
-   //             PMutexGuard {
-   //                 g_ : g,
-   //                 val_ : self,
-   //             }
-   //         }
-   //         Err(_) => { 
-   //             let g = self.data_.lock().unwrap();
-   //             if self.is_write_locked.load(Ordering::SeqCst) { /* Locked by a writer */
-   //                 tx.add_dep(self.last_writer_.get());
-   //             }
-   //             self.is_write_locked.store(false, Ordering::SeqCst);
-   //             PMutexGuard {
-   //                 g_ : g,
-   //                 val_ : self,
-   //             }
-   //         }
-   //     }
-   // }
-
     fn lock(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
         let mut prev = 0;
         let tid :u32 = tx.id().into();
@@ -206,43 +183,6 @@ where V : Debug
         return g;
     }
 
-   // pub fn write(&self, tx: &mut TransactionPar) -> PMutexGuard<V> {
-   //     debug!("{:?} write\t{:?}", tx.id(), self);
-   //     match self.data_.try_lock() {
-   //         Ok(g) => {
-   //             self.is_write_locked.store(true, Ordering::SeqCst);
-   //             self.last_writer_.set(tx.txn_info().clone());
-
-   //             #[cfg(feature = "pmem")]
-   //             {
-   //                 let (ptr, layout) = Self::make_record(&g, tx);
-   //                 tx.add_record(ptr, layout);
-   //             }
-
-   //             PMutexGuard {
-   //                 g_ : g,
-   //                 val_ : self,
-   //             }
-   //         },
-   //         Err(_) => {
-   //             let g = self.data_.lock().unwrap();
-   //             self.is_write_locked.store(true, Ordering::SeqCst);
-   //             tx.add_dep(self.last_writer_.get());
-   //             self.last_writer_.set(tx.txn_info().clone());
-
-   //             #[cfg(feature = "pmem")]
-   //             {
-   //                 let (ptr, layout) = Self::make_record(&g, tx);
-   //                 tx.add_record(ptr, layout);
-   //             }
-
-   //             PMutexGuard {
-   //                 g_ : g,
-   //                 val_ : self,
-   //             }
-   //         }
-   //     }
-   // }
     
     #[cfg(feature = "pmem")]
     fn make_record(g : &PMutexGuard<V>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
@@ -258,12 +198,6 @@ where V : Debug
     
     //FIXME: unlock twice
     pub fn unlock(&self, cur: u32) {
-        //debug_assert!(self.lock_.load(Ordering::Relaxed) == cur);
-       // self.lock_.compare_exchange(cur, 0,
-       //                             Ordering::Acquire, 
-       //                             Ordering::Relaxed)
-       //     .expect("lock poisoned");
-        
         if self.count_.fetch_sub(1, Ordering::SeqCst) == 1 { /* Last unlock */
             self.lock_.compare_exchange(cur, 0,
                                         Ordering::SeqCst, 
@@ -272,48 +206,6 @@ where V : Debug
              
         }
     }
-
-    //If has writer on it check if own 
-   // pub fn lock_read(&self, tx: &mut TransactionPar) {
-   //     while self.is_read_locked() && *self.read_locker() == *tx.id() {}
-
-
-   // }
-   // 
-   // //If has other readers or writers 
-   // //write lock before read lock
-   // pub fn lock_write(&self, tx: &mut TransactionPar) {
-   //     let tid = tx.id();
-
-   //     loop {
-   //         let locker = self.try_lock(tid);
-   //         if locker != 0 {
-   //             if self.write_locker() == locker { /* Could this be unlocked already?*/
-   //                 //add dep
-   //                 //recheck if locker still holds on the lock?
-   //                 //nah, it is fine to have false positives I think
-   //             } else {
-   //                 //add all read deps
-   //             }
-   //         } else {
-   //             //locked
-   //             //update write_locker
-   //             break;
-   //         }
-   //     }
-
-   //     //assert here I am the locker
-
-
-   // }
-
-   // pub fn unlock_read(&self, tx: &mut TransactionPar) {
-
-   // }
-
-   // pub fn unlock_write(&self, tx: &mut TransactionPar) {
-
-   // }
 }
 
 impl<V> Default for PValue<V> 

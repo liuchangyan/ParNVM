@@ -19,11 +19,11 @@ use std::{
 };
 use super::table::*;
 use super::entry::*;
-use super::workload::*;
+use super::workload_occ::*;
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
-use pnvm_lib::parnvm::nvm_txn::TransactionParOCC;
+use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
 
 #[derive(Debug)]
 pub struct Tables {

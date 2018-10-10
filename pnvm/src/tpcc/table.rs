@@ -9,11 +9,6 @@
 //- SecIndex                secondary index map for range queries 
 //- SecIndexBucket          partition for the secondary index
 //
-//For TPCC tables
-//- CustomerTable
-//- NewOrderTable
-//- OrderTable
-//- XXXXTable
 //****************************************
 
 use alloc::alloc::Layout;
@@ -45,11 +40,11 @@ use num::iter::Range;
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
-use pnvm_lib::parnvm::nvm_txn::TransactionParOCC;
+use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
 use super::entry::*;
 
 //FIXME: const
-use super::workload::*;
+use super::workload_occ::*;
 use super::tpcc_tables::*;
 
 const PMEM_DIR_ROOT : &str = "/home/v-xuc/ParNVM/data/";

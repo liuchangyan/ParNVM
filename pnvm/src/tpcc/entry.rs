@@ -12,7 +12,7 @@ use std::{
     fmt::{Debug, self},
 };
 use table::{Key, Table};
-use workload::{num_district_get, num_warehouse_get};
+use workload_occ::{num_district_get, num_warehouse_get};
 
 use pnvm_lib::{tcore::*, txn::TxnInfo};
 

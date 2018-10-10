@@ -53,7 +53,8 @@ use std::{
 
 use pnvm_lib::{
     occ::*,
-    parnvm::nvm_txn::{TransactionPar, TransactionParOCC},
+    parnvm::nvm_txn_2pl::{TransactionPar},
+    parnvm::nvm_txn_occ::{TransactionParOCC},
     tbox::*,
     tcore::*,
     txn::*,
@@ -333,7 +334,7 @@ fn run_occ_micro(conf: Config) {
 fn run_pc_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     //FIXME: rename the function, parepare workload
-    let tables = tpcc::workload::prepare_workload(&conf, &mut rng);
+    let tables = tpcc::workload_occ::prepare_workload(&conf, &mut rng);
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
@@ -357,8 +358,8 @@ fn run_pc_tpcc(conf: Config) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
-                tpcc::workload::num_warehouse_set(wh_num);
-                tpcc::workload::num_district_set(d_num);
+                tpcc::workload_occ::num_warehouse_set(wh_num);
+                tpcc::workload_occ::num_district_set(d_num);
 
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
@@ -366,15 +367,15 @@ fn run_pc_tpcc(conf: Config) {
                 
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
-                let new_order_base = tpcc::pc_gen::pc_new_order_base(&tables);
-                let payment_base = tpcc::pc_gen::pc_payment_base(&tables);
-                let orderstatus_base = tpcc::pc_gen::pc_orderstatus_base(&tables);
+                let new_order_base = tpcc::workload_ppnvm::pc_new_order_base(&tables);
+                let payment_base = tpcc::workload_ppnvm::pc_payment_base(&tables);
+                let orderstatus_base = tpcc::workload_ppnvm::pc_orderstatus_base(&tables);
 
                 let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
-                let delivery_base = tpcc::pc_gen::pc_delivery_base(&tables, w_home, o_carrier_id);
+                let delivery_base = tpcc::workload_ppnvm::pc_delivery_base(&tables, w_home, o_carrier_id);
 
                 let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
-                let stocklevel_base = tpcc::pc_gen::pc_stocklevel_base(&tables, w_home, d_home, thd);
+                let stocklevel_base = tpcc::workload_ppnvm::pc_stocklevel_base(&tables, w_home, d_home, thd);
                 
                 let start = Instant::now();
                 BenchmarkCounter::start();
@@ -387,22 +388,22 @@ fn run_pc_tpcc(conf: Config) {
                     //FIXME: pass by ref rather than box it
                     let mut tx = match j {
                         12...55 => {
-                            let inputs = tpcc::pc_gen::pc_new_order_input(w_home, &mut rng);
+                            let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
                             TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
                         },
                         0...4 => {
-                            let inputs = tpcc::pc_gen::pc_orderstatus_input(w_home, &mut rng);
+                            let inputs = tpcc::workload_ppnvm::pc_orderstatus_input(w_home, &mut rng);
                             TransactionParOCC::new_from_base(&orderstatus_base, tid, Box::new(inputs))
                         },
                         4...8 => {
-                            let inputs = tpcc::pc_gen::pc_delivery_input(w_home, &mut rng);
+                            let inputs = tpcc::workload_ppnvm::pc_delivery_input(w_home, &mut rng);
                             TransactionParOCC::new_from_base(&delivery_base, tid, Box::new(inputs))
                         },
                         8...12 => {
                             TransactionParOCC::new_from_base(&stocklevel_base, tid, Box::new(-1))
                         },
                         55...100 => {
-                            let inputs = tpcc::pc_gen::pc_payment_input(w_home, &mut rng);
+                            let inputs = tpcc::workload_ppnvm::pc_payment_input(w_home, &mut rng);
                             TransactionParOCC::new_from_base(&payment_base, tid, Box::new(inputs))
                         },
                         _ => panic!("invalid tx mix")
@@ -434,7 +435,7 @@ fn run_pc_tpcc(conf: Config) {
 //Run the OCC contention management TPCC workload
 fn run_occ_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-    let tables = tpcc::workload::prepare_workload(&conf, &mut rng);
+    let tables = tpcc::workload_occ::prepare_workload(&conf, &mut rng);
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
@@ -458,8 +459,8 @@ fn run_occ_tpcc(conf: Config) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
-                tpcc::workload::num_warehouse_set(wh_num);
-                tpcc::workload::num_district_set(d_num);
+                tpcc::workload_occ::num_warehouse_set(wh_num);
+                tpcc::workload_occ::num_district_set(d_num);
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
@@ -479,18 +480,18 @@ fn run_occ_tpcc(conf: Config) {
                     while {
                         info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
                         if j > 55 {
-                            tpcc::workload::new_order_random(tx, &tables, w_home,  &mut rng);
+                            tpcc::workload_occ::new_order_random(tx, &tables, w_home,  &mut rng);
                         } else if j < 4 {
-                            tpcc::workload::orderstatus_random(tx, &tables, w_home, &mut rng);
+                            tpcc::workload_occ::orderstatus_random(tx, &tables, w_home, &mut rng);
                         } else if j < 8  {
                             let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
-                            tpcc::workload::delivery(tx, &tables, w_home, o_carrier_id);
+                            tpcc::workload_occ::delivery(tx, &tables, w_home, o_carrier_id);
                         } else if j < 12 {
                             let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
-                            tpcc::workload::stocklevel(tx, &tables, w_home, d_home, thd);
+                            tpcc::workload_occ::stocklevel(tx, &tables, w_home, d_home, thd);
                         }
                         else{
-                            tpcc::workload::payment_random(tx, &tables,w_home  ,  &mut rng);
+                            tpcc::workload_occ::payment_random(tx, &tables,w_home  ,  &mut rng);
                         }
 
                         let res = tx.try_commit();

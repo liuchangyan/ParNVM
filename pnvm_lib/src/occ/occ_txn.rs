@@ -7,7 +7,7 @@ use std::{
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
 #[cfg(feature = "pmem")]
-use {plog, pnvn_sys};
+use {plog, pnvm_sys};
 
 use tcore::{self, ObjectId, TTag, TRef, BoxRef};
 use tbox::TBox;
@@ -38,7 +38,7 @@ impl Transaction for TransactionOCC
             return self.abort(AbortReason::IndexErr);
         }
 
-        //Stage 1: lock [TODO: Bounded lock or try_lock syntax]
+        //Stage 1: lock
         if !self.lock() {
             return self.abort(AbortReason::FailedLocking);
         }
@@ -54,19 +54,20 @@ impl Transaction for TransactionOCC
         true
     }
 
-    //pub fn read<'b, T:'static>(&'b mut self, tobj: &'b dyn TRef) -> &'b T {
-    //    let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone());
-    //    tag.add_version(tobj.get_version());
-    //    tag.get_data()
-    //}
      fn read<'b, T:'static + Clone>(&'b mut self, tref: Box<dyn TRef>) -> &'b T 
     {
-        //let tref = tobj.clone().into_box_ref();
         
+        //Get the tx id
         let id = *tref.get_id();
+
+        //Get the current object's version 
         let vers = tref.get_version();
+
+        //Insert a tag
         let tag = self.retrieve_tag(&id, tref, OPERATION_CODE_RW);
         tag.add_version(vers);
+
+        //Return data
         tag.get_data()
     }
 
@@ -74,8 +75,10 @@ impl Transaction for TransactionOCC
     //#[cfg_attr(feature = "profile", flame)]
      fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
     {
-        //let tref = tobj.clone().into_box_ref();
+        //Get the tx id
         let id = *tref.get_id();
+
+        //Create tag and store the temporary value
         let mut tag = self.retrieve_tag(&id,tref, OPERATION_CODE_RW);
         tag.write::<T>(val);
     }
@@ -103,16 +106,6 @@ impl Transaction for TransactionOCC
         {
             self.deps_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
         }
-    /*Non TransactionOCC Functions*/
-   // fn notrans_read(tobj: &TObject<T>) -> T {
-   //     //let tobj = Arc::clone(tobj);
-   //     tobj.raw_read()
-   // }
-
-    //fn notrans_lock(tobj: &TObject<T>, tid: Tid) -> bool {
-    //    let tobj = Arc::clone(tobj);
-    //    tobj.lock(tid)
-    //}
 }
 
 impl TransactionOCC
@@ -143,16 +136,11 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
         let me  = self.id();
-        //FIXME: this is hacky! allocate an vector large enough so that no move of reference
-        //let mut locks_ : Vec<&TTag> =  Vec::with_capacity(64);
         for tag in self.deps_.values_mut() {
             if !tag.has_write() {
                 continue;
             }
             if !tag.lock(me) {
-                //while let Some(_tag) = locks_.pop() {
-                //    _tag.unlock();
-                //}
                 debug!("{:#?} failed to locked!", tag);
                 return false;
             } 
@@ -160,18 +148,21 @@ impl TransactionOCC
         }
 
         debug!("All locked");
-
         true
     }
 
     #[cfg_attr(feature = "profile", flame)]
     fn check(&mut self) -> bool {
         for tag in self.deps_.values() {
+            //Only read ops need to be checked
             if !tag.has_read() {
                 continue;
             }
+
+            //Check if the versions match
             if !tag.check(tag.vers_, self.id().into())  {
-                warn!("{:?} CHECKED FAILED ---- EXPECT: {}, BUT: {}", self.tid_, tag.get_version(), tag.vers_);
+                warn!("{:?} CHECKED FAILED ---- EXPECT: {}, BUT: {}",
+                      self.tid_, tag.get_version(), tag.vers_);
                 return false;
             }
         }
@@ -210,7 +201,6 @@ impl TransactionOCC
     #[cfg(feature = "pmem")]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_commit(&self) {
-        //FIXME:: Can it be async?
         pnvm_sys::drain();
         plog::persist_txn(self.id().into());
     }

@@ -30,10 +30,9 @@ extern crate test;
 extern crate concurrent_hashmap;
 extern crate chashmap;
 
-extern crate evmap;
-extern crate parking_lot;
+//extern crate evmap;
+//extern crate parking_lot;
 
-pub mod conf;
 
 #[cfg(feature = "pmem")]
 pub mod plog;

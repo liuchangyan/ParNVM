@@ -23,7 +23,7 @@ use zipf::ZipfDistribution;
 
 use pnvm_lib::{
     occ::{map::*, occ_txn::*},
-    parnvm::{map::*, dep::*, nvm_txn::*, piece::*},
+    parnvm::{map::*, nvm_txn_occ::*, nvm_txn_2pl::*, piece::*},
     tbox::*,
     tcore::*,
     txn::*,

@@ -8,7 +8,7 @@
 //******************************
 
 
-use super::workload::*;
+use super::workload_occ::*;
 use super::numeric::*;
 use super::entry::*;
 use super::table::*;
@@ -23,7 +23,7 @@ use std::{
 
 use rand::rngs::SmallRng;
 
-use pnvm_lib::parnvm::nvm_txn::*;
+use pnvm_lib::parnvm::nvm_txn_occ::*;
 use pnvm_lib::parnvm::piece::*;
 use pnvm_lib::txn::*;
 

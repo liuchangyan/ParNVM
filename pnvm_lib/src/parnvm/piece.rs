@@ -8,7 +8,8 @@ use txn::Tid;
 
 use std::mem;
 
-use super::nvm_txn::{TransactionPar, TransactionParOCC};
+use super::nvm_txn_2pl::{TransactionPar};
+use super::nvm_txn_occ::TransactionParOCC;
 
 //FIXME: core
 use core::alloc::Layout;
