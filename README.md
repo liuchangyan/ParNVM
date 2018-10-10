@@ -32,6 +32,40 @@ Sample output from the program:
 ```
 
 
+### Main Project Structure ###
+
+```
+pnvm/src/                           // Hold benchmarking related files
+    main.rs                         // Functions that run the benchmark
+    tpcc/                           // Folder for TPCC workload
+        table.rs                    // Table data structures for TPCC
+        numeric.rs                  // Numeric data type for TPCC
+        entry.rs                    // Entry type for each table
+        tpcc_tables.rs              // Tables with queries functions built on top 
+                                    // of table.rs
+        workload_occ.rs             // Prepare tables for benchmark
+        workload_ppnvm.rs           // Piece generation for each txn
+
+pnvm_lib/                           // Library for txn management
+    occ/
+        map.rs                      // Map data structure for microbenchmark
+        occ_txn.rs                  // OCC txn methods
+    parnvm/
+        nvm_txn_2pl.rs              // Pieces with 2PL as contension management
+        nvm_txn_occ.rs              // Pieces with OCC as contention management
+        pieces.rs                   // Piece data structure
+        map.rs                      // Map data structure for microbenchmark
+    plog.rs                         // NVM log data structure
+    tbox.rs                         // TBox data structure for microbenchmark
+    tcore.rs                        // Tag, Version data structure 
+    txn.rs                          // Common data structure related to txn
+
+pnvm_sys/
+    lib.rs                          // PMDK interface 
+
+```
+
+
 ### DOC ###
 [Algo_Draft](doc/Algo_Draft.md)  
 
