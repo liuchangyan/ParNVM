@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
-use tcore::{self, ObjectId, TTag, TRef};
+use tcore::{ObjectId, TTag, TRef};
 
 //lazy_static! {
 //    static ref TXN_RUNNING: Arc<RwLock<HashMap<Tid, bool>>> =

@@ -25,7 +25,7 @@ use std::{
     time,
 };
 
-use std::alloc::{self, GlobalAlloc};
+//use std::alloc::{self, GlobalAlloc};
 
 #[cfg(not(feature = "pmem"))]
 use core::alloc::Layout;
@@ -212,7 +212,7 @@ impl TVersion {
         let tid : u32 = tid.into();
         assert_eq!(tid != 0 , true);
         match self.lock_owner_.compare_exchange(0, tid, Ordering::SeqCst, Ordering::SeqCst) {
-            Ok(cur) => {
+            Ok(_cur) => {
                 assert_eq!(self.count_.load(Ordering::SeqCst), 0);
                 self.count_.fetch_add(1, Ordering::SeqCst);
                 true

@@ -249,6 +249,8 @@ impl Customer {
             copy_from_string(&mut c_state, c_state_str);
             copy_from_string(&mut c_zip, c_zip_str);
             copy_from_string(&mut c_data, c_data_str);
+            copy_from_string(&mut c_credit, c_credit_str);
+            copy_from_string(&mut c_phone, c_phone_str);
 
             Customer {
                 c_id,

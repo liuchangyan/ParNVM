@@ -1,16 +1,14 @@
 use std::{
     collections::HashMap,
     rc::Rc,
-    sync::{Arc, RwLock},
+    sync::{Arc},
 };
 
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
 #[cfg(feature = "pmem")]
 use {plog, pnvm_sys};
-
 use tcore::{self, ObjectId, TTag, TRef, BoxRef};
-use tbox::TBox;
 
 #[cfg(feature = "profile")]
 use flame;
@@ -79,7 +77,7 @@ impl Transaction for TransactionOCC
         let id = *tref.get_id();
 
         //Create tag and store the temporary value
-        let mut tag = self.retrieve_tag(&id,tref, OPERATION_CODE_RW);
+        let tag = self.retrieve_tag(&id,tref, OPERATION_CODE_RW);
         tag.write::<T>(val);
     }
 

@@ -263,7 +263,7 @@ impl NewOrderTable {
             None => {
                 panic!("NewOrderTable::delete_index : missing index");
             },
-            Some(mut v) => {
+            Some(v) => {
                 match v.iter().position(|&x| x.2 == o_id) {
                     None => {
                         warn!("delete_index:: no id {:?}", (w_id, d_id, o_id));

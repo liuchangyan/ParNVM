@@ -152,7 +152,7 @@ impl DataRecord {
     pub fn new<T: ?Sized>(t: &T) -> Self {
         let ptr = unsafe { mem::transmute::<&T, *const T>(t) };
         DataRecord {
-            ptr:    unsafe { ptr as *mut u8 },
+            ptr:   ptr as *mut u8, 
             layout: Layout::for_value(t),
         }
     }

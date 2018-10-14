@@ -185,7 +185,7 @@ where V : Debug
 
     
     #[cfg(feature = "pmem")]
-    fn make_record(g : &PMutexGuard<V>, tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
+    fn make_record(g : &PMutexGuard<V>, _tx: &TransactionPar) -> (Option<*mut u8>, Layout) {
         let ref_ : &Option<V> = g.data_;
         match ref_.as_ref() {
             None =>  (None, Layout::new::<V>()),

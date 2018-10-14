@@ -413,7 +413,7 @@ fn new_order(tx: &mut TransactionOCC,
          //println!("READ : ITEM : {:?}", item_ref.get_id());
          let i_price = tx.read::<Item>(item_ref).i_price;
 
-         let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), (src_whs[i] as usize)).unwrap().into_table_ref(None, None);
+         let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
          let mut stock = tx.read::<Stock>(stock_ref.box_clone()).clone();
          let s_quantity = stock.s_quantity;
          let s_remote_cnt = stock.s_remote_cnt;
@@ -790,7 +790,7 @@ pub fn stocklevel(tx: &mut TransactionOCC,
     let tid = tx.id();
     let wh_num = num_warehouse_get();
     let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
-    let mut d = tx.read::<District>(d_row).clone();
+    let d = tx.read::<District>(d_row).clone();
     let d_next_o_id = d.d_next_o_id;
     info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);
     
@@ -895,7 +895,7 @@ pub fn rand_data(low : i32, high : i32, rng : &mut SmallRng ) -> String {
 
 
 pub fn rand_last_name(c_id : i32, rng: &mut SmallRng) -> String {
-    let mut c = if c_id <= 1000 {
+    let c = if c_id <= 1000 {
         urand(0,999,rng)
     } else  {
         nurand(255, 0, 999, rng)
