@@ -65,6 +65,26 @@ pnvm_sys/
 
 ```
 
+### Running with persistent memory ###
+1. Check if the machine has persistent memory (or disk simulated non-volatile memory). Follow instructions on [this](http://pmem.io/2016/02/22/pm-emulation.html).`libelf-dev` might need to be installed for this to work
+
+2. Install PMDK (v1.4)  
+```
+git clone https://github.com/pmem/pmdk.git
+cd pmdk && make
+sudo make install
+```
+Some dependencies for pmdk:  
+`sudo apt-get install pkg-config autoconf doxygen`
+
+3. Run with pmem features flag  
+`cargo +nightly run --release --features "unstable pmem"`
+
+#### Troubleshoot ####
+- `error while loading shared libraries`
+> Refer to this [issue](https://github.com/rust-lang/rust/issues/24677)
+> Try adding `usr/local/lib` to `etc/ld.so.conf` and run `ldconfig`
+
 
 ### DOC ###
 [Algo_Draft](doc/Algo_Draft.md)  
