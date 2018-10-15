@@ -271,7 +271,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.id().clone();
-        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
@@ -286,7 +286,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.id().clone();
-        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
@@ -306,7 +306,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             bucket_idx,
             tables.clone(),
             );
-        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
         tag.set_write(); //FIXME: better way?
         true
     }
@@ -327,7 +327,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             bucket_idx,
             tables.clone(),
             );
-        let mut tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
         tag.set_write(); //FIXME: better way?
         true
     }
@@ -430,7 +430,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
     pub fn with_capacity(cap: usize) -> Bucket<Entry, Index> 
     {
-        let mut bucket = Bucket {
+        let  bucket = Bucket {
             rows: UnsafeCell::new(Vec::with_capacity(cap)),
             index: UnsafeCell::new(HashMap::with_capacity(cap)),
 
@@ -446,7 +446,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         /* Get the persistent memory */
         #[cfg(feature = "pmem")]
         {
-            let mut path = String::from(PMEM_DIR_ROOT);
+            let path = String::from(PMEM_DIR_ROOT);
             let size =  cap *  mem::size_of::<Entry>();
             //path.push_str(name);
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
@@ -469,9 +469,9 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         assert_eq!(self.vers_.get_locker() == 0, false);
         let idx_elem = row_arc.get_data().primary_key();
         unsafe {
-            let mut rows = self.rows.get().as_mut().unwrap();
+            let rows = self.rows.get().as_mut().unwrap();
             rows.push(row_arc.clone());
-            let mut idx_map = self.index.get().as_mut().unwrap();
+            let idx_map = self.index.get().as_mut().unwrap();
             idx_map.insert(idx_elem, self.len() -1);
 
             #[cfg(feature = "pmem")]
@@ -486,7 +486,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
         /* FIXME: Leave the data in the rows */
         unsafe {
-            let mut idx_map = self.index.get().as_mut().unwrap();
+            let idx_map = self.index.get().as_mut().unwrap();
             idx_map.remove(&idx_elem);
         }
     }
@@ -494,8 +494,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     fn push_raw(&self, entry: Entry) {
         let idx_elem = entry.primary_key();
         unsafe {
-            let mut rows = self.rows.get().as_mut().unwrap();
-            let mut idx_map = self.index.get().as_mut().unwrap();
+            let rows = self.rows.get().as_mut().unwrap();
+            let idx_map = self.index.get().as_mut().unwrap();
             let arc = Arc::new(Row::new(entry));
             rows.push(arc.clone());
             idx_map.insert(idx_elem, self.len()-1);
@@ -789,7 +789,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             //      tid, self.data_.get().as_ref().unwrap(), val);
 
             //ptr::write(self.data_.get(), val.clone());
-            let mut data = self.data_.as_ptr() ;
+            let data = self.data_.as_ptr() ;
             *data = val.clone();
         }
         self.vers_.set_version(tid.into());

@@ -1,7 +1,10 @@
-#![feature(duration_extras, global_allocator)]
+#![feature(duration_extras)]
 #![feature(alloc, raw_vec_internals)]
 #![feature(generic_associated_types)]
 #![feature(box_into_raw_non_null)]
+
+#![allow(dead_code, unused_imports, unused_variables)]
+
 
 extern crate pnvm_lib;
 
@@ -163,7 +166,7 @@ fn run_nvm_occ_micro(conf: Config) {
     let barrier = Arc::new(Barrier::new(conf.thread_num));
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
-    let mut prep_time = time::Duration::new(0, 0);
+    let prep_time = time::Duration::new(0, 0);
 
 
     #[cfg(feature = "profile")]
@@ -223,7 +226,7 @@ fn run_nvm_occ_micro(conf: Config) {
 
 fn run_occ_micro(conf: Config) {
     let mtx = Arc::new(Mutex::new(0));
-    let mut dataset = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
+    let dataset = util::TestHelper::prepare_workload_occ(&conf).get_dataset();
     let keys = dataset.keys;
     let maps = dataset.maps;
 
@@ -532,7 +535,7 @@ fn run_single(conf : Config) {
     let start = time::Instant::now();
     let data = util::TestHelper::prepare_workload_single(&conf);
     let keys = data.keys;
-    let mut maps = data.maps;
+    let maps = data.maps;
 
     for i in 0..conf.thread_num {
         let _prep_start = time::Instant::now();
@@ -582,7 +585,7 @@ fn run_single(conf : Config) {
     }
 
     for handle in handles {
-        handle.join();
+        handle.join().unwrap();
     }
 
     let total_time = start.elapsed();

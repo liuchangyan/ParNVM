@@ -224,7 +224,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
 
             for i in 0..ol_cnt as usize {
-                let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), (src_whs[i] as usize)).unwrap().into_table_ref(None, None);
+                let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
                 let mut stock = tx.read::<Stock>(stock_ref.box_clone()).clone();
                 let s_quantity = stock.s_quantity;
                 let s_remote_cnt = stock.s_remote_cnt;
@@ -339,7 +339,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             let tid = tx.id().clone();    
             let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize)
                 .unwrap().into_table_ref(None, None);
-            let mut d = tx.read::<District>(d_row).clone();
+            let d = tx.read::<District>(d_row).clone();
             let d_next_o_id = d.d_next_o_id;
             info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);
 
@@ -452,7 +452,6 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
             for d_id in 1..=num_dis {
                 let i : usize = d_id as usize-1;
-                assert_eq!(i >= 0, true);
                 match no_o_id_arr[i] {
                     Some(no_o_id) => {
                         info!("[{:?}][DELIVERY] RETRIEVING ORDER  [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);

@@ -1,9 +1,8 @@
 use txn::{Tid, TxnInfo};
 //use std::cell::RefCell;
 use std::{
-    ptr::Unique,
     //rc::Rc,
-    sync::{Arc, RwLock, atomic::AtomicU32},
+    sync::{Arc, atomic::AtomicU32},
     any::Any,
 };
 

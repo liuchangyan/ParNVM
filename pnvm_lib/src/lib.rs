@@ -1,5 +1,5 @@
 //pub mod sched;
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 #![feature(allocator_api)]
 #![feature(libc)]
 #![feature(test)]
