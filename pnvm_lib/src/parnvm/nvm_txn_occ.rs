@@ -59,15 +59,14 @@ pub struct TransactionParOCC
     name_:      String,
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
-    wait_:      Option<PieceOCC>,
     inputs_ :   Box<Any>,
     outputs_ :  Vec<Box<Any>>,
-
-    //#[cfg(feature="pmem")]
-    //records_ :     Vec<*mut u8, *mut u8,Layout)>,
+    
+    //FIXME: store reference instead
+    #[cfg(feature="pmem")]
+    records_ :     Vec<Box<dyn TRef>>,
 
     tags_ : HashMap<(ObjectId, i8), TTag>,
-    locks_ : Vec<*const TTag>,
     early_abort_ : bool,
 }
 
@@ -108,12 +107,10 @@ impl TransactionParOCC
             status_:    TxState::EMBRYO,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
-            wait_:      None,
-           // #[cfg(feature="pmem")]
-           // records_ :     Vec::new(),
+            #[cfg(feature="pmem")]
+            records_ :     Vec::new(),
 
             tags_: HashMap::with_capacity(16),
-            locks_ : Vec::with_capacity(16),
             early_abort_ : false,
             //inputs_: Vec::with_capacity(txn_base.all_ps.len()),
         }
@@ -233,15 +230,10 @@ impl TransactionParOCC
         self.install_data();
 
         //Persist the data
-        #[cfg(feature = "pmem")]
-        self.persist_data();
-        
-
-
-        //Persist commit the transaction
+        //FIXME: delay the commit until commiting transaction
         //#[cfg(feature = "pmem")]
-        //self.persist_commit();
-
+        //self.persist_data();
+        
         self.update_rank(rank);
 
         //Clean up local data structures.
@@ -252,10 +244,17 @@ impl TransactionParOCC
 
     #[cfg(feature = "pmem")]
     #[cfg_attr(feature = "profile", flame)]
-    fn persist_data(&self) {
-        for tag in self.tags_.values() {
-            tag.persist_data(*self.id());
+    fn persist_data(&mut self) {
+        for record in self.records_.drain(..) {
+            let paddr = record.get_pmem_addr();
+            let vaddr = record.get_ptr();
+            let layout  = record.get_layout();
+            pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
         }
+
+        //for tag in self.tags_.values() {
+        //    tag.persist_data(*self.id());
+        //}
     }
 
     fn install_data(&mut self) {
@@ -353,20 +352,17 @@ impl TransactionParOCC
         self.commit();
     }
 
-   // #[cfg(feature = "pmem")]
-   // pub fn add_record(&mut self, pmemdest: *mut u8, src: *mut u8,layout: Layout) {
-   //     self.records_.push((pmemdest, src, layout));
-   // }
 
     #[cfg(feature = "pmem")]
     #[cfg_attr(feature = "profile", flame)]
-    pub fn persist_logs(&self) {
+    pub fn persist_logs(&mut self) {
         let id = *(self.id());
         let mut logs = vec![];
 
         for tag in self.tags_.values() {
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
+                self.records_.push(tag.tobj_ref_.box_clone());
             }
         }
 //        let logs = self.records_.iter().map(|(ptr, layout)| {
@@ -407,18 +403,19 @@ impl TransactionParOCC
         &self.txn_info_
     }
 
-    pub fn get_next_piece(&mut self) -> Option<PieceOCC> {
-        self.wait_.take().or_else(|| self.all_ps_.pop())
-    }
+   pub fn get_next_piece(&mut self) -> Option<PieceOCC> {
+       self.all_ps_.pop()
+       //self.wait_.take().or_else(|| self.all_ps_.pop())
+   }
 
 
     pub fn has_next_piece(&self) -> bool {
         !self.all_ps_.is_empty()
     }
 
-    pub fn add_wait(&mut self, p: PieceOCC) {
-        self.wait_ = Some(p)
-    }
+  //  pub fn add_wait(&mut self, p: PieceOCC) {
+  //      self.wait_ = Some(p)
+  //  }
 
     #[cfg(feature = "pmem")]
     #[cfg_attr(feature = "profile", flame)]
@@ -447,8 +444,11 @@ impl TransactionParOCC
         tcore::BenchmarkCounter::success();
 
         #[cfg(feature="pmem")]
-        {
+        {   
+            //Persist data here
+            self.persist_data(); 
             self.wait_deps_persist();
+
             self.persist_txn();
             self.status_ = TxState::PERSIST;
         }

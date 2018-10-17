@@ -512,6 +512,13 @@ impl TTag
             id,
         )
     }
+
+    #[cfg(feature= "pmem")]
+    pub fn make_record(&self) -> (*mut u8, *mut u8, Layout) {
+        (self.tobj_ref_.get_pmem_addr(),
+        self.tobj_ref_.get_ptr(),
+        self.tobj_ref_.get_layout())
+    }
 }
 
 impl fmt::Debug for TTag
