@@ -78,7 +78,7 @@ Some dependencies for pmdk:
 `sudo apt-get install pkg-config autoconf doxygen`
 
 3. Run with pmem features flag  
-`cargo +nightly run --release --features "unstable pmem"`
+`PMEM_FILE_DIR=/path/to/pmem/dir cargo +nightly run --release --features "unstable pmem"`
 
 #### Troubleshoot ####
 - `error while loading shared libraries`

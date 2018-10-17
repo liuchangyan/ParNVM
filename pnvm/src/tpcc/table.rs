@@ -47,7 +47,7 @@ use super::entry::*;
 use super::workload_occ::*;
 use super::tpcc_tables::*;
 
-const PMEM_DIR_ROOT : &str = "/home/v-xuc/ParNVM/data/";
+const PMEM_DIR_ROOT : Option<&str> = option_env!("PMEM_FILE_DIR");
 
 
 pub struct SecIndex<K, V>
@@ -446,7 +446,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         /* Get the persistent memory */
         #[cfg(feature = "pmem")]
         {
-            let path = String::from(PMEM_DIR_ROOT);
+            let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
             let size =  cap *  mem::size_of::<Entry>();
             //path.push_str(name);
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
@@ -508,7 +508,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     fn get_pmem_addr(&self, idx : usize) -> *mut Entry {
         if idx >= self.pmem_cap_.load(Ordering::SeqCst) {
             //TODO: resize 
-            let path = String::from(PMEM_DIR_ROOT);
+            let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
             let size = self.pmem_per_size_ * mem::size_of::<Entry>();
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 

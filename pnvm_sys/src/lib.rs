@@ -199,7 +199,8 @@ extern "C" {
 pub const PMEM_MIN_SIZE: usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE: usize = 48 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK: c_int = 0;
-pub const PMEM_FILE_DIR: &'static str = "/home/v-xuc/ParNVM/data";
+//pub const PMEM_FILE_DIR: &'static str = "/home/v-xuc/ParNVM/data";
+pub const PMEM_FILE_DIR: Option<&'static str> = option_env!("PMEM_FILE_DIR");
 pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";
 const PLOG_FILE_PATH: &'static str = "/home/v-xuc/ParNVM/data/log";
 const PLOG_MIN_SIZE: usize = 1024 * 1024 * 2;
@@ -289,7 +290,7 @@ pub struct PMem {
 
 thread_local!{
     //This init should just be dummy
-    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE)));
+    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
     pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
 
