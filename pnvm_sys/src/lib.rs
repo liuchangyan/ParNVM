@@ -65,6 +65,20 @@ pub fn drain() {
 }
 
 
+/* Disk Operations*/
+pub fn disk_memcpy(dest: *mut c_void, src: *const c_void, n : size_t) -> *mut u8 {
+    unsafe { memcpy(dest, src, n) as *mut u8}
+}
+
+pub fn disk_msync(addr: *mut c_void, len: size_t, flags: c_int) -> c_int {
+    unsafe { msync(addr, len, flags)}
+}
+
+//TODO:
+pub fn disk_persist_log(iovecs: &Vec<iovec>) {
+
+}
+
 
 //pub fn persist_single(addr : *const c_void, size : usize) {
 //    trace!("persit_single::(addr : {:p}, size : {})", addr, size);
@@ -110,7 +124,10 @@ pub fn init() {
     }
 
     if(!is_pmem.as_ptr().is_null()) {
-        unsafe { assert_eq!(is_pmem.as_ref(), &1)};
+        unsafe {
+            println!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
+        //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
+        }
         //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
     } else {
         panic!("[pmem_map_file]: is_pmeme is null");
@@ -196,13 +213,16 @@ extern "C" {
     pub fn memkind_pmem_destroy(kind: *mut MemKind) -> c_int;
 }
 
+
 pub const PMEM_MIN_SIZE: usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE: usize = 48 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK: c_int = 0;
 //pub const PMEM_FILE_DIR: &'static str = "/home/v-xuc/ParNVM/data";
 pub const PMEM_FILE_DIR: Option<&'static str> = option_env!("PMEM_FILE_DIR");
 pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";
+//FIXME:
 const PLOG_FILE_PATH: &'static str = "/home/v-xuc/ParNVM/data/log";
+const DISK_LOG_FILE : &'static str = "/home/v-xuc/ParNVM/v-data/log";
 const PLOG_MIN_SIZE: usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE: usize = 2 * PLOG_MIN_SIZE;
 
@@ -293,6 +313,9 @@ thread_local!{
     pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
     pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
+
+    pub static DISK_LOGGER: Rc<RefCell<DLogger>>= Rc::new(RefCell::new(DLogger::new(String::from(DISK_LOG_FILE))));
+    //pub static IS_PMEM: Rc<RefCell<i32>> = Rc::new(RefCell::new(0));
 
 }
 
@@ -413,6 +436,53 @@ pub struct PLog {
     size: usize,
     path: String,
 }
+
+pub struct DLogger {
+    fd : c_int,
+    path: String,
+}
+
+
+//TODO:
+impl DLogger {
+    fn new(path: String)  -> DLogger {
+        //Open a disk file 
+        let mut path_cpy = String::clone(&path);
+        path_cpy.push_str(
+            thread::current()
+            .name()
+            .expect("thrad local needs to have named threads"),
+            );
+        let path_cstr = CString::new(path_cpy).unwrap();
+        let pathp = path_cstr.as_ptr();
+
+        let mut mode = String::from("a+");
+        let mode_cstr = CString::new(mode).unwrap(); 
+        let modep = mode_cstr.as_ptr();
+
+        let file = unsafe { fopen(pathp,  modep)};
+        let fd = unsafe {fileno(file)};
+
+        DLogger {
+            fd: fd,
+            path: path,
+        }
+    }
+
+    fn append_many(&self, iovecs: &Vec<iovec>, size: c_int) {
+        warn!("writev : {} items", size);
+        unsafe { writev(self.fd, iovecs.as_ptr() as *const iovec, size)};
+    }
+    
+}
+
+impl Drop for DLogger {
+    fn drop(&mut self)  {
+        unsafe { close(self.fd)};  
+    }
+
+}
+
 
 impl PLog {
     fn new(path: String, size: usize, thread_local: bool) -> PLog {
