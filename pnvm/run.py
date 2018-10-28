@@ -14,11 +14,11 @@ micro_bench_config = {
         "set_size" : [5],
         #"zipf": np.linspace(0.000001, 1.0, num=10),
         "zipf" : [0.9],
-        "name": 'TPCC_NVM',
+        "name": 'TPCC_OCC',
         "wh_num" : [1, 2, 4, 8, 1, 4, 8, 16],
         "round_num": 100000,
 }
-out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/nvm-pm-output.csv"), "w+")
+out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/disk-occ-output.csv"), "w+")
 
 def print_header():
     # out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,new_order\n")

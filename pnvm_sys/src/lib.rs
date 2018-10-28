@@ -66,18 +66,19 @@ pub fn drain() {
 
 
 /* Disk Operations*/
-pub fn disk_memcpy(dest: *mut c_void, src: *const c_void, n : size_t) -> *mut u8 {
-    unsafe { memcpy(dest, src, n) as *mut u8}
+pub fn disk_memcpy(dest: *mut u8, src: *mut u8, n : size_t) -> *mut u8 {
+    unsafe { memcpy(dest as *mut c_void, src as *const c_void, n) as *mut u8}
 }
 
-pub fn disk_msync(addr: *mut c_void, len: size_t, flags: c_int) -> c_int {
-    unsafe { msync(addr, len, flags)}
+pub fn disk_msync(addr: *mut u8, len: size_t) -> c_int {
+    unsafe { msync(addr as *mut c_void, len, MS_SYNC)}
 }
 
-//TODO:
 pub fn disk_persist_log(iovecs: &Vec<iovec>) {
-
+    DISK_LOGGER.with(|disk_log| disk_log.borrow_mut().append_many(iovecs, iovecs.len() as i32));
 }
+
+
 
 
 //pub fn persist_single(addr : *const c_void, size : usize) {
@@ -125,7 +126,7 @@ pub fn init() {
 
     if(!is_pmem.as_ptr().is_null()) {
         unsafe {
-            println!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
+            //println!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
         //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
         }
         //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};

@@ -27,10 +27,10 @@ use std::{
 
 //use std::alloc::{self, GlobalAlloc};
 
-#[cfg(not(feature = "pmem"))]
+#[cfg(not(any(feature = "pmem", feature = "disk")))]
 use core::alloc::Layout;
 
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature = "disk"))]
 use pnvm_sys::{
     self, Alloc, AllocErr, Layout, MemKind, PMem, PMEM_DEFAULT_SIZE, PMEM_FILE_DIR_BYTES,
 };
@@ -38,7 +38,7 @@ use pnvm_sys::{
 #[cfg(feature = "profile")]
 use flame;
 
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature = "disk"))]
 use plog::PLog;
 
 //#[cfg(benchmark)]
@@ -156,7 +156,7 @@ pub trait TRef : fmt::Debug{
     fn set_writer_info(&mut self, Arc<TxnInfo>);
     fn get_name(&self) -> String;
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8;
 }
 
@@ -492,19 +492,36 @@ impl TTag
     }
     
     //FIXME: pmem flush
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn persist_data(&self, _: Tid) {
         if !self.has_write() {
             return;
         }
 
         let pmemaddr = self.tobj_ref_.get_pmem_addr();
-        pnvm_sys::memcpy_nodrain(pmemaddr,
-                                 self.tobj_ref_.get_ptr(),
+
+        #[cfg(feature = "pmem")] 
+        {
+            pnvm_sys::memcpy_nodrain(pmemaddr,
+                                     self.tobj_ref_.get_ptr(),
+                                     self.tobj_ref_.get_layout().size());
+        }
+
+
+        #[cfg(feature = "disk")]
+        {
+            pnvm_sys::disk_memcpy(pmemaddr,
+                                     self.tobj_ref_.get_ptr(),
+                                     self.tobj_ref_.get_layout().size());
+
+            pnvm_sys::disk_msync(pmemaddr, 
                                  self.tobj_ref_.get_layout().size());
+        }
+
+
     }
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn make_log(&self, id: Tid) -> PLog {
         PLog::new(
             self.tobj_ref_.get_ptr() as *mut u8,
@@ -513,7 +530,7 @@ impl TTag
         )
     }
 
-    #[cfg(feature= "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn make_record(&self) -> (*mut u8, *mut u8, Layout) {
         (self.tobj_ref_.get_pmem_addr(),
         self.tobj_ref_.get_ptr(),

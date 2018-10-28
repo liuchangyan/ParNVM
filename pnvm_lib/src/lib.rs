@@ -10,7 +10,7 @@
 #![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
 #![cfg_attr(feature = "profile", plugin(flamer))]
 
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature ="disk"))]
 extern crate pnvm_sys;
 extern crate alloc;
 
@@ -20,32 +20,25 @@ extern crate flame;
 
 #[macro_use]
 extern crate lazy_static;
+
 #[macro_use]
 extern crate log;
+
 extern crate crossbeam;
 extern crate libc;
-
 extern crate test;
-
 extern crate concurrent_hashmap;
 extern crate chashmap;
 
-//extern crate evmap;
-//extern crate parking_lot;
 
-
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature ="disk"))]
 pub mod plog;
 
 pub mod tbox;
 pub mod tcore;
 pub mod txn;
-
 pub mod occ;
 pub mod parnvm;
-
-//pub mod table;
-//pub mod entry;
 
 #[cfg(test)]
 mod tests {

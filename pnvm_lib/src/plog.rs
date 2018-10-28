@@ -126,7 +126,12 @@ pub fn persist_log(logs: Vec<PLog>) {
 
     iovecs.shrink_to_fit();
     debug_assert!(iovecs.capacity() == iovecs.len());
+    
+    #[cfg(feature="pmem")]
     pnvm_sys::persist_log(&iovecs);
+
+    #[cfg(feature="disk")]
+    pnvm_sys::disk_persist_log(&iovecs);
 }
 
 pub fn persist_txn(id: u32) {
@@ -151,7 +156,12 @@ pub fn persist_txn(id: u32) {
 
     iovecs.shrink_to_fit();
     debug_assert!(iovecs.capacity() == iovecs.len());
+
+    #[cfg(feature="pmem")]
     pnvm_sys::persist_log(&iovecs);
+
+    #[cfg(feature="disk")]
+    pnvm_sys::disk_persist_log(&iovecs);
     //pnvm_sys::walk(0, visit_log);
 }
 

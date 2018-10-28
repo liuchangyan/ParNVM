@@ -6,7 +6,7 @@ use std::{
 
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature="disk"))]
 use {plog, pnvm_sys};
 use tcore::{self, ObjectId, TTag, TRef, BoxRef};
 
@@ -179,15 +179,15 @@ impl TransactionOCC
         self.install_data();
 
         //Persist the write set logs
-        #[cfg(feature = "pmem")]
+        #[cfg(any(feature = "pmem", feature="disk"))]
         self.persist_log();
 
         //Persist the data
-        #[cfg(feature = "pmem")]
+        #[cfg(any(feature = "pmem", feature="disk"))]
         self.persist_data();
 
         //Persist commit the transaction
-        #[cfg(feature = "pmem")]
+        #[cfg(any(feature = "pmem", feature="disk"))]
         self.persist_commit();
 
         //Clean up local data structures.
@@ -196,14 +196,16 @@ impl TransactionOCC
         true
     }
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature="disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_commit(&self) {
+        #[cfg(feature = "pmem")]
         pnvm_sys::drain();
+
         plog::persist_txn(self.id().into());
     }
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature="disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_log(&self) {
         let mut logs = vec![];
@@ -217,7 +219,7 @@ impl TransactionOCC
         plog::persist_log(logs);
     }
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature="disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&self) {
         for tag in self.deps_.values() {

@@ -145,7 +145,7 @@ pub struct TxnInfo {
     locked_ : AtomicBool,
     committed_ : AtomicBool,
     rank_ : AtomicUsize,
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     persist_: AtomicBool,
 }
 
@@ -156,7 +156,7 @@ impl Default for TxnInfo {
             locked_ : AtomicBool::new(false),
             committed_: AtomicBool::new(true),
             rank_ : AtomicUsize::default(),
-            #[cfg(feature = "pmem")]
+            #[cfg(any(feature = "pmem", feature = "disk"))]
             persist_: AtomicBool::new(true), 
         }
     }
@@ -171,12 +171,12 @@ impl TxnInfo {
             rank_ : AtomicUsize::new(0),
             locked_ : AtomicBool::new(false),
 
-            #[cfg(feature = "pmem")]
+            #[cfg(any(feature = "pmem", feature = "disk"))]
             persist_ : AtomicBool::new(false),
         }
     }
 
-    #[cfg(feature = "pmem")] 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn has_persist(&self) -> bool {
         self.persist_.load(Ordering::SeqCst)
     }
@@ -205,7 +205,7 @@ impl TxnInfo {
         self.committed_.store(true, Ordering::SeqCst);
     }
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn persist(&self) {
         self.persist_.store(true, Ordering::SeqCst);
     }

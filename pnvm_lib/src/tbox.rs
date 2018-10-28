@@ -192,7 +192,7 @@ impl TRef for TInt {
         }
     }
     
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8 {
         panic!("TInt::get_pmem_addr(): not implemented");
     }
