@@ -1,5 +1,5 @@
 
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature = "disk"))]
 use plog::PLog;
 
 use std::fmt::{Debug, Formatter, Result};
@@ -158,7 +158,7 @@ impl DataRecord {
     }
 
     //FIXME: can it be self here?
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn as_log(&self, id: Tid) -> PLog {
         PLog::new(self.ptr, self.layout.clone(), id)
     }
