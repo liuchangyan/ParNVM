@@ -230,7 +230,7 @@ const PMEM_ERROR_OK: c_int = 0;
 pub const PMEM_FILE_DIR: Option<&'static str> = option_env!("PMEM_FILE_DIR");
 pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";
 //FIXME:
-const PLOG_FILE_PATH: &'static str = "/home/v-xuc/ParNVM/data/log";
+pub const PLOG_FILE_PATH: Option<&'static str> = option_env!("PLOG_FILE_PATH");
 const DISK_LOG_FILE : &'static str = "/home/v-xuc/ParNVM/v-data/log";
 const PLOG_MIN_SIZE: usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE: usize = 2 * PLOG_MIN_SIZE;
@@ -321,7 +321,7 @@ thread_local!{
     //This init should just be dummy
 //    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
-    pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
+    pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH.expect("plog_file_path should be set at compile time")), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
 
     pub static DISK_LOGGER: Rc<RefCell<DLogger>>= Rc::new(RefCell::new(DLogger::new(String::from(DISK_LOG_FILE))));
     //pub static IS_PMEM: Rc<RefCell<i32>> = Rc::new(RefCell::new(0));
