@@ -47,16 +47,16 @@ const PMEM_FILE_TMPFILE: c_int = 1<<3;
 /* *************
  * Exposed APIS
  * **************/
-pub fn alloc(layout: Layout) -> Result<*mut u8, AllocErr> {
-    panic!("not used anymore");
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().alloc(layout))
-}
-
-pub fn dealloc(ptr: *mut u8, layout: Layout) {
-    panic!("not used anymore");
-    warn!("freeing pointer {:p}", ptr);
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
-}
+//pub fn alloc(layout: Layout) -> Result<*mut u8, AllocErr> {
+//    panic!("not used anymore");
+//    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().alloc(layout))
+//}
+//
+//pub fn dealloc(ptr: *mut u8, layout: Layout) {
+//    panic!("not used anymore");
+//    warn!("freeing pointer {:p}", ptr);
+//    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
+//}
 
 pub fn flush(ptr: *mut u8, layout: Layout) {
     trace!("flush {:p} , {}", ptr, layout.size());
@@ -102,7 +102,7 @@ pub fn walk(
 }
 
 pub fn init() {
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
+//    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().check());
 }
 
@@ -206,21 +206,21 @@ extern "C" {
     );
 }
 
-#[link(name = "memkind")]
-extern "C" {
-    //Memkind Wrappers
-    pub fn memkind_create_pmem(
-        dir: *const c_char,
-        max_size: size_t,
-        kind: *mut *mut MemKind,
-    ) -> c_int;
-
-    pub fn memkind_malloc(kind: *mut MemKind, size: size_t) -> *mut u8;
-    pub fn memkind_free(kind: *mut MemKind, ptr: *mut u8);
-    pub fn memkind_check_available(kind: *mut MemKind) -> c_int;
-
-    pub fn memkind_pmem_destroy(kind: *mut MemKind) -> c_int;
-}
+//#[link(name = "memkind")]
+//extern "C" {
+//    //Memkind Wrappers
+//    pub fn memkind_create_pmem(
+//        dir: *const c_char,
+//        max_size: size_t,
+//        kind: *mut *mut MemKind,
+//    ) -> c_int;
+//
+//    pub fn memkind_malloc(kind: *mut MemKind, size: size_t) -> *mut u8;
+//    pub fn memkind_free(kind: *mut MemKind, ptr: *mut u8);
+//    pub fn memkind_check_available(kind: *mut MemKind) -> c_int;
+//
+//    pub fn memkind_pmem_destroy(kind: *mut MemKind) -> c_int;
+//}
 
 
 pub const PMEM_MIN_SIZE: usize = 1024 * 1024 * 16;
@@ -235,19 +235,19 @@ const DISK_LOG_FILE : &'static str = "/home/v-xuc/ParNVM/v-data/log";
 const PLOG_MIN_SIZE: usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE: usize = 2 * PLOG_MIN_SIZE;
 
-#[repr(C)]
-pub struct MemKind {
-    ops_ptr: *mut c_void,
-    partitions: c_uint,
-    name: [u8; 64],
-    init_once: c_int, //No matching type in libc tho
-    arena_map_len: c_uint,
-    arena_map: *mut c_uint,
-    arena_key: pthread_key_t,
-    _priv: *mut c_void,
-    arena_map_mask: c_uint,
-    arena_zero: c_uint,
-}
+//#[repr(C)]
+//pub struct MemKind {
+//    ops_ptr: *mut c_void,
+//    partitions: c_uint,
+//    name: [u8; 64],
+//    init_once: c_int, //No matching type in libc tho
+//    arena_map_len: c_uint,
+//    arena_map: *mut c_uint,
+//    arena_key: pthread_key_t,
+//    _priv: *mut c_void,
+//    arena_map_mask: c_uint,
+//    arena_zero: c_uint,
+//}
 
 #[repr(C)]
 pub struct LogPool {
@@ -311,15 +311,15 @@ pub struct ShutdownState {
     checksum: uint64_t,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct PMem {
-    pub kind: *mut MemKind,
-    pub size: usize,
-}
+//#[derive(Debug, Copy, Clone)]
+//pub struct PMem {
+//    pub kind: *mut MemKind,
+//    pub size: usize,
+//}
 
 thread_local!{
     //This init should just be dummy
-    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
+//    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
     pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
 
@@ -329,115 +329,115 @@ thread_local!{
 }
 
 //FIXME::Potentially could implement Alloc Trait from rust
-impl PMem {
-    //Allocate max_size pmem and returns the memory allocator
-
-    pub fn new_bytes_with_nul_unchecked(dir: &[u8], max_size: usize) -> PMem {
-        let dir_str = unsafe { CStr::from_bytes_with_nul_unchecked(dir) };
-        let dir_ptr = dir_str.as_ptr();
-
-        let mut kind_ptr: *mut MemKind = ptr::null_mut();
-        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
-
-        if max_size < PMEM_MIN_SIZE {
-            panic!("pmem size too small");
-            //return None;
-        }
-
-        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
-        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
-        if err != PMEM_ERROR_OK {
-            panic!(
-                "pemem failed create {} @ {:?} {:} {:p}\n",
-                err,
-                dir,
-                max_size,
-                unsafe { *kind_ptr_ptr }
-            );
-            //return None;
-        }
-
-        PMem {
-            kind: unsafe { &mut *(kind_ptr) },
-            size: max_size,
-        }
-    }
-
-    pub fn new(dir: String, max_size: usize) -> PMem {
-        trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
-        let _dir = String::clone(&dir);
-        let dir = CString::new(dir).unwrap();
-        //let dir_ptr = dir.as_ptr();
-        let dir_ptr = dir.into_raw();
-        let mut kind_ptr: *mut MemKind = ptr::null_mut();
-        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
-
-        if max_size < PMEM_MIN_SIZE {
-            panic!("pmem size too small");
-            //return None;
-        }
-
-        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
-        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
-        let _ = unsafe { CString::from_raw(dir_ptr) };
-        if err != PMEM_ERROR_OK {
-            panic!(
-                "pemem failed create {} @ {:} {:} {:p}\n",
-                err,
-                _dir,
-                max_size,
-                unsafe { *kind_ptr_ptr }
-            );
-            //return None;
-        }
-
-        PMem {
-            kind: unsafe { &mut *(kind_ptr) },
-            size: max_size,
-        }
-    }
-
-    pub fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
-        debug_assert!(layout.size() > 0, "alloc: size of layout must be non-zero");
-        let res = unsafe { memkind_malloc(self.kind, layout.size()) };
-
-        if res.is_null() {
-            #[cfg(not(any(feature = "profile", feature = "unstable")))]
-            return Err(AllocErr::Exhausted { request: layout });
-
-            #[cfg(any(feature = "profile", feature = "unstable"))]
-            return Err(AllocErr);
-        } else {
-            return Ok(res);
-        }
-    }
-
-    pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
-        debug_assert!(
-            layout.size() > 0,
-            "dealloc: size of layout must be non-zero"
-        );
-
-        unsafe { memkind_free(self.kind, ptr) };
-    }
-
-    pub fn check(&mut self) {
-        let res = unsafe { memkind_check_available(self.kind) };
-        if res != 0 {
-            panic!("memkeind check failed");
-        }
-    }
-
-    pub fn is_pmem(ptr: *mut u8, size: usize) -> bool {
-        let res = unsafe { pmem_is_pmem(ptr as *const c_void, size) };
-        println!("result {}", res);
-        if res == 1 {
-            true
-        } else {
-            false
-        }
-    }
-}
+//impl PMem {
+//    //Allocate max_size pmem and returns the memory allocator
+//
+//    pub fn new_bytes_with_nul_unchecked(dir: &[u8], max_size: usize) -> PMem {
+//        let dir_str = unsafe { CStr::from_bytes_with_nul_unchecked(dir) };
+//        let dir_ptr = dir_str.as_ptr();
+//
+//        let mut kind_ptr: *mut MemKind = ptr::null_mut();
+//        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
+//
+//        if max_size < PMEM_MIN_SIZE {
+//            panic!("pmem size too small");
+//            //return None;
+//        }
+//
+//        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
+//        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
+//        if err != PMEM_ERROR_OK {
+//            panic!(
+//                "pemem failed create {} @ {:?} {:} {:p}\n",
+//                err,
+//                dir,
+//                max_size,
+//                unsafe { *kind_ptr_ptr }
+//            );
+//            //return None;
+//        }
+//
+//        PMem {
+//            kind: unsafe { &mut *(kind_ptr) },
+//            size: max_size,
+//        }
+//    }
+//
+//    pub fn new(dir: String, max_size: usize) -> PMem {
+//        trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
+//        let _dir = String::clone(&dir);
+//        let dir = CString::new(dir).unwrap();
+//        //let dir_ptr = dir.as_ptr();
+//        let dir_ptr = dir.into_raw();
+//        let mut kind_ptr: *mut MemKind = ptr::null_mut();
+//        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
+//
+//        if max_size < PMEM_MIN_SIZE {
+//            panic!("pmem size too small");
+//            //return None;
+//        }
+//
+//        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
+//        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
+//        let _ = unsafe { CString::from_raw(dir_ptr) };
+//        if err != PMEM_ERROR_OK {
+//            panic!(
+//                "pemem failed create {} @ {:} {:} {:p}\n",
+//                err,
+//                _dir,
+//                max_size,
+//                unsafe { *kind_ptr_ptr }
+//            );
+//            //return None;
+//        }
+//
+//        PMem {
+//            kind: unsafe { &mut *(kind_ptr) },
+//            size: max_size,
+//        }
+//    }
+//
+//    pub fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
+//        debug_assert!(layout.size() > 0, "alloc: size of layout must be non-zero");
+//        let res = unsafe { memkind_malloc(self.kind, layout.size()) };
+//
+//        if res.is_null() {
+//            #[cfg(not(any(feature = "profile", feature = "unstable")))]
+//            return Err(AllocErr::Exhausted { request: layout });
+//
+//            #[cfg(any(feature = "profile", feature = "unstable"))]
+//            return Err(AllocErr);
+//        } else {
+//            return Ok(res);
+//        }
+//    }
+//
+//    pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
+//        debug_assert!(
+//            layout.size() > 0,
+//            "dealloc: size of layout must be non-zero"
+//        );
+//
+//        unsafe { memkind_free(self.kind, ptr) };
+//    }
+//
+//    pub fn check(&mut self) {
+//        let res = unsafe { memkind_check_available(self.kind) };
+//        if res != 0 {
+//            panic!("memkeind check failed");
+//        }
+//    }
+//
+//    pub fn is_pmem(ptr: *mut u8, size: usize) -> bool {
+//        let res = unsafe { pmem_is_pmem(ptr as *const c_void, size) };
+//        println!("result {}", res);
+//        if res == 1 {
+//            true
+//        } else {
+//            false
+//        }
+//    }
+//}
 
 #[derive(Debug)]
 pub struct PLog {
@@ -559,36 +559,36 @@ impl Drop for PLog {
     }
 }
 
-impl fmt::Debug for MemKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        //  write!(f, "heyehe")
-        write!(
-            f,
-            "MemKind {{
-           ops_ptr : {:p}
-           partitions : {:?}
-           name : {:?}
-           init_once : {:?}
-           arena_map_len : {:?}
-           arena_map : {:p}
-           arena_key: {:?}
-           _priv: {:p}
-           arena_map_mask : {:}
-           arena_zero: {:?}
-       }}",
-            self.ops_ptr,
-            self.partitions,
-            unsafe { str::from_utf8_unchecked(&(self.name)) },
-            self.init_once,
-            self.arena_map_len,
-            self.arena_map,
-            self.arena_key,
-            self._priv,
-            self.arena_map_mask,
-            self.arena_zero
-        )
-    }
-}
+//impl fmt::Debug for MemKind {
+//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//        //  write!(f, "heyehe")
+//        write!(
+//            f,
+//            "MemKind {{
+//           ops_ptr : {:p}
+//           partitions : {:?}
+//           name : {:?}
+//           init_once : {:?}
+//           arena_map_len : {:?}
+//           arena_map : {:p}
+//           arena_key: {:?}
+//           _priv: {:p}
+//           arena_map_mask : {:}
+//           arena_zero: {:?}
+//       }}",
+//            self.ops_ptr,
+//            self.partitions,
+//            unsafe { str::from_utf8_unchecked(&(self.name)) },
+//            self.init_once,
+//            self.arena_map_len,
+//            self.arena_map,
+//            self.arena_key,
+//            self._priv,
+//            self.arena_map_mask,
+//            self.arena_zero
+//        )
+//    }
+//}
 
 #[cfg(test)]
 mod tests {
