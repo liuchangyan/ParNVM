@@ -11,6 +11,9 @@ extern crate core;
 #[macro_use]
 extern crate log;
 
+extern crate errno;
+use errno::{Errno, errno};
+
 use libc::*;
 
 #[cfg(any(feature = "profile", feature = "unstable"))]
@@ -71,7 +74,7 @@ pub fn disk_memcpy(dest: *mut u8, src: *mut u8, n : size_t) -> *mut u8 {
 }
 
 pub fn disk_msync(addr: *mut u8, len: size_t) -> c_int {
-    unsafe { msync(addr as *mut c_void, len, MS_SYNC)}
+    unsafe { msync(addr as *mut c_void, len, MS_ASYNC)}
 }
 
 pub fn disk_persist_log(iovecs: &Vec<iovec>) {
@@ -117,8 +120,13 @@ pub fn init() {
                       is_pmem.as_ptr())
     };
 
+    if(ret.is_null()) {
+        panic!("[pmem_map_file] failed {}", errno());
+    }
+
+
     if(!mapped_len.as_ptr().is_null()) {
-        unsafe {assert_eq!(mapped_len.as_ref(), &len)};
+        //unsafe {assert_eq!(mapped_len.as_ref(), &len)};
         //unsafe{ debug!("[pmem_map_file]: mapped_len is {}", mapped_len.as_ref())};
     } else {
         panic!("[pmem_map_file]:mapped_len is null");

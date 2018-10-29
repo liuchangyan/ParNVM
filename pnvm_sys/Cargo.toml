@@ -9,6 +9,7 @@ log = "0.4.0"
 env_logger = "~0.4"
 rand = "0.5"
 libc = "0.2"
+errno = "*"
 
 [features]
 profile=[]
