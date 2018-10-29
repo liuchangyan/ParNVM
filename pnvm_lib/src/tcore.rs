@@ -32,7 +32,7 @@ use core::alloc::Layout;
 
 #[cfg(any(feature = "pmem", feature = "disk"))]
 use pnvm_sys::{
-    self, Alloc, AllocErr, Layout, MemKind, PMem, PMEM_DEFAULT_SIZE, PMEM_FILE_DIR_BYTES,
+    self, Alloc, AllocErr, Layout, PMEM_DEFAULT_SIZE, PMEM_FILE_DIR_BYTES,
 };
 
 #[cfg(feature = "profile")]
