@@ -96,24 +96,24 @@ pub fn persist_log(iovecs: &Vec<iovec>) {
 pub fn walk(
     chunksize: usize,
     callback: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
-) {
+    ) {
     trace!("walk : chunksize = {}", chunksize);
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
 
 pub fn init() {
-//    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
+    //    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().check());
 }
 
- pub fn mmap_file(path: String, len: usize) -> *mut u8 
+pub fn mmap_file(path: String, len: usize) -> *mut u8 
 {
     let path = CString::new(path).unwrap();    
     let pathp = path.as_ptr();
 
     let mut mapped_len : NonNull<usize> = Box::into_raw_non_null(Box::new(0));
     let mut is_pmem: NonNull<c_int> = Box::into_raw_non_null(Box::new(0));
-    
+
     let ret = unsafe {
         pmem_map_file(pathp, len, PMEM_FILE_CREATE | PMEM_FILE_TMPFILE, 0777, 
                       mapped_len.as_ptr(), 
@@ -135,13 +135,13 @@ pub fn init() {
     if(!is_pmem.as_ptr().is_null()) {
         unsafe {
             //println!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
-        //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
+            //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
         }
         //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
     } else {
         panic!("[pmem_map_file]: is_pmeme is null");
     }
-    
+
     debug!("mmap_file(): {:p}", ret);
     ret as *mut u8
 
@@ -180,7 +180,7 @@ extern "C" {
         mode: mode_t,
         mapped_lenp: *mut usize,
         is_pmemp: *mut c_int,
-    ) -> *mut c_void;
+        ) -> *mut c_void;
     pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_persist(addr: *const c_void, len: usize);
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
@@ -203,7 +203,7 @@ extern "C" {
         chunksize: usize,
         process_chunk: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
         arg: *mut c_void,
-    );
+        );
 }
 
 //#[link(name = "memkind")]
@@ -319,7 +319,7 @@ pub struct ShutdownState {
 
 thread_local!{
     //This init should just be dummy
-//    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
+    //    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
     pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH.expect("plog_file_path should be set at compile time")), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
 
@@ -482,7 +482,7 @@ impl DLogger {
         warn!("writev : {} items", size);
         unsafe { writev(self.fd, iovecs.as_ptr() as *const iovec, size)};
     }
-    
+
 }
 
 impl Drop for DLogger {
@@ -500,9 +500,9 @@ impl PLog {
         if thread_local {
             _path.push_str(
                 thread::current()
-                    .name()
-                    .expect("thrad local needs to have named threads"),
-            );
+                .name()
+                .expect("thrad local needs to have named threads"),
+                );
         }
         let path = CString::new(String::clone(&_path)).unwrap();
         let pathp = path.as_ptr();
@@ -539,7 +539,7 @@ impl PLog {
         &self,
         chunk_size: usize,
         callback: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
-    ) {
+        ) {
         unsafe {
             let arg = &1 as *const _ as *mut c_void;
             pmemlog_walk(self.plp, chunk_size, callback, arg)
@@ -595,139 +595,141 @@ mod tests {
     use super::*;
 
     extern crate env_logger;
+    extern crate rand;
 
     const PMEM_TEST_PATH_ABS: &str = "/home/v-xuc/ParNVM/data";
-    // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
+#[derive(Clone)]
+    pub struct Customer {
+        pub c_id: i32,
+        pub c_d_id: i32,
+        pub c_w_id: i32,
+        pub c_first: [u8; 16],
+        pub c_middle: [u8; 2],
+        pub c_last: [u8; 16],
+        pub c_street_1: [u8; 20],
+        pub c_street_2: [u8; 20],
+        pub c_city: [u8; 20],
+        pub c_state: [u8; 2],
+        pub c_zip: [u8; 9],
+        pub c_phone: [u8; 16],
+        pub c_since: i32, // Timestamp
+        pub c_credit: [u8; 2],
+        pub c_credit_lim: i32,   // i32(12,2)
+        pub c_discount: i32,     // i32(4, 4)
+        pub c_balance: i32,      // i32(12,2)
+        pub c_ytd_payment: i32,  // i32(12,2)
+        pub c_payment_cnt: i32,  // i32(4,0)
+        pub c_delivery_cnt: i32, // i32(4,0)
+        pub c_data: [u8; 500],
+    }
+    
+    impl Customer {
+        pub fn new( )-> Self {
+                let  c_first : [u8;16] = Default::default();
+                let  c_middle :[u8;2] = Default::default();
+                let  c_last : [u8;16] = Default::default();
+                let  c_street_1 : [u8;20] = Default::default();
+                let  c_street_2 : [u8;20] = Default::default();
+                let  c_city : [u8;20] = Default::default();
+                let  c_state : [u8;2] = Default::default();
+                let  c_zip : [u8;9] = Default::default();
+                let  c_phone : [u8;16] = Default::default();
+                let  c_credit : [u8;2] = Default::default();
+                let  c_data : [u8;500] = [1 ; 500]; 
+
+                let c_id = 0;
+                let c_d_id =  1;
+                let c_w_id = 1;
+                let c_since = 1;
+                let c_credit_lim = 1;
+                let c_discount = 1;
+                let c_balance = 1;
+                let c_ytd_payment = 1;
+                let c_payment_cnt = 1;
+                let c_delivery_cnt = 1;
+
+
+                Customer {
+                    c_id,
+                    c_d_id,
+                    c_w_id,
+                    c_first,
+                    c_middle,
+                    c_last,
+                    c_street_1,
+                    c_street_2,
+                    c_city,
+                    c_state,
+                    c_zip,
+                    c_phone,
+                    c_since, // Timestamp
+                    c_credit,
+                    c_credit_lim,   // i32(12,2)
+                    c_discount,     // i32(4, 4)
+                    c_balance,      // i32(12,2)
+                    c_ytd_payment,  // i32(12,2)
+                    c_payment_cnt,  // i32(4,0)
+                    c_delivery_cnt, // i32(4,0)
+                    c_data,
+                }
+            }
+
+    }
+    
+    use std::time::{Duration, Instant};
+    use std::mem;
     #[test]
-    fn test_create_ok() {
-        //absolute path
-        let _ = env_logger::init();
-        let pmem = PMem::new(String::from(PMEM_TEST_PATH_ABS), 16 * super::PMEM_MIN_SIZE);
-        assert_eq!(pmem.is_some(), true);
-        pmem.unwrap().check();
-        //relative path
-        //let pmem = PMem::new(String::from("../data"), 16*super::PMEM_MIN_SIZE);
-        //assert_eq!(pmem.is_some(), true);
-        //assert_eq!(pmem.unwrap().check(), true);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_create_non_exist() {
-        let _ = env_logger::init();
-        let pmem = PMem::new(String::from("../../data"), 16 * super::PMEM_MIN_SIZE);
-        assert_eq!(pmem.is_some(), false);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_size_too_small() {
-        let _ = env_logger::init();
-        let pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE / 2);
-        assert_eq!(pmem.is_some(), false);
-    }
-
-    #[test]
-    fn test_malloc_ok() {
-        let _ = env_logger::init();
-        let mut pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-        //FIXME: This assert is never true due to pmem_is_pmem(3) caveats
-        //More details at: http://pmem.io/pmdk/manpages/linux/v1.4/libpmem/pmem_is_pmem.3
-        //assert_eq!(PMem::is_pmem(res.unwrap(), size_of::<u32>()), true);
-    }
-
-    //#[test]
-    fn test_non_pem_check() {
-        let _ = env_logger::init();
-
-        let mut pmem = PMem::new(String::from("../dat"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-        //assert_eq!(PMem::is_pmem(res.unwrap(), size_of::<u32>()), false);
-    }
-
-    #[test]
-    fn test_malloc_fail() {
-        let _ = env_logger::init();
-        let mut pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::from_size_align(PMEM_MIN_SIZE * 5, 4).unwrap());
-        assert_eq!(res.is_err(), true);
-    }
-
-    //FIXME: this one creating invalid references
-    //#[test]
-    fn test_dealloc_ok() {
-        let mut pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::new::<u32>());
-        pmem.dealloc(res.unwrap(), Layout::new::<u32>());
-    }
-
-    #[test]
-    fn test_alloc_ok() {
-        let _ = env_logger::init();
-        let res = super::alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-    }
-
-    #[test]
-    fn test_free_thread_ok() {
-        let _ = env_logger::init();
-        let res = super::alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-        super::dealloc(res.unwrap(), Layout::new::<u32>());
-    }
-
-    #[test]
-    fn test_flush_ok() {
-        let _ = env_logger::init();
-        let res = super::alloc(Layout::new::<u32>());
-        let value = res.unwrap();
-        unsafe { *value = 10 };
-        trace!("here");
-        super::flush(value, Layout::new::<u32>());
-    }
-
-    // #[test]
-    // fn test_append_log_ok() {
-    //     let _ = env_logger::init();
-    //     let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
-    //     let offset_before = plog.tell();
-    //     trace!("offset_before : {}", offset_before);
-    //     let tid = 999;
-    //     plog.append(tid);
-    //     let offset_after = plog.tell();
-    //     trace!("offset_after : {}", offset_after);
-    //     assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
-    // }
-    use std::sync::{Arc, Mutex};
-    #[test]
-    fn test_multiple_create() {
-        //let mut pmems = vec![];
-        let mut handles = vec![];
-        //let mtx = Arc::new(Mutex::new(0));
-        for i in 1..80 {
-            //let mtx = mtx.clone();
-            let handle = thread::spawn(move || {
-                //let g = mtx.lock().unwrap();
-                let pmem1 = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE).unwrap();
-            });
-
-            handles.push(handle);
+    fn single_write_dram() {
+        let mut counter = 0;
+        let size =  1 << 30;
+        let pmem = mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
+        let dram_data = Box::into_raw(Box::new(Customer::new()));
+        let offset_max =  size/ mem::size_of::<Customer>();
+        let start = Instant::now();
+        let duration = Duration::new(10, 0); //10 seconds 
+        let cus_size = mem::size_of::<Customer>();
+        //let offset = rand::random::<usize>() % offset_max; 
+        let  mut prev = 0;
+        unsafe{
+            while start.elapsed() < duration {
+                let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
+                prev = (prev+100) % offset_max;
+                memcpy_persist(paddr, 
+                               dram_data as *mut u8, 
+                               cus_size);
+                counter += 1;
+            }
         }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
+        println!("write:counter : {}, time: {:?}",  counter, duration);
     }
+
 
     #[test]
-    fn test_multiple_create_single_thread() {
-        for i in 1..80 {
-            std::fs::create_dir_all(format!("../data/{}", i)).unwrap();
-            let mut pmem = PMem::new(format!("../data/{}", i), super::PMEM_MIN_SIZE).unwrap();
+    fn single_write_drain() {
+        let mut counter = 0;
+        let size =  1 << 30;
+        let pmem = mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
+        let dram_data = Box::into_raw(Box::new(Customer::new()));
+        let offset_max =  size/ mem::size_of::<Customer>();
+        let start = Instant::now();
+        let duration = Duration::new(10, 0); //10 seconds 
+        let cus_size = mem::size_of::<Customer>();
+        //let offset = rand::random::<usize>() % offset_max; 
+        let  mut prev = 0;
+        unsafe{
+            while start.elapsed() < duration {
+                let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
+                prev = (prev+100) % offset_max;
+                memcpy_persist(paddr, 
+                               dram_data as *mut u8, 
+                               cus_size);
+                pmem_drain();
+                counter += 1;
+            }
         }
+        println!("drain(): counter : {}, time: {:?}",  counter, duration);
+
     }
+
 }

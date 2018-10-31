@@ -1,0 +1,11 @@
+[package]
+name = "pnvm_bench"
+version = "0.1.0"
+authors = ["Xu <xuchen@u.nus.edu>"]
+
+[dependencies]
+pnvm_sys = { path = "../pnvm_sys"}
+rand = "0.5"
+
+[features]
+unstable = ["pnvm_sys/unstable"]

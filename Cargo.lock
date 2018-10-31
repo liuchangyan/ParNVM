@@ -368,6 +368,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pnvm_bench"
+version = "0.1.0"
+dependencies = [
+ "pnvm_sys 0.1.0",
+ "rand 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "pnvm_lib"
 version = "0.1.0"
 dependencies = [

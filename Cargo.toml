@@ -3,4 +3,5 @@ members = [
     "pnvm",
     "pnvm_lib",
     "pnvm_sys",
+    "pnvm_bench",
 ]
