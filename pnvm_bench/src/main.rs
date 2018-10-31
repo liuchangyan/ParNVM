@@ -14,7 +14,7 @@ fn main() {
     multi_threads(4);
 }
 
-const PMEM_TEST_PATH_ABS: &str = "/home/v-xuc/ParNVM/data";
+const PMEM_TEST_PATH_ABS: &str = "../data";
 
 #[derive(Clone)]
 pub struct Customer {
