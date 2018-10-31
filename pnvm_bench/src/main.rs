@@ -2,6 +2,10 @@ use std::mem;
 extern crate rand;
 extern crate pnvm_sys;
 
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
 use pnvm_sys::*;
 use std::{
     thread,
@@ -11,6 +15,7 @@ use std::{
 
 
 fn main() {
+    env_logger::init().unwrap();
     multi_threads(4);
 }
 

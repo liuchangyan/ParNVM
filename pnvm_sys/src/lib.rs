@@ -134,7 +134,7 @@ pub fn mmap_file(path: String, len: usize) -> *mut u8
 
     if(!is_pmem.as_ptr().is_null()) {
         unsafe {
-            //println!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
+            debug!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
             //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
         }
         //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
