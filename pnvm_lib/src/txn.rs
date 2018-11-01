@@ -184,9 +184,13 @@ impl TxnInfo {
     pub fn has_commit(&self) -> bool {
         self.committed_.load(Ordering::SeqCst)
     }
-
-    pub fn has_done(&self, rank: usize) -> bool {
-        self.rank_.load(Ordering::SeqCst) >= rank
+    
+    //if deps just started rank 3
+    //  txn ready to start rank 3 must wait for it to complete
+    //  txn ready to start rank 2 can safely go
+    //  dep.cur_rank  > txn.rank_to_run
+    pub fn has_started(&self, rank: usize) -> bool {
+        self.rank_.load(Ordering::SeqCst) > rank
     }
 
     pub fn has_lock(&self) -> bool {
@@ -210,7 +214,7 @@ impl TxnInfo {
         self.persist_.store(true, Ordering::SeqCst);
     }
 
-    pub fn done(&self, rank: usize) {
+    pub fn start(&self, rank: usize) {
         self.rank_.store(rank, Ordering::SeqCst);
     }
 

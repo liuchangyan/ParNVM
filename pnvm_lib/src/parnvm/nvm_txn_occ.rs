@@ -158,11 +158,14 @@ impl TransactionParOCC
             self.id(),
             &piece
         );
+    
+        //Mark the current rank here
+        self.update_rank(piece.rank());
 
         while {
             //Any states created in the run must be reset
             piece.run(self);
-            let res = self.try_commit_piece(piece.rank());
+            let res = self.try_commit_piece();
             !res
         } {}
     }
@@ -201,7 +204,7 @@ impl TransactionParOCC
         }
     }
 
-    pub fn try_commit_piece(&mut self, rank: usize) -> bool {
+    pub fn try_commit_piece(&mut self) -> bool {
         if !self.lock() {
             return self.abort_piece(AbortReason::FailedLocking);
         }
@@ -212,7 +215,7 @@ impl TransactionParOCC
 
         self.add_dep();
 
-        self.commit_piece(rank)
+        self.commit_piece()
     }
 
     fn abort_piece(&mut self, _ : AbortReason) -> bool {
@@ -221,7 +224,7 @@ impl TransactionParOCC
         false
     }
 
-    fn commit_piece(&mut self, rank: usize) -> bool {
+    fn commit_piece(&mut self) -> bool {
         tcore::BenchmarkCounter::success_piece();
        
         #[cfg(any(feature = "pmem", feature = "disk"))]
@@ -232,10 +235,9 @@ impl TransactionParOCC
 
         //Persist the data
         //FIXME: delay the commit until commiting transaction
-        //#[cfg(any(feature = "pmem", feature = "disk"))]
-        //self.persist_data();
+        #[cfg(any(feature = "pmem", feature = "disk"))]
+        self.persist_data();
         
-        self.update_rank(rank);
 
         //Clean up local data structures.
         self.clean_up();
@@ -255,8 +257,10 @@ impl TransactionParOCC
             pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
 
             #[cfg(feature = "disk")]
-            pnvm_sys::disk_memcpy(paddr, vaddr, layout.size());
-            pnvm_sys::disk_msync(paddr, layout.size());
+            {
+                pnvm_sys::disk_memcpy(paddr, vaddr, layout.size());
+                pnvm_sys::disk_msync(paddr, layout.size());
+            }
 
         }
 
@@ -321,7 +325,7 @@ impl TransactionParOCC
     pub fn wait_deps_start(&self, to_run_rank: usize) {
         for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
-                if !dep.has_commit() && !dep.has_done(to_run_rank) {
+                if !dep.has_commit() && !dep.has_started(to_run_rank) {
                     warn!("{:?} waiting  for {:?} start", self.id(), dep.id());
                     //Why not do log and memcpy here?
                 } else {
@@ -393,7 +397,7 @@ impl TransactionParOCC
     //}
 
     pub fn update_rank(&self, rank: usize) {
-        self.txn_info_.done(rank);
+        self.txn_info_.start(rank);
     }
 
     pub fn id(&self) -> &Tid {

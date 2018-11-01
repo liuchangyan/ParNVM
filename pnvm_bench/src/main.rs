@@ -155,6 +155,10 @@ fn single_write_drain(size: usize) {
 
 }
 
+fn pmem_direct(size: usize) {
+    
+}
+
 
 fn multi_threads(thread_num : usize) {
     let mut handles = Vec::new();

@@ -175,12 +175,14 @@ impl TransactionOCC
         tcore::BenchmarkCounter::success();
         self.state_ = TxState::COMMITTED;
 
-        //Install write sets into the underlying data
-        self.install_data();
 
         //Persist the write set logs
         #[cfg(any(feature = "pmem", feature="disk"))]
         self.persist_log();
+
+        //Install write sets into the underlying data
+        self.install_data();
+
 
         //Persist the data
         #[cfg(any(feature = "pmem", feature="disk"))]
