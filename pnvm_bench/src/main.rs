@@ -5,7 +5,7 @@ extern crate pnvm_sys;
 #[macro_use]
 extern crate log;
 extern crate env_logger;
-
+extern crate libc;
 use pnvm_sys::*;
 use std::{
     thread,
@@ -16,7 +16,7 @@ use std::{
 
 fn main() {
     env_logger::init().unwrap();
-    multi_threads(4);
+    multi_threads(1);
 }
 
 const PMEM_TEST_PATH_ABS: &str = "../data";
@@ -116,9 +116,11 @@ fn single_write_dram(size: usize) {
         while counter < total {
             let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
             prev = (prev+100) % offset_max;
-            memcpy_persist(paddr, 
-                           dram_data as *mut u8, 
-                           cus_size);
+
+            //flush_clwb(paddr as *const libc::c_void, cus_size);
+           memcpy_nodrain(paddr, 
+                          dram_data as *mut u8, 
+                          cus_size);
             counter += 1;
         }
     }
@@ -153,6 +155,7 @@ fn single_write_drain(size: usize) {
 
 }
 
+
 fn multi_threads(thread_num : usize) {
     let mut handles = Vec::new();
     let barrier = Arc::new(Barrier::new(thread_num));
@@ -162,7 +165,7 @@ fn multi_threads(thread_num : usize) {
         let handle = builder.spawn(move || {
             barrier.wait();
             //single_write_drain(512);
-            single_write_dram(512);
+            single_write_dram(128);
         }).unwrap();
 
         handles.push(handle);

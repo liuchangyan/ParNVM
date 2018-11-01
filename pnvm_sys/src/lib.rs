@@ -187,6 +187,7 @@ extern "C" {
 
     pub fn pmem_memcpy_persist(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
     pub fn pmem_memcpy_nodrain(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
+
 }
 
 #[link(name = "pmemlog")]

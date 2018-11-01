@@ -8,6 +8,7 @@ pnvm_sys = { path = "../pnvm_sys"}
 rand = "0.5"
 log = {version = "0.4"}
 env_logger = "0.4"
+libc = "0.2"
 
 [features]
 unstable = ["pnvm_sys/unstable"]
