@@ -108,7 +108,7 @@ fn single_write_dram(size: usize) {
     let dram_data = Box::into_raw(Box::new(Customer::new()));
     let offset_max =  size/ mem::size_of::<Customer>();
     let start = Instant::now();
-    let total = 10000000; 
+    let total = 1000000;
     let cus_size = mem::size_of::<Customer>();
     //let offset = rand::random::<usize>() % offset_max; 
     let  mut prev = 0;

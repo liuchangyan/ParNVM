@@ -4,7 +4,7 @@ import numpy as np
 
 def run_exp(env, command, out_fd):
     # print(env)
-    for i in range(0,5):
+    for i in range(0,3):
         # subprocess.run(command, shell = True, env=env, stderr=out_fd, stdout=out_fd)
         subprocess.run(command, shell = True, env=env)
 
@@ -80,7 +80,7 @@ def run():
     config_env = {
         "PMEM_NO_MOVNT" : str(1),
         "PMEM_NO_CLWB": str(1),
-        "PMEM_NO_CLWB" : str(1),
+        "PMEM_NO_CLFLUSHOPT" : str(1),
     }
     env = {**sys_env, **config_env}
     print("MOV clflush")
