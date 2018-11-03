@@ -14,6 +14,7 @@ benchmark/
 */profile/
 
 perf.*
+*.perf.*
 
 
 # pmem dir

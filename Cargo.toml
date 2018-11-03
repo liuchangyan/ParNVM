@@ -5,3 +5,6 @@ members = [
     "pnvm_sys",
     "pnvm_bench",
 ]
+
+[profile.release]
+debug = true
