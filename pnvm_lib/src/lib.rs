@@ -30,6 +30,10 @@ extern crate test;
 extern crate concurrent_hashmap;
 extern crate chashmap;
 
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
+
 
 #[cfg(any(feature = "pmem", feature ="disk"))]
 pub mod plog;

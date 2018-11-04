@@ -14,6 +14,7 @@ use tcore::{self, ObjectId, TTag, TRef, BoxRef};
 use flame;
 
 
+
 pub struct TransactionOCC
 {
 
@@ -122,8 +123,8 @@ impl TransactionOCC
 
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn abort(&mut self, _: AbortReason) -> bool {
-        warn!("Tx[{:?}] is aborting.", self.tid_);
+    pub fn abort(&mut self, reason: AbortReason) -> bool {
+        warn!("Tx[{:?}] is aborting - {}", self.tid_, reason.as_ref());
         //#[cfg(benchmark)]
         tcore::BenchmarkCounter::abort();
         self.state_ = TxState::ABORTED;
@@ -133,24 +134,26 @@ impl TransactionOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
+        warn!("Tx[{:?}] is LOCKING", self.tid_);
         let me  = self.id();
         for tag in self.deps_.values_mut() {
             if !tag.has_write() {
                 continue;
             }
             if !tag.lock(me) {
-                debug!("{:#?} failed to locked!", tag);
+                warn!("{:?} LOCKED FAILED -----", me);
                 return false;
             } 
             debug!("{:#?} locked!", tag);
         }
 
-        debug!("All locked");
+        warn!("Tx[{:?}] LOCK OK", self.tid_);
         true
     }
 
     #[cfg_attr(feature = "profile", flame)]
     fn check(&mut self) -> bool {
+        warn!("Tx[{:?}] is checking", self.tid_);
         for tag in self.deps_.values() {
             //Only read ops need to be checked
             if !tag.has_read() {
@@ -164,6 +167,7 @@ impl TransactionOCC
                 return false;
             }
         }
+        warn!("Tx[{:?}] CHECKED OK", self.tid_);
         true
     }
 
@@ -171,7 +175,7 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     fn commit(&mut self) -> bool {
         //#[cfg(benchmark)]
-        debug!("Tx[{:?}] is commiting", self.tid_);
+        warn!("Tx[{:?}] is commiting", self.tid_);
         tcore::BenchmarkCounter::success();
         self.state_ = TxState::COMMITTED;
 

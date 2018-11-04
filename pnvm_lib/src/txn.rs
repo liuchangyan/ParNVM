@@ -132,6 +132,7 @@ impl Default for TxState {
     }
 }
 
+#[derive(AsRefStr)]
 pub enum AbortReason {
     Error,
     User,

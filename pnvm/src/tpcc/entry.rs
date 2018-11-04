@@ -108,8 +108,8 @@ impl Key<(i32, i32)> for District {
 
     #[inline(always)]
     fn bucket_key(&self) -> usize {
-        let wh_num = num_warehouse_get();
-        (self.d_w_id * wh_num + self.d_id) as usize
+        let dis_num = num_district_get();
+        (self.d_w_id * dis_num + self.d_id) as usize
     }
 }
 
@@ -192,8 +192,8 @@ impl Key<(i32, i32, i32)> for Customer {
 
     #[inline(always)]
     fn bucket_key(&self) -> usize {
-        let wh_num = num_warehouse_get();
-        (self.c_w_id * wh_num + self.c_d_id) as usize
+        let dis_num = num_district_get();
+        (self.c_w_id * dis_num + self.c_d_id) as usize
     }
 }
 
@@ -294,8 +294,8 @@ impl Key<(i32, i32, i32)> for NewOrder {
 
     #[inline(always)]
     fn bucket_key(&self) -> usize {
-        let wh_num = num_warehouse_get();
-        (self.no_w_id * wh_num + self.no_d_id) as usize
+        let dis_num = num_district_get();
+        (self.no_w_id * dis_num + self.no_d_id) as usize
     }
 }
 
@@ -318,8 +318,8 @@ impl Key<(i32, i32, i32)> for Order {
     }
     #[inline(always)]
     fn bucket_key(&self) -> usize {
-        let wh_num = num_warehouse_get();
-        (self.o_w_id * wh_num + self.o_d_id) as usize
+        let dis_num = num_district_get();
+        (self.o_w_id * dis_num + self.o_d_id) as usize
     }
 }
 
@@ -371,8 +371,8 @@ impl Key<(i32, i32, i32, i32)> for OrderLine {
 
     #[inline(always)]
     fn bucket_key(&self) -> usize {
-        let wh_num = num_warehouse_get();
-        (self.ol_w_id * wh_num + self.ol_d_id) as usize
+        let dis_num = num_district_get();
+        (self.ol_w_id * dis_num + self.ol_d_id) as usize
     }
 }
 
@@ -588,8 +588,8 @@ impl Key<(i32, i32)> for History {
 
     #[inline(always)]
     fn bucket_key(&self) -> usize {
-        let wh_num = num_warehouse_get();
-        (self.h_w_id * wh_num + self.h_d_id) as usize
+        let dis_num = num_district_get();
+        (self.h_w_id * dis_num + self.h_d_id) as usize
     }
 }
 

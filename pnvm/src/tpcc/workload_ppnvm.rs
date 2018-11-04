@@ -91,7 +91,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
     pub fn pc_new_order_base(_tables: &Arc<Tables>) -> TransactionParBaseOCC
     { 
-        let wh_num = num_warehouse_get();
+        let dis_num = num_district_get();
 
         /* Read & Write District */
         let tables = _tables.clone();
@@ -103,7 +103,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 (w_id, d_id)
             };
 
-            let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
+            let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize).unwrap().into_table_ref(None, None);
             //println!("READ : DISTRICT : {:?}", district_ref.get_id());
             let mut district = tx.read::<District>(district_ref.box_clone()).clone();
 
@@ -332,12 +332,12 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
     {
 
 
-        let wh_num = num_warehouse_get();
+        let dis_num = num_district_get();
         /* R District */
         let tables = _tables.clone();
         let stocklevel_dis= move | tx: &mut TransactionParOCC |  {
             let tid = tx.id().clone();    
-            let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize)
+            let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize)
                 .unwrap().into_table_ref(None, None);
             let d = tx.read::<District>(d_row).clone();
             let d_next_o_id = d.d_next_o_id;
@@ -415,7 +415,6 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
         -> TransactionParBaseOCC
     {
         let num_dis = num_district_get();
-        let num_wh = num_warehouse_get();
 
         /* NewOrder transaction */
         let tables = _tables.clone();
@@ -699,7 +698,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
         -> TransactionParBaseOCC 
         {
 
-            let wh_num = num_warehouse_get();
+            let dis_num = num_district_get();
 
 
 
@@ -718,7 +717,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 let tid = tx.id().clone();
 
 
-                let district_row = tables.district.retrieve(&(w_id, d_id),(w_id * wh_num + d_id) as usize ).expect("district empty").into_table_ref(None, None);
+                let district_row = tables.district.retrieve(&(w_id, d_id),(w_id * dis_num + d_id) as usize ).expect("district empty").into_table_ref(None, None);
                 let mut district = tx.read::<District>(district_row.box_clone()).clone();
                 let d_name = district.d_name.clone();
                 district.d_ytd = district.d_ytd + h_amount;

@@ -440,6 +440,7 @@ impl TTag
             self.is_lock_ = true;
             true
         } else {
+            warn!("[{:?}] LOCKED Failed :{}", tid, self.tobj_ref_.get_name());
             false
         }
     }
