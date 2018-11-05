@@ -20,12 +20,12 @@ micro_bench_config = {
 }
 out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/disk-occ-output.csv"), "w+")
 
-def print_header():
+def print_header(out_fd):
     # out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,new_order\n")
-    out_fd.write("thread_num,wh_num,success,abort,total_time\n")
+    out_fd.write("thread_num,wh_num,success,abort,pc_success,pc_abort,total_time\n")
     out_fd.flush()
 
-def run():
+def run(micro_bench_config, out_fd):
     print('-------------CONFIG-----------')
     print(micro_bench_config)
 
@@ -69,9 +69,51 @@ def run_exp(env, command, out_fd):
 
 
 
+if __name__ == '__main__':
+    # Run OCC-PMEM
+    micro_bench_config = {
+            "thread_num" :[1, 4, 8,16, 1, 4, 8, 16],
+            "pc_num": [3],
+            "obj_num" : 50000,
+            "set_size" : [5],
+            #"zipf": np.linspace(0.000001, 1.0, num=10),
+            "zipf" : [0.9],
+            "name": 'TPCC_OCC',
+            "wh_num" : [1, 2, 4, 8, 1, 4, 8, 16],
+            "round_num": 100000,
+    }
+    compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem"'
+    os.system(compile_pmem)
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/pmem-occ-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(micro_bench_config, out_fd)
 
-print_header()
-run()
+    # Run PPNVM-PMEM
+    micro_bench_config['name'] ='TPCC_NVM'
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/pmem-ppnvm-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(micro_bench_config, out_fd)
+
+
+    # Run OCC-VOL
+    compile_vol = 'cargo clean && cargo +nightly build --release --features unstable'
+    os.system(compile_vol)
+    micro_bench_config['name'] ='TPCC_OCC'
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/vol-occ-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(micro_bench_config, out_fd)
+
+    # Run PPNVM-VOL
+    micro_bench_config['name'] ='TPCC_NVM'
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/vol-ppnvm-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(micro_bench_config, out_fd)
+
+
+
+
+
+
 
 
 
