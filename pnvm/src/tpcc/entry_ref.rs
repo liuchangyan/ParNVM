@@ -210,12 +210,12 @@ impl  TRef for WarehouseRef {
         }
     }
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
 
     fn get_name(&self) -> String {
@@ -302,12 +302,12 @@ impl  TRef for DistrictRef  {
         }
     }
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
 
     }
     fn get_name(&self) -> String {
@@ -395,12 +395,12 @@ impl  TRef for CustomerRef  {
     }
 
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
 
     fn get_name(&self) -> String {
@@ -520,12 +520,12 @@ impl  TRef for NewOrderRef  {
     }
 
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
 
 
@@ -612,12 +612,12 @@ impl  TRef for OrderRef  {
     }
 
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
 
     fn get_name(&self) -> String {
@@ -703,12 +703,12 @@ impl  TRef for OrderLineRef  {
         }
     }
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
     fn get_name(&self) -> String {
         String::from("orderline")
@@ -793,12 +793,12 @@ impl  TRef for ItemRef  {
     }
 
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
 
     fn get_name(&self) -> String {
@@ -882,12 +882,12 @@ impl  TRef for HistoryRef  {
         }
     }
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
     fn get_name(&self) -> String {
         String::from("history")
@@ -970,12 +970,12 @@ impl  TRef for StockRef  {
     }
 
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
     fn get_name(&self) -> String {
         String::from("stock")

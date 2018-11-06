@@ -85,12 +85,12 @@ where
         Layout::new::<T>()
     }
 
-    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.vers_.get_writer_info()
+    pub fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_access_info()
     }
 
-    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
-        self.vers_.set_writer_info(info)
+    pub fn set_access_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_access_info(info)
     }
 
     /* No Trans Access method */
@@ -243,12 +243,12 @@ impl TRef for TInt {
         self.inner_.check(vers, _tid)
     }
 
-    fn set_writer_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_writer_info(txn_info);
+    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+        self.inner_.set_access_info(txn_info);
     }
 
-    fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.inner_.get_writer_info()
+    fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.inner_.get_access_info()
     }
 
     fn get_name(&self) -> String {

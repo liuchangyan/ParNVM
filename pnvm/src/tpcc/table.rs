@@ -611,12 +611,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         Layout::new::<Bucket<Entry, Index>>()
     }
 
-    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.vers_.get_writer_info()
+    pub fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_access_info()
     }
 
-    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
-        self.vers_.set_writer_info(info)
+    pub fn set_access_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_access_info(info)
     }
 
 
@@ -821,12 +821,12 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         Layout::new::<Entry>()
     }
 
-    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.vers_.get_writer_info()
+    pub fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_access_info()
     }
 
-    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
-        self.vers_.set_writer_info(info)
+    pub fn set_access_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_access_info(info)
     }
 }
 

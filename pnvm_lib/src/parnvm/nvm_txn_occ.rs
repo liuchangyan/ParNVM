@@ -187,11 +187,11 @@ impl TransactionParOCC
         self.tags_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
     }
 
-
+    //FIXME: R->W dependency
     fn add_dep(&mut self) {
         let me : u32 = self.id().into();
         for (_, tag) in self.tags_.iter() {
-            let txn_info = tag.tobj_ref_.get_writer_info();
+            let txn_info = tag.tobj_ref_.get_access_info();
             if !txn_info.has_commit() {
                 let id : u32= txn_info.id().into();
                 if me != id { /* Do not add myself into it */
@@ -274,10 +274,8 @@ impl TransactionParOCC
         let txn_info = self.txn_info().clone();
         for tag in self.tags_.values_mut() {
             tag.commit_data(id);
-            //FIXME: only write tag needs to update writer info
-            if tag.has_write() {
-                tag.tobj_ref_.set_writer_info(txn_info.clone()); 
-            }
+            //FIXME: R->R also needs to be included
+            tag.tobj_ref_.set_access_info(txn_info.clone()); 
         }
     }
 

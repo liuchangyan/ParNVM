@@ -152,8 +152,8 @@ pub trait TRef : fmt::Debug{
     fn lock(&self, Tid) -> bool;
     fn unlock(&self);
     fn check(&self, u32, u32) -> bool;
-    fn get_writer_info(&self) -> Arc<TxnInfo>;
-    fn set_writer_info(&mut self, Arc<TxnInfo>);
+    fn get_access_info(&self) -> Arc<TxnInfo>;
+    fn set_access_info(&mut self, Arc<TxnInfo>);
     fn get_name(&self) -> String;
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
@@ -285,12 +285,12 @@ impl TVersion {
     }
 
     #[inline(always)]
-    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
+    pub fn get_access_info(&self) -> Arc<TxnInfo> {
         self.txn_info_.get()
     }
 
     #[inline(always)]
-    pub fn set_writer_info(&self, txn_info : Arc<TxnInfo>) {
+    pub fn set_access_info(&self, txn_info : Arc<TxnInfo>) {
         self.txn_info_.set(txn_info);
     }
 }
