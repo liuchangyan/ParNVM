@@ -108,12 +108,12 @@ impl TransactionParOCC
             status_:    TxState::EMBRYO,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
+        
             #[cfg(any(feature= "pmem", feature = "disk"))]
             records_ :     Vec::new(),
 
             tags_: HashMap::with_capacity(16),
-            early_abort_ : false,
-            //inputs_: Vec::with_capacity(txn_base.all_ps.len()),
+            early_abort_ : false, // User initiated abort for the whole Txn
         }
     }
 

@@ -156,6 +156,7 @@ impl Default for TxnInfo {
             tid_ : Tid::default(),
             locked_ : AtomicBool::new(false),
             committed_: AtomicBool::new(true),
+            status_ : AtomicUsize::new(TxnStatus::Active as usize),
             rank_ : AtomicUsize::default(),
             #[cfg(any(feature = "pmem", feature = "disk"))]
             persist_: AtomicBool::new(true), 
@@ -164,11 +165,18 @@ impl Default for TxnInfo {
 }
 
 
+pub enum TxnStatus {
+    Active = 0,
+    Committed, //1 
+    Aborted = 2,
+}
+
 impl TxnInfo {
     pub fn new(tid: Tid) -> TxnInfo {
         TxnInfo {
             tid_ : tid,
             committed_: AtomicBool::new(false),
+            status_ : AtomicUsize::new(TxnStatus::Active as usize),
             rank_ : AtomicUsize::new(0),
             locked_ : AtomicBool::new(false),
 
