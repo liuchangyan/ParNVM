@@ -11,6 +11,9 @@ extern crate core;
 #[macro_use]
 extern crate log;
 
+extern crate errno;
+use errno::{Errno, errno};
+
 use libc::*;
 
 #[cfg(any(feature = "profile", feature = "unstable"))]
@@ -44,16 +47,16 @@ const PMEM_FILE_TMPFILE: c_int = 1<<3;
 /* *************
  * Exposed APIS
  * **************/
-pub fn alloc(layout: Layout) -> Result<*mut u8, AllocErr> {
-    panic!("not used anymore");
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().alloc(layout))
-}
-
-pub fn dealloc(ptr: *mut u8, layout: Layout) {
-    panic!("not used anymore");
-    warn!("freeing pointer {:p}", ptr);
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
-}
+//pub fn alloc(layout: Layout) -> Result<*mut u8, AllocErr> {
+//    panic!("not used anymore");
+//    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().alloc(layout))
+//}
+//
+//pub fn dealloc(ptr: *mut u8, layout: Layout) {
+//    panic!("not used anymore");
+//    warn!("freeing pointer {:p}", ptr);
+//    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
+//}
 
 pub fn flush(ptr: *mut u8, layout: Layout) {
     trace!("flush {:p} , {}", ptr, layout.size());
@@ -63,6 +66,21 @@ pub fn flush(ptr: *mut u8, layout: Layout) {
 pub fn drain() {
     unsafe {pmem_drain()};
 }
+
+
+/* Disk Operations*/
+pub fn disk_memcpy(dest: *mut u8, src: *mut u8, n : size_t) -> *mut u8 {
+    unsafe { memcpy(dest as *mut c_void, src as *const c_void, n) as *mut u8}
+}
+
+pub fn disk_msync(addr: *mut u8, len: size_t) -> c_int {
+    unsafe { msync(addr as *mut c_void, len, MS_ASYNC)}
+}
+
+pub fn disk_persist_log(iovecs: &Vec<iovec>) {
+    DISK_LOGGER.with(|disk_log| disk_log.borrow_mut().append_many(iovecs, iovecs.len() as i32));
+}
+
 
 
 
@@ -78,44 +96,52 @@ pub fn persist_log(iovecs: &Vec<iovec>) {
 pub fn walk(
     chunksize: usize,
     callback: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
-) {
+    ) {
     trace!("walk : chunksize = {}", chunksize);
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
 
 pub fn init() {
-    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
+    //    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().check());
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().check());
 }
 
- pub fn mmap_file(path: String, len: usize) -> *mut u8 
+pub fn mmap_file(path: String, len: usize) -> *mut u8 
 {
     let path = CString::new(path).unwrap();    
     let pathp = path.as_ptr();
 
     let mut mapped_len : NonNull<usize> = Box::into_raw_non_null(Box::new(0));
     let mut is_pmem: NonNull<c_int> = Box::into_raw_non_null(Box::new(0));
-    
+
     let ret = unsafe {
         pmem_map_file(pathp, len, PMEM_FILE_CREATE | PMEM_FILE_TMPFILE, 0777, 
                       mapped_len.as_ptr(), 
                       is_pmem.as_ptr())
     };
 
+    if(ret.is_null()) {
+        panic!("[pmem_map_file] failed {}", errno());
+    }
+
+
     if(!mapped_len.as_ptr().is_null()) {
-        unsafe {assert_eq!(mapped_len.as_ref(), &len)};
+        //unsafe {assert_eq!(mapped_len.as_ref(), &len)};
         //unsafe{ debug!("[pmem_map_file]: mapped_len is {}", mapped_len.as_ref())};
     } else {
         panic!("[pmem_map_file]:mapped_len is null");
     }
 
     if(!is_pmem.as_ptr().is_null()) {
-        unsafe { assert_eq!(is_pmem.as_ref(), &1)};
+        unsafe {
+            debug!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
+            //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
+        }
         //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
     } else {
         panic!("[pmem_map_file]: is_pmeme is null");
     }
-    
+
     debug!("mmap_file(): {:p}", ret);
     ret as *mut u8
 
@@ -154,13 +180,14 @@ extern "C" {
         mode: mode_t,
         mapped_lenp: *mut usize,
         is_pmemp: *mut c_int,
-    ) -> *mut c_void;
+        ) -> *mut c_void;
     pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_persist(addr: *const c_void, len: usize);
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
 
     pub fn pmem_memcpy_persist(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
     pub fn pmem_memcpy_nodrain(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
+
 }
 
 #[link(name = "pmemlog")]
@@ -177,47 +204,51 @@ extern "C" {
         chunksize: usize,
         process_chunk: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
         arg: *mut c_void,
-    );
+        );
 }
 
-#[link(name = "memkind")]
-extern "C" {
-    //Memkind Wrappers
-    pub fn memkind_create_pmem(
-        dir: *const c_char,
-        max_size: size_t,
-        kind: *mut *mut MemKind,
-    ) -> c_int;
+//#[link(name = "memkind")]
+//extern "C" {
+//    //Memkind Wrappers
+//    pub fn memkind_create_pmem(
+//        dir: *const c_char,
+//        max_size: size_t,
+//        kind: *mut *mut MemKind,
+//    ) -> c_int;
+//
+//    pub fn memkind_malloc(kind: *mut MemKind, size: size_t) -> *mut u8;
+//    pub fn memkind_free(kind: *mut MemKind, ptr: *mut u8);
+//    pub fn memkind_check_available(kind: *mut MemKind) -> c_int;
+//
+//    pub fn memkind_pmem_destroy(kind: *mut MemKind) -> c_int;
+//}
 
-    pub fn memkind_malloc(kind: *mut MemKind, size: size_t) -> *mut u8;
-    pub fn memkind_free(kind: *mut MemKind, ptr: *mut u8);
-    pub fn memkind_check_available(kind: *mut MemKind) -> c_int;
-
-    pub fn memkind_pmem_destroy(kind: *mut MemKind) -> c_int;
-}
 
 pub const PMEM_MIN_SIZE: usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE: usize = 48 * PMEM_MIN_SIZE;
 const PMEM_ERROR_OK: c_int = 0;
-pub const PMEM_FILE_DIR: &'static str = "/home/v-xuc/ParNVM/data";
+//pub const PMEM_FILE_DIR: &'static str = "/home/v-xuc/ParNVM/data";
+pub const PMEM_FILE_DIR: Option<&'static str> = option_env!("PMEM_FILE_DIR");
 pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";
-const PLOG_FILE_PATH: &'static str = "/home/v-xuc/ParNVM/data/log";
+//FIXME:
+pub const PLOG_FILE_PATH: Option<&'static str> = option_env!("PLOG_FILE_PATH");
+const DISK_LOG_FILE : &'static str = "/home/v-xuc/ParNVM/v-data/log";
 const PLOG_MIN_SIZE: usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE: usize = 2 * PLOG_MIN_SIZE;
 
-#[repr(C)]
-pub struct MemKind {
-    ops_ptr: *mut c_void,
-    partitions: c_uint,
-    name: [u8; 64],
-    init_once: c_int, //No matching type in libc tho
-    arena_map_len: c_uint,
-    arena_map: *mut c_uint,
-    arena_key: pthread_key_t,
-    _priv: *mut c_void,
-    arena_map_mask: c_uint,
-    arena_zero: c_uint,
-}
+//#[repr(C)]
+//pub struct MemKind {
+//    ops_ptr: *mut c_void,
+//    partitions: c_uint,
+//    name: [u8; 64],
+//    init_once: c_int, //No matching type in libc tho
+//    arena_map_len: c_uint,
+//    arena_map: *mut c_uint,
+//    arena_key: pthread_key_t,
+//    _priv: *mut c_void,
+//    arena_map_mask: c_uint,
+//    arena_zero: c_uint,
+//}
 
 #[repr(C)]
 pub struct LogPool {
@@ -281,130 +312,133 @@ pub struct ShutdownState {
     checksum: uint64_t,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct PMem {
-    pub kind: *mut MemKind,
-    pub size: usize,
-}
+//#[derive(Debug, Copy, Clone)]
+//pub struct PMem {
+//    pub kind: *mut MemKind,
+//    pub size: usize,
+//}
 
 thread_local!{
     //This init should just be dummy
-    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR), PMEM_DEFAULT_SIZE)));
+    //    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
-    pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
+    pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH.expect("plog_file_path should be set at compile time")), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
+
+    pub static DISK_LOGGER: Rc<RefCell<DLogger>>= Rc::new(RefCell::new(DLogger::new(String::from(DISK_LOG_FILE))));
+    //pub static IS_PMEM: Rc<RefCell<i32>> = Rc::new(RefCell::new(0));
 
 }
 
 //FIXME::Potentially could implement Alloc Trait from rust
-impl PMem {
-    //Allocate max_size pmem and returns the memory allocator
-
-    pub fn new_bytes_with_nul_unchecked(dir: &[u8], max_size: usize) -> PMem {
-        let dir_str = unsafe { CStr::from_bytes_with_nul_unchecked(dir) };
-        let dir_ptr = dir_str.as_ptr();
-
-        let mut kind_ptr: *mut MemKind = ptr::null_mut();
-        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
-
-        if max_size < PMEM_MIN_SIZE {
-            panic!("pmem size too small");
-            //return None;
-        }
-
-        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
-        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
-        if err != PMEM_ERROR_OK {
-            panic!(
-                "pemem failed create {} @ {:?} {:} {:p}\n",
-                err,
-                dir,
-                max_size,
-                unsafe { *kind_ptr_ptr }
-            );
-            //return None;
-        }
-
-        PMem {
-            kind: unsafe { &mut *(kind_ptr) },
-            size: max_size,
-        }
-    }
-
-    pub fn new(dir: String, max_size: usize) -> PMem {
-        trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
-        let _dir = String::clone(&dir);
-        let dir = CString::new(dir).unwrap();
-        //let dir_ptr = dir.as_ptr();
-        let dir_ptr = dir.into_raw();
-        let mut kind_ptr: *mut MemKind = ptr::null_mut();
-        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
-
-        if max_size < PMEM_MIN_SIZE {
-            panic!("pmem size too small");
-            //return None;
-        }
-
-        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
-        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
-        let _ = unsafe { CString::from_raw(dir_ptr) };
-        if err != PMEM_ERROR_OK {
-            panic!(
-                "pemem failed create {} @ {:} {:} {:p}\n",
-                err,
-                _dir,
-                max_size,
-                unsafe { *kind_ptr_ptr }
-            );
-            //return None;
-        }
-
-        PMem {
-            kind: unsafe { &mut *(kind_ptr) },
-            size: max_size,
-        }
-    }
-
-    pub fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
-        debug_assert!(layout.size() > 0, "alloc: size of layout must be non-zero");
-        let res = unsafe { memkind_malloc(self.kind, layout.size()) };
-
-        if res.is_null() {
-            #[cfg(not(any(feature = "profile", feature = "unstable")))]
-            return Err(AllocErr::Exhausted { request: layout });
-
-            #[cfg(any(feature = "profile", feature = "unstable"))]
-            return Err(AllocErr);
-        } else {
-            return Ok(res);
-        }
-    }
-
-    pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
-        debug_assert!(
-            layout.size() > 0,
-            "dealloc: size of layout must be non-zero"
-        );
-
-        unsafe { memkind_free(self.kind, ptr) };
-    }
-
-    pub fn check(&mut self) {
-        let res = unsafe { memkind_check_available(self.kind) };
-        if res != 0 {
-            panic!("memkeind check failed");
-        }
-    }
-
-    pub fn is_pmem(ptr: *mut u8, size: usize) -> bool {
-        let res = unsafe { pmem_is_pmem(ptr as *const c_void, size) };
-        println!("result {}", res);
-        if res == 1 {
-            true
-        } else {
-            false
-        }
-    }
-}
+//impl PMem {
+//    //Allocate max_size pmem and returns the memory allocator
+//
+//    pub fn new_bytes_with_nul_unchecked(dir: &[u8], max_size: usize) -> PMem {
+//        let dir_str = unsafe { CStr::from_bytes_with_nul_unchecked(dir) };
+//        let dir_ptr = dir_str.as_ptr();
+//
+//        let mut kind_ptr: *mut MemKind = ptr::null_mut();
+//        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
+//
+//        if max_size < PMEM_MIN_SIZE {
+//            panic!("pmem size too small");
+//            //return None;
+//        }
+//
+//        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
+//        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
+//        if err != PMEM_ERROR_OK {
+//            panic!(
+//                "pemem failed create {} @ {:?} {:} {:p}\n",
+//                err,
+//                dir,
+//                max_size,
+//                unsafe { *kind_ptr_ptr }
+//            );
+//            //return None;
+//        }
+//
+//        PMem {
+//            kind: unsafe { &mut *(kind_ptr) },
+//            size: max_size,
+//        }
+//    }
+//
+//    pub fn new(dir: String, max_size: usize) -> PMem {
+//        trace!("{:}new(dir: {:}, max_size:{:})", LPREFIX, dir, max_size);
+//        let _dir = String::clone(&dir);
+//        let dir = CString::new(dir).unwrap();
+//        //let dir_ptr = dir.as_ptr();
+//        let dir_ptr = dir.into_raw();
+//        let mut kind_ptr: *mut MemKind = ptr::null_mut();
+//        let kind_ptr_ptr = (&mut kind_ptr) as *mut _ as *mut *mut MemKind;
+//
+//        if max_size < PMEM_MIN_SIZE {
+//            panic!("pmem size too small");
+//            //return None;
+//        }
+//
+//        //println!("pemem  create @ {:} {:} {:p} ",  _dir, max_size, kind_ptr_ptr);
+//        let err = unsafe { memkind_create_pmem(dir_ptr, max_size, kind_ptr_ptr) };
+//        let _ = unsafe { CString::from_raw(dir_ptr) };
+//        if err != PMEM_ERROR_OK {
+//            panic!(
+//                "pemem failed create {} @ {:} {:} {:p}\n",
+//                err,
+//                _dir,
+//                max_size,
+//                unsafe { *kind_ptr_ptr }
+//            );
+//            //return None;
+//        }
+//
+//        PMem {
+//            kind: unsafe { &mut *(kind_ptr) },
+//            size: max_size,
+//        }
+//    }
+//
+//    pub fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
+//        debug_assert!(layout.size() > 0, "alloc: size of layout must be non-zero");
+//        let res = unsafe { memkind_malloc(self.kind, layout.size()) };
+//
+//        if res.is_null() {
+//            #[cfg(not(any(feature = "profile", feature = "unstable")))]
+//            return Err(AllocErr::Exhausted { request: layout });
+//
+//            #[cfg(any(feature = "profile", feature = "unstable"))]
+//            return Err(AllocErr);
+//        } else {
+//            return Ok(res);
+//        }
+//    }
+//
+//    pub fn dealloc(&mut self, ptr: *mut u8, layout: Layout) {
+//        debug_assert!(
+//            layout.size() > 0,
+//            "dealloc: size of layout must be non-zero"
+//        );
+//
+//        unsafe { memkind_free(self.kind, ptr) };
+//    }
+//
+//    pub fn check(&mut self) {
+//        let res = unsafe { memkind_check_available(self.kind) };
+//        if res != 0 {
+//            panic!("memkeind check failed");
+//        }
+//    }
+//
+//    pub fn is_pmem(ptr: *mut u8, size: usize) -> bool {
+//        let res = unsafe { pmem_is_pmem(ptr as *const c_void, size) };
+//        println!("result {}", res);
+//        if res == 1 {
+//            true
+//        } else {
+//            false
+//        }
+//    }
+//}
 
 #[derive(Debug)]
 pub struct PLog {
@@ -413,6 +447,53 @@ pub struct PLog {
     path: String,
 }
 
+pub struct DLogger {
+    fd : c_int,
+    path: String,
+}
+
+
+//TODO:
+impl DLogger {
+    fn new(path: String)  -> DLogger {
+        //Open a disk file 
+        let mut path_cpy = String::clone(&path);
+        path_cpy.push_str(
+            thread::current()
+            .name()
+            .expect("thrad local needs to have named threads"),
+            );
+        let path_cstr = CString::new(path_cpy).unwrap();
+        let pathp = path_cstr.as_ptr();
+
+        let mut mode = String::from("a+");
+        let mode_cstr = CString::new(mode).unwrap(); 
+        let modep = mode_cstr.as_ptr();
+
+        let file = unsafe { fopen(pathp,  modep)};
+        let fd = unsafe {fileno(file)};
+
+        DLogger {
+            fd: fd,
+            path: path,
+        }
+    }
+
+    fn append_many(&self, iovecs: &Vec<iovec>, size: c_int) {
+        warn!("writev : {} items", size);
+        unsafe { writev(self.fd, iovecs.as_ptr() as *const iovec, size)};
+    }
+
+}
+
+impl Drop for DLogger {
+    fn drop(&mut self)  {
+        unsafe { close(self.fd)};  
+    }
+
+}
+
+
 impl PLog {
     fn new(path: String, size: usize, thread_local: bool) -> PLog {
         trace!("{:}Plog::new(path: {:}, size:{:})", LPREFIX, path, size);
@@ -420,9 +501,9 @@ impl PLog {
         if thread_local {
             _path.push_str(
                 thread::current()
-                    .name()
-                    .expect("thrad local needs to have named threads"),
-            );
+                .name()
+                .expect("thrad local needs to have named threads"),
+                );
         }
         let path = CString::new(String::clone(&_path)).unwrap();
         let pathp = path.as_ptr();
@@ -459,7 +540,7 @@ impl PLog {
         &self,
         chunk_size: usize,
         callback: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
-    ) {
+        ) {
         unsafe {
             let arg = &1 as *const _ as *mut c_void;
             pmemlog_walk(self.plp, chunk_size, callback, arg)
@@ -479,175 +560,177 @@ impl Drop for PLog {
     }
 }
 
-impl fmt::Debug for MemKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        //  write!(f, "heyehe")
-        write!(
-            f,
-            "MemKind {{
-           ops_ptr : {:p}
-           partitions : {:?}
-           name : {:?}
-           init_once : {:?}
-           arena_map_len : {:?}
-           arena_map : {:p}
-           arena_key: {:?}
-           _priv: {:p}
-           arena_map_mask : {:}
-           arena_zero: {:?}
-       }}",
-            self.ops_ptr,
-            self.partitions,
-            unsafe { str::from_utf8_unchecked(&(self.name)) },
-            self.init_once,
-            self.arena_map_len,
-            self.arena_map,
-            self.arena_key,
-            self._priv,
-            self.arena_map_mask,
-            self.arena_zero
-        )
-    }
-}
+//impl fmt::Debug for MemKind {
+//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//        //  write!(f, "heyehe")
+//        write!(
+//            f,
+//            "MemKind {{
+//           ops_ptr : {:p}
+//           partitions : {:?}
+//           name : {:?}
+//           init_once : {:?}
+//           arena_map_len : {:?}
+//           arena_map : {:p}
+//           arena_key: {:?}
+//           _priv: {:p}
+//           arena_map_mask : {:}
+//           arena_zero: {:?}
+//       }}",
+//            self.ops_ptr,
+//            self.partitions,
+//            unsafe { str::from_utf8_unchecked(&(self.name)) },
+//            self.init_once,
+//            self.arena_map_len,
+//            self.arena_map,
+//            self.arena_key,
+//            self._priv,
+//            self.arena_map_mask,
+//            self.arena_zero
+//        )
+//    }
+//}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     extern crate env_logger;
+    extern crate rand;
 
     const PMEM_TEST_PATH_ABS: &str = "/home/v-xuc/ParNVM/data";
-    // const PMEM_TEST_PATH_WRONG : &str = "/home/v-xuc";
 
+#[derive(Clone)]
+    pub struct Customer {
+        pub c_id: i32,
+        pub c_d_id: i32,
+        pub c_w_id: i32,
+        pub c_first: [u8; 16],
+        pub c_middle: [u8; 2],
+        pub c_last: [u8; 16],
+        pub c_street_1: [u8; 20],
+        pub c_street_2: [u8; 20],
+        pub c_city: [u8; 20],
+        pub c_state: [u8; 2],
+        pub c_zip: [u8; 9],
+        pub c_phone: [u8; 16],
+        pub c_since: i32, // Timestamp
+        pub c_credit: [u8; 2],
+        pub c_credit_lim: i32,   // i32(12,2)
+        pub c_discount: i32,     // i32(4, 4)
+        pub c_balance: i32,      // i32(12,2)
+        pub c_ytd_payment: i32,  // i32(12,2)
+        pub c_payment_cnt: i32,  // i32(4,0)
+        pub c_delivery_cnt: i32, // i32(4,0)
+        pub c_data: [u8; 500],
+    }
+    
+    impl Customer {
+        pub fn new( )-> Self {
+                let  c_first : [u8;16] = Default::default();
+                let  c_middle :[u8;2] = Default::default();
+                let  c_last : [u8;16] = Default::default();
+                let  c_street_1 : [u8;20] = Default::default();
+                let  c_street_2 : [u8;20] = Default::default();
+                let  c_city : [u8;20] = Default::default();
+                let  c_state : [u8;2] = Default::default();
+                let  c_zip : [u8;9] = Default::default();
+                let  c_phone : [u8;16] = Default::default();
+                let  c_credit : [u8;2] = Default::default();
+                let  c_data : [u8;500] = [1 ; 500]; 
+
+                let c_id = 0;
+                let c_d_id =  1;
+                let c_w_id = 1;
+                let c_since = 1;
+                let c_credit_lim = 1;
+                let c_discount = 1;
+                let c_balance = 1;
+                let c_ytd_payment = 1;
+                let c_payment_cnt = 1;
+                let c_delivery_cnt = 1;
+
+
+                Customer {
+                    c_id,
+                    c_d_id,
+                    c_w_id,
+                    c_first,
+                    c_middle,
+                    c_last,
+                    c_street_1,
+                    c_street_2,
+                    c_city,
+                    c_state,
+                    c_zip,
+                    c_phone,
+                    c_since, // Timestamp
+                    c_credit,
+                    c_credit_lim,   // i32(12,2)
+                    c_discount,     // i32(4, 4)
+                    c_balance,      // i32(12,2)
+                    c_ytd_payment,  // i32(12,2)
+                    c_payment_cnt,  // i32(4,0)
+                    c_delivery_cnt, // i32(4,0)
+                    c_data,
+                }
+            }
+
+    }
+    
+    use std::time::{Duration, Instant};
+    use std::mem;
     #[test]
-    fn test_create_ok() {
-        //absolute path
-        let _ = env_logger::init();
-        let pmem = PMem::new(String::from(PMEM_TEST_PATH_ABS), 16 * super::PMEM_MIN_SIZE);
-        assert_eq!(pmem.is_some(), true);
-        pmem.unwrap().check();
-        //relative path
-        //let pmem = PMem::new(String::from("../data"), 16*super::PMEM_MIN_SIZE);
-        //assert_eq!(pmem.is_some(), true);
-        //assert_eq!(pmem.unwrap().check(), true);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_create_non_exist() {
-        let _ = env_logger::init();
-        let pmem = PMem::new(String::from("../../data"), 16 * super::PMEM_MIN_SIZE);
-        assert_eq!(pmem.is_some(), false);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_size_too_small() {
-        let _ = env_logger::init();
-        let pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE / 2);
-        assert_eq!(pmem.is_some(), false);
-    }
-
-    #[test]
-    fn test_malloc_ok() {
-        let _ = env_logger::init();
-        let mut pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-        //FIXME: This assert is never true due to pmem_is_pmem(3) caveats
-        //More details at: http://pmem.io/pmdk/manpages/linux/v1.4/libpmem/pmem_is_pmem.3
-        //assert_eq!(PMem::is_pmem(res.unwrap(), size_of::<u32>()), true);
-    }
-
-    //#[test]
-    fn test_non_pem_check() {
-        let _ = env_logger::init();
-
-        let mut pmem = PMem::new(String::from("../dat"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-        //assert_eq!(PMem::is_pmem(res.unwrap(), size_of::<u32>()), false);
-    }
-
-    #[test]
-    fn test_malloc_fail() {
-        let _ = env_logger::init();
-        let mut pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::from_size_align(PMEM_MIN_SIZE * 5, 4).unwrap());
-        assert_eq!(res.is_err(), true);
-    }
-
-    //FIXME: this one creating invalid references
-    //#[test]
-    fn test_dealloc_ok() {
-        let mut pmem = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE * 4).unwrap();
-        let res = pmem.alloc(Layout::new::<u32>());
-        pmem.dealloc(res.unwrap(), Layout::new::<u32>());
-    }
-
-    #[test]
-    fn test_alloc_ok() {
-        let _ = env_logger::init();
-        let res = super::alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-    }
-
-    #[test]
-    fn test_free_thread_ok() {
-        let _ = env_logger::init();
-        let res = super::alloc(Layout::new::<u32>());
-        assert_eq!(res.is_ok(), true);
-        super::dealloc(res.unwrap(), Layout::new::<u32>());
-    }
-
-    #[test]
-    fn test_flush_ok() {
-        let _ = env_logger::init();
-        let res = super::alloc(Layout::new::<u32>());
-        let value = res.unwrap();
-        unsafe { *value = 10 };
-        trace!("here");
-        super::flush(value, Layout::new::<u32>());
-    }
-
-    // #[test]
-    // fn test_append_log_ok() {
-    //     let _ = env_logger::init();
-    //     let mut plog = PLog::new(String::from(PLOG_FILE_PATH), PLOG_DEFAULT_SIZE, false);
-    //     let offset_before = plog.tell();
-    //     trace!("offset_before : {}", offset_before);
-    //     let tid = 999;
-    //     plog.append(tid);
-    //     let offset_after = plog.tell();
-    //     trace!("offset_after : {}", offset_after);
-    //     assert_eq!(offset_before + size_of::<u32>() as i64, offset_after);
-    // }
-    use std::sync::{Arc, Mutex};
-    #[test]
-    fn test_multiple_create() {
-        //let mut pmems = vec![];
-        let mut handles = vec![];
-        //let mtx = Arc::new(Mutex::new(0));
-        for i in 1..80 {
-            //let mtx = mtx.clone();
-            let handle = thread::spawn(move || {
-                //let g = mtx.lock().unwrap();
-                let pmem1 = PMem::new(String::from("../data"), super::PMEM_MIN_SIZE).unwrap();
-            });
-
-            handles.push(handle);
+    fn single_write_dram() {
+        let mut counter = 0;
+        let size =  1 << 30;
+        let pmem = mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
+        let dram_data = Box::into_raw(Box::new(Customer::new()));
+        let offset_max =  size/ mem::size_of::<Customer>();
+        let start = Instant::now();
+        let duration = Duration::new(10, 0); //10 seconds 
+        let cus_size = mem::size_of::<Customer>();
+        //let offset = rand::random::<usize>() % offset_max; 
+        let  mut prev = 0;
+        unsafe{
+            while start.elapsed() < duration {
+                let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
+                prev = (prev+100) % offset_max;
+                memcpy_persist(paddr, 
+                               dram_data as *mut u8, 
+                               cus_size);
+                counter += 1;
+            }
         }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
+        println!("write:counter : {}, time: {:?}",  counter, duration);
     }
+
 
     #[test]
-    fn test_multiple_create_single_thread() {
-        for i in 1..80 {
-            std::fs::create_dir_all(format!("../data/{}", i)).unwrap();
-            let mut pmem = PMem::new(format!("../data/{}", i), super::PMEM_MIN_SIZE).unwrap();
+    fn single_write_drain() {
+        let mut counter = 0;
+        let size =  1 << 30;
+        let pmem = mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
+        let dram_data = Box::into_raw(Box::new(Customer::new()));
+        let offset_max =  size/ mem::size_of::<Customer>();
+        let start = Instant::now();
+        let duration = Duration::new(10, 0); //10 seconds 
+        let cus_size = mem::size_of::<Customer>();
+        //let offset = rand::random::<usize>() % offset_max; 
+        let  mut prev = 0;
+        unsafe{
+            while start.elapsed() < duration {
+                let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
+                prev = (prev+100) % offset_max;
+                memcpy_persist(paddr, 
+                               dram_data as *mut u8, 
+                               cus_size);
+                pmem_drain();
+                counter += 1;
+            }
         }
+        println!("drain(): counter : {}, time: {:?}",  counter, duration);
+
     }
+
 }

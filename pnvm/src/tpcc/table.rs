@@ -13,7 +13,7 @@
 
 use alloc::alloc::Layout;
 
-#[cfg(feature="pmem")]
+#[cfg(any(feature ="pmem", feature="disk"))]
 use pnvm_sys;
 
 use std::{
@@ -47,7 +47,8 @@ use super::entry::*;
 use super::workload_occ::*;
 use super::tpcc_tables::*;
 
-const PMEM_DIR_ROOT : &str = "/home/v-xuc/ParNVM/data/";
+#[cfg(any(feature = "pmem", feature = "disk"))]
+const PMEM_DIR_ROOT : Option<&str> = option_env!("PMEM_FILE_DIR");
 
 
 pub struct SecIndex<K, V>
@@ -395,7 +396,7 @@ where Entry: 'static + Key<Index> + Clone +Debug,
 //}
 //
 
-const PMEM_PAGE_ENTRY_NUM: usize = 1 << 10;
+//const PMEM_PAGE_ENTRY_NUM: usize = 1 << 10;
 
 /* FIXME: can we avoid the copy */
 pub struct Bucket<Entry, Index> 
@@ -406,7 +407,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
     vers_ : TVersion,
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature ="pmem", feature="disk"))]
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
     pmem_cap_ : AtomicUsize,
     pmem_per_size_ : usize,
@@ -437,16 +438,16 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             id_ : OidFac::get_obj_next(),
             vers_ : TVersion::default(),
 
-            #[cfg(feature="pmem")]
+            #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_root_: RefCell::new(Vec::new()),
             pmem_cap_: AtomicUsize::new(cap),
             pmem_per_size_ : cap,
         };
 
         /* Get the persistent memory */
-        #[cfg(feature = "pmem")]
+        #[cfg(any(feature ="pmem", feature="disk"))]
         {
-            let path = String::from(PMEM_DIR_ROOT);
+            let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
             let size =  cap *  mem::size_of::<Entry>();
             //path.push_str(name);
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
@@ -474,7 +475,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             let idx_map = self.index.get().as_mut().unwrap();
             idx_map.insert(idx_elem, self.len() -1);
 
-            #[cfg(feature = "pmem")]
+            #[cfg(any(feature ="pmem", feature="disk"))]
             row_arc.set_pmem_addr(self.get_pmem_addr(self.len() -1));
         }
     }
@@ -499,16 +500,16 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             let arc = Arc::new(Row::new(entry));
             rows.push(arc.clone());
             idx_map.insert(idx_elem, self.len()-1);
-            #[cfg(feature="pmem")]
+            #[cfg(any(feature ="pmem", feature="disk"))]
             arc.set_pmem_addr(self.get_pmem_addr(self.len()-1));
         }
     }
 
-    #[cfg(feature ="pmem")]
+    #[cfg(any(feature ="pmem", feature="disk"))]
     fn get_pmem_addr(&self, idx : usize) -> *mut Entry {
         if idx >= self.pmem_cap_.load(Ordering::SeqCst) {
             //TODO: resize 
-            let path = String::from(PMEM_DIR_ROOT);
+            let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
             let size = self.pmem_per_size_ * mem::size_of::<Entry>();
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 
@@ -610,12 +611,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         Layout::new::<Bucket<Entry, Index>>()
     }
 
-    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.vers_.get_writer_info()
+    pub fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_access_info()
     }
 
-    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
-        self.vers_.set_writer_info(info)
+    pub fn set_access_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_access_info(info)
     }
 
 
@@ -656,7 +657,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     id_ : ObjectId,
     index_ : Index,
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature ="pmem", feature="disk"))]
     pmem_addr_ : AtomicPtr<Entry>,
 }
 
@@ -727,7 +728,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             id_ : OidFac::get_obj_next(),
             index_ : key, 
             
-            #[cfg(feature= "pmem")]
+            #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_addr_: AtomicPtr::default(),
         }
     }
@@ -741,19 +742,19 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             id_ : OidFac::get_obj_next(),
             index_ : key,
 
-            #[cfg(feature= "pmem")]
+            #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_addr_: AtomicPtr::default(),
         }
     }
 
 
-    #[cfg(feature="pmem")]
+    #[cfg(any(feature ="pmem", feature="disk"))]
     pub fn set_pmem_addr(&self, addr : *mut Entry) {
         self.pmem_addr_.store(addr, Ordering::SeqCst);        
     }
     
 
-    #[cfg(feature="pmem")]
+    #[cfg(any(feature ="pmem", feature="disk"))]
     pub fn get_pmem_addr(&self) -> *mut Entry {
         self.pmem_addr_.load(Ordering::SeqCst)
     }
@@ -820,12 +821,12 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         Layout::new::<Entry>()
     }
 
-    pub fn get_writer_info(&self) -> Arc<TxnInfo> {
-        self.vers_.get_writer_info()
+    pub fn get_access_info(&self) -> Arc<TxnInfo> {
+        self.vers_.get_access_info()
     }
 
-    pub fn set_writer_info(&self, info : Arc<TxnInfo>) {
-        self.vers_.set_writer_info(info)
+    pub fn set_access_info(&self, info : Arc<TxnInfo>) {
+        self.vers_.set_access_info(info)
     }
 }
 

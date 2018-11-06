@@ -8,7 +8,7 @@
 
 extern crate pnvm_lib;
 
-#[cfg(feature = "pmem")]
+#[cfg(any(feature = "pmem", feature ="disk"))]
 extern crate pnvm_sys;
 
 #[cfg(feature = "profile")]

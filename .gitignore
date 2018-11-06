@@ -14,9 +14,11 @@ benchmark/
 */profile/
 
 perf.*
+*.perf.*
 
 
 # pmem dir
 /data
+/v-data
 
 pnvm/Settings.toml

@@ -75,7 +75,7 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     let total_wd : usize = (num_wh * num_dis) as usize;
 
     let mut tables = Tables {
-        warehouse: Table::new_with_buckets(num_wh as usize, conf.wh_num as usize, "warehouse"),
+        warehouse: Table::new_with_buckets(total_wd as usize, conf.wh_num as usize, "warehouse"),
         district: Table::new_with_buckets(total_wd, num_dis as usize, "district"),
         customer: CustomerTable::new_with_buckets(total_wd, 1024, "customer"),
         neworder: NewOrderTable::new_with_buckets(total_wd, 4096, "neworder"),
@@ -367,7 +367,7 @@ fn new_order(tx: &mut TransactionOCC,
 
 {
     let tid = tx.id();
-    let wh_num = num_warehouse_get();
+    let dis_num = num_district_get();
     let warehouse_ref = tables.warehouse.retrieve(&w_id, w_id as usize).unwrap().into_table_ref(None, None);
     //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
     let w_tax = tx.read::<Warehouse>(warehouse_ref).w_tax;
@@ -376,7 +376,7 @@ fn new_order(tx: &mut TransactionOCC,
     let c_discount = tx.read::<Customer>(customer_ref).c_discount;
      info!("[{:?}][TXN-NEWORDER] Read Customer {:?}", tid, c_id);
 
-    let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
+    let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize).unwrap().into_table_ref(None, None);
     //println!("READ : DISTRICT : {:?}", district_ref.get_id());
     let mut district = tx.read::<District>(district_ref.box_clone()).clone();
 
@@ -389,6 +389,9 @@ fn new_order(tx: &mut TransactionOCC,
      for i in 0..ol_cnt as usize {
          if w_id != src_whs[i] {
              all_local = 0;
+
+             #[cfg(feature = "noconflict")]
+             panic!("no_conflict!");
          }
      }
       
@@ -477,14 +480,21 @@ pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : 
     let mut qty = [0 as i32;15];
 
     for i in 0..ol_cnt as usize {
-        //supware[i] = if urand(1, 100, rng) > 1 {
-        supware[i] = if true {
+        //supware[i] = if true {
+        supware[i] = if urand(1, 100, rng) > 1 {
             w_id
         } else {
             urandexcept(1, num_wh, w_id, rng)
         };
+
+
         itemid[i] = nurand(8191, 1, 100000, rng);
         qty[i] = urand(1, 10, rng);
+       
+        #[cfg(feature = "noconflict")]
+        {
+            supware[i] = w_id;
+        }
     }
 
     new_order(tx, tables, w_id, d_id, c_id, ol_cnt, &supware, &itemid, &qty, now)
@@ -508,9 +518,9 @@ pub fn payment_random(tx: &mut TransactionOCC,
     let x = urand(1, 100, rng);
     let y = urand(1, 100, rng);
 
-    let c_w_id : i32;
-    let c_d_id : i32;
-    
+    let mut c_w_id : i32;
+    let mut c_d_id : i32;
+     
     if num_wh == 1 || x <= 85 {
         //85% paying throuhg won house
         c_w_id = w_id;
@@ -520,6 +530,12 @@ pub fn payment_random(tx: &mut TransactionOCC,
         c_w_id =  urandexcept(1, num_wh, w_id, rng);
         assert!(c_w_id != w_id);
         c_d_id = urand(1, 10, rng);
+    }
+
+    #[cfg(feature = "noconflict")]
+    {
+        c_w_id = w_id;
+        c_d_id = d_id;
     }
 
     let h_amount = rand_numeric(1.00, 5000.00, 10, 2, rng);
@@ -547,7 +563,8 @@ fn payment(tx: &mut TransactionOCC,
            h_date : i32,
            rng : &mut SmallRng)
 {
-    let wh_num = num_warehouse_get();
+    //let wh_num = num_warehouse_get();
+    let dis_num = num_district_get();
     let tid = tx.id();
     /* RW Warehouse */
     let warehouse_row = tables.warehouse.retrieve(&w_id, w_id as usize).expect("warehouse empty").into_table_ref(None, None);
@@ -563,7 +580,7 @@ fn payment(tx: &mut TransactionOCC,
     tx.write(warehouse_row, warehouse);
 
     /* RW District */
-    let district_row = tables.district.retrieve(&(w_id, d_id),(w_id * wh_num + d_id) as usize ).expect("district empty").into_table_ref(None, None);
+    let district_row = tables.district.retrieve(&(w_id, d_id),(w_id * dis_num + d_id) as usize ).expect("district empty").into_table_ref(None, None);
     let mut district = tx.read::<District>(district_row.box_clone()).clone();
     let d_name = district.d_name.clone();
    // let _d_street_1 = district.d_street_1;
@@ -730,7 +747,6 @@ pub fn delivery(tx: &mut TransactionOCC,
     let tid = tx.id();    
     info!("[{:?}][DELIVERY STARTs]", tid);
     let num_dis = num_district_get();
-    let wh_num = num_warehouse_get();
 
     for d_id in 1..=num_dis {
         //TODO:
@@ -788,8 +804,9 @@ pub fn stocklevel(tx: &mut TransactionOCC,
               )
 {
     let tid = tx.id();
-    let wh_num = num_warehouse_get();
-    let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * wh_num + d_id) as usize).unwrap().into_table_ref(None, None);
+    //let wh_num = num_warehouse_get();
+    let dis_num = num_district_get();
+    let d_row = tables.district.retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize).unwrap().into_table_ref(None, None);
     let d = tx.read::<District>(d_row).clone();
     let d_next_o_id = d.d_next_o_id;
     info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);

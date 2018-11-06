@@ -20,3 +20,8 @@ parking_lot = {version = "0.6", features = ["nightly"]}
 profile = ["pnvm_lib/profile", "flame"]
 unstable = ["pnvm_lib/unstable"]
 pmem = ["pnvm_lib/pmem", "pnvm_sys"]
+disk = ["pnvm_lib/disk", "pnvm_sys"]
+noconflict = []
+
+[profile.release]
+debug = true

@@ -132,6 +132,7 @@ impl Default for TxState {
     }
 }
 
+#[derive(AsRefStr)]
 pub enum AbortReason {
     Error,
     User,
@@ -145,7 +146,7 @@ pub struct TxnInfo {
     locked_ : AtomicBool,
     committed_ : AtomicBool,
     rank_ : AtomicUsize,
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     persist_: AtomicBool,
 }
 
@@ -155,28 +156,36 @@ impl Default for TxnInfo {
             tid_ : Tid::default(),
             locked_ : AtomicBool::new(false),
             committed_: AtomicBool::new(true),
+            status_ : AtomicUsize::new(TxnStatus::Active as usize),
             rank_ : AtomicUsize::default(),
-            #[cfg(feature = "pmem")]
+            #[cfg(any(feature = "pmem", feature = "disk"))]
             persist_: AtomicBool::new(true), 
         }
     }
 }
 
 
+pub enum TxnStatus {
+    Active = 0,
+    Committed, //1 
+    Aborted = 2,
+}
+
 impl TxnInfo {
     pub fn new(tid: Tid) -> TxnInfo {
         TxnInfo {
             tid_ : tid,
             committed_: AtomicBool::new(false),
+            status_ : AtomicUsize::new(TxnStatus::Active as usize),
             rank_ : AtomicUsize::new(0),
             locked_ : AtomicBool::new(false),
 
-            #[cfg(feature = "pmem")]
+            #[cfg(any(feature = "pmem", feature = "disk"))]
             persist_ : AtomicBool::new(false),
         }
     }
 
-    #[cfg(feature = "pmem")] 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn has_persist(&self) -> bool {
         self.persist_.load(Ordering::SeqCst)
     }
@@ -184,9 +193,13 @@ impl TxnInfo {
     pub fn has_commit(&self) -> bool {
         self.committed_.load(Ordering::SeqCst)
     }
-
-    pub fn has_done(&self, rank: usize) -> bool {
-        self.rank_.load(Ordering::SeqCst) >= rank
+    
+    //if deps just started rank 3
+    //  txn ready to start rank 3 must wait for it to complete
+    //  txn ready to start rank 2 can safely go
+    //  dep.cur_rank  > txn.rank_to_run
+    pub fn has_started(&self, rank: usize) -> bool {
+        self.rank_.load(Ordering::SeqCst) > rank
     }
 
     pub fn has_lock(&self) -> bool {
@@ -205,12 +218,12 @@ impl TxnInfo {
         self.committed_.store(true, Ordering::SeqCst);
     }
 
-    #[cfg(feature = "pmem")]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn persist(&self) {
         self.persist_.store(true, Ordering::SeqCst);
     }
 
-    pub fn done(&self, rank: usize) {
+    pub fn start(&self, rank: usize) {
         self.rank_.store(rank, Ordering::SeqCst);
     }
 

@@ -136,7 +136,7 @@ impl TransactionPar
         let cur_rank = self.cur_rank();
         for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
-                if !dep.has_commit() && !dep.has_done(cur_rank) {
+                if !dep.has_commit() && !dep.has_started(cur_rank) {
                     warn!("waiting for {:?} start", dep.id());
                 } else {
                     break;
@@ -208,7 +208,7 @@ impl TransactionPar
     }
 
     pub fn update_rank(&self, rank: usize) {
-        self.txn_info_.done(rank);
+        self.txn_info_.start(rank);
     }
 
     pub fn id(&self) -> &Tid {

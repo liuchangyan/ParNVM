@@ -58,7 +58,7 @@ impl CustomerTable {
             table_ : Table::new_with_buckets(num, bkt_size, name),
             name_index_ : SecIndex::new_with_buckets(total_wd as usize, Box::new(move |key| {
                 let (_ , w_id, d_id) = key;          
-                ((w_id * num_whs + d_id)% total_wd) as usize
+                ((w_id * num_dis + d_id)% total_wd) as usize
             })),
         }
     }
@@ -101,8 +101,8 @@ impl CustomerTable {
 
     pub fn retrieve(&self, index :&(i32, i32, i32)) -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
     {
-        let wh_num = num_warehouse_get();
-        let bucket_idx = index.0 * wh_num + index.1;
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num + index.1;
         self.table_.retrieve(index, bucket_idx as usize)
     }
 
@@ -114,7 +114,7 @@ impl CustomerTable {
     pub fn find_by_name_id(&self, index : &(String, i32, i32))
         -> Option<Arc<Row<Customer, (i32, i32, i32)>>>
         {
-            let wh_num = num_warehouse_get();
+            let dis_num = num_district_get();
             match self.name_index_.find_one_bucket_mut(index) {
                 None => {
                     self.name_index_.unlock_bucket(index);
@@ -128,7 +128,7 @@ impl CustomerTable {
                     
                     let i = tuples.len()/2;
                     let (w_id, d_id, c_id, _) = tuples[i];
-                    let ret = self.table_.retrieve(&(w_id, d_id, c_id), (wh_num * w_id + d_id) as usize);
+                    let ret = self.table_.retrieve(&(w_id, d_id, c_id), (dis_num * w_id + d_id) as usize);
                     self.name_index_.unlock_bucket(index);
                     ret
                 }
@@ -161,7 +161,7 @@ impl NewOrderTable {
             wd_index_ : SecIndex::new_with_buckets(
                 total_wd as usize, 
                 Box::new(move |key| { 
-                   ((key.0 * num_whs + key.1) % total_wd) as usize
+                   ((key.0 * num_dis + key.1) % total_wd) as usize
                 }))
         }
      }
@@ -204,8 +204,8 @@ impl NewOrderTable {
     pub fn retrieve(&self, index: &(i32, i32, i32)) 
         -> Option<Arc<Row<NewOrder, (i32, i32,i32)>>>
         {
-            let wh_num = num_warehouse_get();
-            let bucket_idx = index.0 * wh_num + index.1;
+            let dis_num = num_district_get();
+            let bucket_idx = index.0 * dis_num + index.1;
             self.table_.retrieve(index, bucket_idx as usize)
         }
 
@@ -219,7 +219,7 @@ impl NewOrderTable {
     pub fn retrieve_min_oid(&self, index: &(i32, i32)) 
         -> Option<Arc<Row<NewOrder, (i32,i32,i32)>>>
         {
-            let wh_num = num_warehouse_get();
+            let dis_num = num_district_get();
             match self.wd_index_.find_one_bucket(index) {
                 None => {
                     self.wd_index_.unlock_bucket(index);
@@ -229,7 +229,7 @@ impl NewOrderTable {
                 Some(vecs) => {
                     assert_eq!(vecs.len()> 0, true);
                     let min_no = vecs[0];    
-                    let ret =self.table_.retrieve(&min_no, (min_no.0 * wh_num + min_no.1) as usize);
+                    let ret =self.table_.retrieve(&min_no, (min_no.0 * dis_num + min_no.1) as usize);
                     self.wd_index_.unlock_bucket(index);
                     ret
                 }
@@ -238,15 +238,15 @@ impl NewOrderTable {
     
     pub fn delete(&self, tx: &mut TransactionOCC, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
     {
-        let wh_num = num_warehouse_get();
-        let bucket_idx = index.0 * wh_num + index.1;
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num  + index.1;
         self.table_.delete(tx, index, tables, bucket_idx as usize)
     }
 
     pub fn delete_pc(&self, tx: &mut TransactionParOCC, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
     {
-        let wh_num = num_warehouse_get();
-        let bucket_idx = index.0 * wh_num + index.1;
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num  + index.1;
         self.table_.delete_pc(tx, index, tables, bucket_idx as usize)
     }
 
@@ -310,7 +310,7 @@ impl OrderLineTable {
                 total_wd as usize,
                 Box::new(move |key| {
                     let (w_id, d_id, _o_id) = key;
-                    ((w_id * num_whs + d_id) % total_wd) as usize
+                    ((w_id * num_dis + d_id) % total_wd) as usize
                 })),
         }
     }
@@ -352,8 +352,8 @@ impl OrderLineTable {
 
     pub fn retrieve(&self, index: &(i32, i32, i32, i32)) -> Option<Arc<Row<OrderLine, (i32, i32, i32, i32)>>>
     {
-        let wh_num = num_warehouse_get();
-        let bucket_idx = index.0 * wh_num + index.1;
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num + index.1;
        self.table_.retrieve(index, bucket_idx as usize)
     }
 
@@ -385,7 +385,6 @@ impl OrderLineTable {
         -> Vec<Arc<Row<OrderLine, (i32, i32, i32, i32)>>>
         {
             let mut ids = Vec::new();
-            let wh_num = num_warehouse_get();
             for o_id in o_id_low..=o_id_high { 
                 let key = (w_id, d_id, o_id);
                 match self.order_index_.find_one_bucket(&key) {
@@ -446,7 +445,7 @@ impl OrderTable {
                 total_wd,
                 Box::new(move |key| {
                     let (w_id, d_id, _o_id) = key;
-                    (w_id * num_whs + d_id) as usize % total_wd
+                    (w_id * num_dis + d_id) as usize % total_wd
                 })),
         }
     }
@@ -465,8 +464,8 @@ impl OrderTable {
 
     pub fn retrieve(&self, index: &(i32, i32, i32)) -> Option<Arc<Row<Order, (i32, i32, i32)>>>
     {
-        let wh_num = num_warehouse_get();
-        let bucket_idx = index.0 * wh_num + index.1;
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num + index.1;
         self.table_.retrieve(index, bucket_idx as usize)
     }
 
@@ -500,7 +499,7 @@ impl OrderTable {
     pub fn retrieve_by_cid(&self, key: &(i32, i32, i32))
         -> Option<Arc<Row<Order, (i32, i32, i32)>>> 
         {
-            let wh_num = num_warehouse_get();
+            //let wh_num = num_warehouse_get();
             match self.cus_index_.find_one_bucket(key) {
                 None => {
                     self.cus_index_.unlock_bucket(key);
