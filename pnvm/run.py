@@ -7,18 +7,6 @@ import numpy as np
 
 
 
-micro_bench_config = {
-        "thread_num" :[1, 4, 8,16, 1, 4, 8, 16],
-        "pc_num": [3],
-        "obj_num" : 50000,
-        "set_size" : [5],
-        #"zipf": np.linspace(0.000001, 1.0, num=10),
-        "zipf" : [0.9],
-        "name": 'TPCC_OCC',
-        "wh_num" : [1, 2, 4, 8, 1, 4, 8, 16],
-        "round_num": 100000,
-}
-out_fd = open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/disk-occ-output.csv"), "w+")
 
 def print_header(out_fd):
     # out_fd.write("thread_num,obj_num,set_size,zipf,pc_num,success,abort,total_time,new_order\n")
@@ -72,14 +60,14 @@ def run_exp(env, command, out_fd):
 if __name__ == '__main__':
     # Run OCC-PMEM
     micro_bench_config = {
-            "thread_num" :[1, 4, 8,16, 1, 4, 8, 16],
+            "thread_num" :[1, 4, 8,16, 32, 64, 1, 4, 8, 16, 32, 64],
             "pc_num": [3],
             "obj_num" : 50000,
             "set_size" : [5],
             #"zipf": np.linspace(0.000001, 1.0, num=10),
             "zipf" : [0.9],
             "name": 'TPCC_OCC',
-            "wh_num" : [1, 2, 4, 8, 1, 4, 8, 16],
+            "wh_num" : [1, 1, 2, 4,8, 16, 1, 4, 8, 16, 32, 64],
             "round_num": 100000,
     }
     compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem"'
