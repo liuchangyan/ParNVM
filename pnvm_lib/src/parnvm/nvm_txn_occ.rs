@@ -32,7 +32,6 @@ use log;
 use flame;
 
 
-const OPERATION_CODE_RW :i8 = 2;
 const DEP_DEFAULT_SIZE : usize = 128;
 
 #[derive(Clone, Debug)]
@@ -67,7 +66,7 @@ pub struct TransactionParOCC
     #[cfg(any(feature= "pmem", feature = "disk"))]
     records_ :     Vec<Box<dyn TRef>>,
 
-    tags_ : HashMap<(ObjectId, i8), TTag>,
+    tags_ : HashMap<(ObjectId, Operation), TTag>,
     early_abort_ : bool,
 }
 
@@ -172,19 +171,19 @@ impl TransactionParOCC
 
     /* Implement OCC interface */
     pub fn read<'a, T:'static +Clone>(&'a mut self, tobj: Box<dyn TRef>) -> &'a T {
-        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), OPERATION_CODE_RW);
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), Operation::RWrite);
         tag.add_version(tobj.get_version());
         tag.get_data()
     }
 
     pub fn write<T: 'static + Clone>(&mut self, tobj: Box<dyn TRef>, val : T) {
-        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), OPERATION_CODE_RW);
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), Operation::RWrite);
         tag.write::<T>(val);
     }
 
     #[inline(always)]
-    pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, code: i8) -> &mut TTag {
-        self.tags_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
+    pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, op: Operation) -> &mut TTag {
+        self.tags_.entry((*id, op)).or_insert(TTag::new(*id, tobj_ref))
     }
 
     //FIXME: R->W dependency

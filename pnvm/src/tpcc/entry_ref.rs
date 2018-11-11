@@ -134,17 +134,29 @@ pub struct HistoryRef  {
 }
 
 impl  TRef for WarehouseRef {
+   // fn install(&self, id: Tid) {
+   //     match self.table_ref_ {
+   //         Some(ref table) => {
+   //         },
+   //         None => {
+   //         }
+   //     }
+   // }
+
+
     fn install(&self, id: Tid) {
-        match self.table_ref_ {
-            Some(ref table) => {
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().expect("Warehouse_ref: no table ref for push");
                 let row = self.inner_.clone();
                 let bucket_idx = self.bucket_idx_.unwrap();
                 table.warehouse.get_bucket(bucket_idx).set_version(row.get_version());
                 table.warehouse.get_bucket(bucket_idx).push(row);
             },
-            None => {
+            Operation::RWrite => {
                 self.inner_.install(self.data_.as_ref().unwrap(), id);
-            }
+            },
+            _ =>  panic!("Unknown Operations")
         }
     }
     
@@ -159,6 +171,21 @@ impl  TRef for WarehouseRef {
 
     fn get_layout(&self) -> Layout {
         self.inner_.get_layout()
+    }
+
+    //TODO:
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
     }
 
     fn box_clone(&self) -> Box<dyn TRef> {
@@ -183,6 +210,11 @@ impl  TRef for WarehouseRef {
             Err(_) => panic!("warehosuref::write value should be Box<Warehouse>")
         }
     }
+
+   // fn replace_filed(&mut self, vals: &[(usize, &Any)], val_cnt: usize) {
+   //     //TODO:
+   //     // 1. store the vals
+   // }
 
     fn lock(&self, tid: Tid) -> bool {
         match self.table_ref_ {
@@ -251,6 +283,19 @@ impl  TRef for DistrictRef  {
 
     fn get_layout(&self) -> Layout {
         self.inner_.get_layout()
+    }
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
     }
 
     fn box_clone(&self) -> Box<dyn TRef> {
@@ -345,6 +390,19 @@ impl  TRef for CustomerRef  {
         self.inner_.get_layout()
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
     fn box_clone(&self) -> Box<dyn TRef> {
         Box::new(self.clone())
     }
@@ -490,11 +548,27 @@ impl  TRef for NewOrderRef  {
     fn get_pmem_addr(&self) -> *mut u8 {
         self.inner_.get_pmem_addr() as *mut u8
     }
+    
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
+    
+
 
     fn get_ptr(&self) -> *mut u8 {
         self.inner_.get_ptr()
     }
-
+    
     fn get_layout(&self) -> Layout {
         self.inner_.get_layout()
     }
@@ -591,6 +665,19 @@ impl  TRef for OrderRef  {
         self.inner_.get_layout()
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
@@ -684,6 +771,19 @@ impl  TRef for OrderLineRef  {
     }
 
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
     }
@@ -772,6 +872,19 @@ impl  TRef for ItemRef  {
         self.inner_.get_layout()
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
@@ -858,6 +971,19 @@ impl  TRef for HistoryRef  {
         self.inner_.get_ptr()
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
     fn get_layout(&self) -> Layout {
         self.inner_.get_layout()
     }
@@ -949,6 +1075,19 @@ impl  TRef for StockRef  {
         self.inner_.get_layout()
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_pmem_field_addr(field_idx) as *mut u8
+    }
+
+    //TODO:
+    fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        self.inner_.get_field_ptr(field_idx)
+    }
+
+    fn get_field_size(&self, field_idx: usize) -> usize {
+        self.inner_.get_field_size(field_idx)
+    }
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()

@@ -2,6 +2,7 @@
 #![feature(alloc, raw_vec_internals)]
 #![feature(generic_associated_types)]
 #![feature(box_into_raw_non_null)]
+#![feature(ptr_wrapping_offset_from)]
 
 #![allow(dead_code, unused_imports, unused_variables)]
 

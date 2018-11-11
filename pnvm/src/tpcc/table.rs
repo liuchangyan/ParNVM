@@ -37,7 +37,7 @@ use std::{
 
 use num::iter::Range;
 
-use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
+use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef, Operation};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
 use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
@@ -220,6 +220,8 @@ pub trait Key<T> {
     fn primary_key(&self) -> T;
 
     fn bucket_key(&self) -> usize;
+
+    fn field_offset(&self) -> [isize;32];
 }
 
 
@@ -272,7 +274,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.id().clone();
-        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Push);
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
@@ -287,7 +289,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.id().clone();
-        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_PUSH);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Push);
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
@@ -307,7 +309,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             bucket_idx,
             tables.clone(),
             );
-        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Delete);
         tag.set_write(); //FIXME: better way?
         true
     }
@@ -328,7 +330,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             bucket_idx,
             tables.clone(),
             );
-        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), OPERATION_CODE_DELETE);
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Delete);
         tag.set_write(); //FIXME: better way?
         true
     }
@@ -657,6 +659,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     id_ : ObjectId,
     index_ : Index,
 
+    fields_offset_ : [isize; 32],
+
     #[cfg(any(feature ="pmem", feature="disk"))]
     pmem_addr_ : AtomicPtr<Entry>,
 }
@@ -721,12 +725,15 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 {
     pub fn new(entry: Entry) -> Row<Entry, Index>{
         let key = entry.primary_key();
+        let offsets = entry.field_offset();
         Row{
             //data_: UnsafeCell::new(entry),
             data_ : Box::into_raw_non_null(Box::new(entry)),
             vers_: TVersion::default(), /* FIXME: this can carry txn info */
             id_ : OidFac::get_obj_next(),
             index_ : key, 
+
+            fields_offset_: offsets,
             
             #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_addr_: AtomicPtr::default(),
@@ -735,6 +742,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
     pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry, Index> {
         let key = entry.primary_key();
+        let offsets = entry.field_offset();
         Row {
             //data_ : UnsafeCell::new(entry),
             data_ : Box::into_raw_non_null(Box::new(entry)),
@@ -742,10 +750,13 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             id_ : OidFac::get_obj_next(),
             index_ : key,
 
+            fields_offset_: offsets,
+
             #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_addr_: AtomicPtr::default(),
         }
     }
+
 
 
     #[cfg(any(feature ="pmem", feature="disk"))]
@@ -771,6 +782,25 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         self.data_.as_ptr() as *mut u8
     }
 
+    pub fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
+        let offset = self.fields_offset_[field_idx];
+        assert_eq!(offset >= 0, true);
+        self.get_ptr().wrapping_add(offset as usize) as *mut u8
+    }
+
+    pub fn get_field_size(&self, field_idx: usize) -> usize {
+        let x = self.fields_offset_[field_idx as usize];
+        let y = self.fields_offset_[field_idx+1 as usize];
+        let diff = y-x;
+        assert_eq!(diff> 0, true);
+        diff as usize
+    }
+
+    pub fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
+        let offset = self.fields_offset_[field_idx as usize];
+        assert_eq!(offset >= 0, true);
+        self.get_pmem_addr().wrapping_add(offset as usize) as *mut u8
+    }
 
     #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool {
@@ -795,6 +825,14 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         }
         self.vers_.set_version(tid.into());
     }
+
+
+    //Install value to a specific field
+   // pub fn install_fields(&self, vals: &[(usize, Box<Any>)], val_cnt: usize) {
+   //    for idx in 0..val_cnt {
+
+   //    }
+   // }
 
     #[inline(always)]
     pub fn unlock(&self) {
@@ -832,12 +870,4 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
 
 
-#[derive(Clone, Debug)]
-pub enum Operation {
-    RWrite,
-    Delete,
-    Push,
-}
 
-const OPERATION_CODE_PUSH :i8 = 0;
-const OPERATION_CODE_DELETE : i8 = 1;
