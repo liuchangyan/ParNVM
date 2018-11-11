@@ -21,6 +21,10 @@ fn copy_from_string(dest : &mut [u8], src: String) {
     dest[..src.len()].copy_from_slice(src.as_bytes());
 }
 
+
+pub const W_YTD :usize = 8;
+
+//90 Bytes
 #[derive(Clone, Debug)]
 pub struct Warehouse {
     pub w_id: i32,
@@ -42,6 +46,15 @@ impl Key<i32> for Warehouse {
 
     fn bucket_key(&self) -> usize {
         self.w_id as usize
+    }
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[W_YTD] = (self.w_ytd as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
     }
 }
 
@@ -85,6 +98,10 @@ impl Warehouse {
     }
 }
 
+
+pub const D_YTD : usize = 9;
+pub const D_NEXT_O_ID : usize  = 10;
+
 #[derive(Clone, Debug)]
 pub struct District {
     pub d_id: i32,
@@ -93,8 +110,7 @@ pub struct District {
     pub d_street_1: [u8; 20],
     pub d_street_2: [u8; 20],
     pub d_city: [u8; 20],
-    pub d_state: [u8; 2],
-    pub d_zip: [u8; 9],
+    pub d_state: [u8; 2], pub d_zip: [u8; 9],
     pub d_tax: Numeric, // Numeric(4, 4)
     pub d_ytd: Numeric, // Numeric(12,2)
     pub d_next_o_id: i32,
@@ -110,6 +126,17 @@ impl Key<(i32, i32)> for District {
     fn bucket_key(&self) -> usize {
         let dis_num = num_district_get();
         (self.d_w_id * dis_num + self.d_id) as usize
+    }
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[D_YTD] = (self.d_ytd as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[D_NEXT_O_ID] = (self.d_next_o_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
     }
 }
 
@@ -159,6 +186,29 @@ impl District {
 
 }
 
+pub C_ID :usize = 0;
+pub C_D_ID :usize = 1;
+pub C_W_ID :usize = 2;
+pub C_FIRST :usize = 3;
+pub C_MIDDLE :usize = 4;
+pub C_LAST :usize = 5;
+pub C_STREET_1 :usize = 6;
+pub C_STREET_2 :usize = 7;
+pub C_CITY :usize = 8;
+pub C_STATE :usize = 9;
+pub C_ZIP :usize = 10;
+pub C_PHONE :usize = 11;
+pub C_SINCE :usize = 12;
+pub C_CREDIT :usize = 13;
+pub C_CREDIT_LIM :usize = 14;
+pub C_DISCOUNT :usize = 15;
+pub C_BALANCE :usize = 16;
+pub C_YTD_PAYMENT :usize = 17;
+pub C_PAYMENT_CNT :usize = 18;
+pub C_DELIVERY_CNT :usize = 19;
+pub C_DATA :usize = 20;
+
+//700Bytes
 #[derive(Clone)]
 pub struct Customer {
     pub c_id: i32,
@@ -194,6 +244,21 @@ impl Key<(i32, i32, i32)> for Customer {
     fn bucket_key(&self) -> usize {
         let dis_num = num_district_get();
         (self.c_w_id * dis_num + self.c_d_id) as usize
+    }
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[C_BALANCE] = (self.c_balance as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[C_YTD_PAYMENT] = (self.c_ytd_payment as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[C_PAYMENT_CNT] = (self.c_payment_cnt as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[C_DELIVERY_CNT] = (self.c_delivery_cnt as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
     }
 }
 
@@ -279,6 +344,10 @@ impl Customer {
 
 }
 
+pub NO_O_ID : usize = 0;
+pub NO_D_ID : usize = 1;
+pub NO_W_ID : usize = 2;
+
 #[derive(Clone, Debug)]
 pub struct NewOrder {
     pub no_o_id: i32,
@@ -298,6 +367,17 @@ impl Key<(i32, i32, i32)> for NewOrder {
         (self.no_w_id * dis_num + self.no_d_id) as usize
     }
 }
+
+
+pub O_ID :usize =  0;
+pub O_D_ID :usize =  1;
+pub O_W_ID :usize =  2;
+pub O_C_ID :usize =  3;
+pub O_ENTRY_ID :usize =  4;
+pub O_CARRIER_ID :usize =  5;
+pub O_OL_CNT :usize =  6;
+pub O_ALL_LOCAL :usize =  7;
+
 
 #[derive(Clone, Debug)]
 pub struct Order {
@@ -321,8 +401,18 @@ impl Key<(i32, i32, i32)> for Order {
         let dis_num = num_district_get();
         (self.o_w_id * dis_num + self.o_d_id) as usize
     }
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[O_CARRIER_ID] = (self.o_carrier_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
+    }
 }
 
+//40 Bytes
 impl Order {
     pub fn new(
         o_id: i32,
@@ -349,6 +439,9 @@ impl Order {
 
 }
 
+
+
+//70Bytes
 #[derive(Clone, Debug)]
 pub struct OrderLine {
     pub ol_o_id: i32,
@@ -374,7 +467,27 @@ impl Key<(i32, i32, i32, i32)> for OrderLine {
         let dis_num = num_district_get();
         (self.ol_w_id * dis_num + self.ol_d_id) as usize
     }
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[OL_DELIVERY_D] = (self.ol_delivery_d as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
+    }
 }
+
+pub const OL_O_ID: usize =           0;
+pub const OL_D_ID: usize =           1;
+pub const OL_W_ID: usize =           2;
+pub const OL_NUMBER: usize =          3;
+pub const OL_I_ID: usize =           4;
+pub const OL_SUPPLY_W_ID: usize =           5;
+pub const OL_DELIVERY_D: usize =           6;
+pub const OL_QUANTITY: usize =           7;
+pub const OL_AMOUNT: usize =           8;
+pub const OL_DIST_INFO: usize =           9;
 
 impl OrderLine {
     pub fn new(
@@ -408,6 +521,13 @@ impl OrderLine {
         }
     }
 }
+
+
+pub I_ID: usize =           0;
+pub I_IM_ID: usize =        1;
+pub I_NAME: usize =         2;
+pub I_PRICE: usize =        3;
+pub I_DATA: usize =         4;
 
 #[derive(Clone)]
 pub struct Item {
@@ -461,6 +581,25 @@ impl Key<i32> for Item {
     }
 }
 
+
+pub S_I_ID : usize = 0;
+pub S_W_ID : usize = 1;
+pub S_QUANTITY : usize = 2;
+pub S_DIST_01 : usize = 3;
+pub S_DIST_02 : usize = 4;
+pub S_DIST_03 : usize = 5;
+pub S_DIST_04 : usize = 6;
+pub S_DIST_05 : usize = 7;
+pub S_DIST_06 : usize = 8;
+pub S_DIST_07 : usize = 9;
+pub S_DIST_08 : usize = 10;
+pub S_DIST_09 : usize = 11;
+pub S_DIST_10 : usize = 12;
+pub S_YTD : usize = 13;
+pub S_ORDER_CNT : usize = 14;
+pub S_REMOTE_CNT : usize = 15;
+pub S_DATA : usize = 16;
+
 #[derive(Clone)]
 pub struct Stock {
     pub s_i_id: i32,
@@ -498,6 +637,23 @@ impl Key<(i32, i32)> for Stock {
     #[inline(always)]
     fn bucket_key(&self) -> usize {
         self.s_w_id as usize
+    }
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[S_I_ID] = (self.s_i_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[S_W_ID] = (self.s_w_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[S_QUANTITY] = (self.s_quantity as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[S_ORDER_CNT] = (self.s_order_cnt as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[S_REMOTE_CNT] = (self.s_remote_cnt as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
     }
 }
 
@@ -590,6 +746,30 @@ impl Key<(i32, i32)> for History {
     fn bucket_key(&self) -> usize {
         let dis_num = num_district_get();
         (self.h_w_id * dis_num + self.h_d_id) as usize
+    }
+
+
+    fn field_offset(&self) -> [i8;32] {
+        let mut fields : [i8;32] = [-1; 32];
+        let base : *const u8 = self as *const _ as *const u8;
+        fields[H_C_ID] = (self.h_c_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_C_D_ID] = (self.h_c_d_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_C_W_ID] = (self.h_c_w_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_D_ID] = (self.h_d_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_W_ID] = (self.h_w_id as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_DATE] = (self.h_date as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_AMOUNT] = (self.h_amount as *const _ as *const u8)
+            .wrapping_offset_from(base);
+        fields[H_DATA] = (self.h_data as *const _ as *const u8)
+            .wrapping_offset_from(base);
+
+        fields
     }
 }
 
