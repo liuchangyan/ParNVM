@@ -6,9 +6,10 @@ use std::{
 
 use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
+
 #[cfg(any(feature = "pmem", feature="disk"))]
 use {plog, pnvm_sys};
-use tcore::{self, ObjectId, TTag, TRef, BoxRef};
+use tcore::{self, ObjectId, TTag, TRef, BoxRef, Operation, FieldArray};
 
 #[cfg(feature = "profile")]
 use flame;
@@ -20,14 +21,13 @@ pub struct TransactionOCC
 
     tid_:   Tid,
     state_: TxState,
-    deps_:  HashMap<(ObjectId, i8), TTag>,
+    deps_:  HashMap<(ObjectId, Operation), TTag>,
     locks_ : Vec<*const TTag>,
     txn_info_ : Arc<TxnInfo>,
     should_abort_: bool,
 
 }
 
-const OPERATION_CODE_RW: i8 = 2;
 impl Transaction for TransactionOCC
 {
 
@@ -63,7 +63,7 @@ impl Transaction for TransactionOCC
         let vers = tref.get_version();
 
         //Insert a tag
-        let tag = self.retrieve_tag(&id, tref, OPERATION_CODE_RW);
+        let tag = self.retrieve_tag(&id, tref, Operation::RWrite);
         tag.add_version(vers);
 
         //Return data
@@ -74,13 +74,21 @@ impl Transaction for TransactionOCC
     //#[cfg_attr(feature = "profile", flame)]
      fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
     {
-        //Get the tx id
+        //Get the object id
         let id = *tref.get_id();
 
         //Create tag and store the temporary value
-        let tag = self.retrieve_tag(&id,tref, OPERATION_CODE_RW);
+        let tag = self.retrieve_tag(&id,tref, Operation::RWrite);
         tag.write::<T>(val);
     }
+
+     fn write_field<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T, fields: FieldArray) 
+     {
+         let o_id = *tref.get_id(); 
+         let tag = self.retrieve_tag(&o_id, tref, Operation::RWrite);
+         tag.write::<T>(val);
+         tag.set_fields(fields);
+     }
 
      fn id(&self) -> Tid {
         self.tid_
@@ -99,11 +107,11 @@ impl Transaction for TransactionOCC
      fn retrieve_tag(&mut self,
                         id: &ObjectId, 
                         tobj_ref: Box<dyn TRef>,
-                        code: i8
+                        ops: Operation
                         ) 
         -> &mut TTag
         {
-            self.deps_.entry((*id, code)).or_insert(TTag::new(*id, tobj_ref))
+            self.deps_.entry((*id, ops)).or_insert(TTag::new(*id, tobj_ref))
         }
 }
 

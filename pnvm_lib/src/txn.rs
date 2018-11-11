@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
-use tcore::{ObjectId, TTag, TRef};
+use tcore::{ObjectId, TTag, TRef, FieldArray, Operation};
 
 //lazy_static! {
 //    static ref TXN_RUNNING: Arc<RwLock<HashMap<Tid, bool>>> =
@@ -45,10 +45,11 @@ pub trait Transaction {
     fn try_commit(&mut self) -> bool;
     fn read<'b, T: 'static + Clone>(&'b mut self, Box<dyn TRef>) -> &'b T;
     fn write<T:'static + Clone>(&mut self, Box<dyn TRef>, T);
+    fn write_field<T:'static + Clone>(&mut self, Box<dyn TRef>, T, FieldArray);
     fn id(&self) -> Tid ;
     fn txn_info(&self) -> &Arc<TxnInfo>;
     fn should_abort(&mut self);
-    fn retrieve_tag(&mut self, &ObjectId, Box<dyn TRef>, i8) -> &mut TTag;
+    fn retrieve_tag(&mut self, &ObjectId, Box<dyn TRef>, Operation) -> &mut TTag;
 
 }
 
@@ -156,7 +157,7 @@ impl Default for TxnInfo {
             tid_ : Tid::default(),
             locked_ : AtomicBool::new(false),
             committed_: AtomicBool::new(true),
-            status_ : AtomicUsize::new(TxnStatus::Active as usize),
+            //status_ : AtomicUsize::new(TxnStatus::Active as usize),
             rank_ : AtomicUsize::default(),
             #[cfg(any(feature = "pmem", feature = "disk"))]
             persist_: AtomicBool::new(true), 
@@ -176,7 +177,7 @@ impl TxnInfo {
         TxnInfo {
             tid_ : tid,
             committed_: AtomicBool::new(false),
-            status_ : AtomicUsize::new(TxnStatus::Active as usize),
+            //status_ : AtomicUsize::new(TxnStatus::Active as usize),
             rank_ : AtomicUsize::new(0),
             locked_ : AtomicBool::new(false),
 
