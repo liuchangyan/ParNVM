@@ -110,7 +110,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             let o_id :i32 = district.d_next_o_id;
             let d_tax :Numeric = district.d_tax;
             district.d_next_o_id = o_id +1;
-            tx.write(district_ref, district);
+            //tx.write(district_ref, district);
+            tx.write_field(district_ref, district, vec![D_NEXT_O_ID]);
 
             tx.add_output(Box::new(o_id), 0);
             tx.add_output(Box::new(d_tax), 1);
@@ -256,7 +257,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                     stock.s_order_cnt = s_order_cnt + Numeric::new(1, 4, 0);
                 }
                 info!("[{:?}][TXN-NEWORDER] Update STOCK \n\t {:?}", tid, stock);
-                tx.write(stock_ref, stock);
+                //tx.write(stock_ref, stock);
+                tx.write_field(stock_ref, stock, vec![S_QUANTITY, S_ORDER_CNT, S_REMOTE_CNT]);
 
                 let ol_amount = qty * i_price_arr[i] * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
                     (Numeric::new(1, 1, 0) - c_discount);
@@ -460,7 +462,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                         let o_c_id = o.o_c_id;
 
                         o.o_carrier_id = o_carrier_id;
-                        tx.write(o_row, o);
+                        //tx.write(o_row, o);
+                        tx.write_field(o_row, o, vec![O_CARRIER_ID]);
 
 
                         let ol_arcs = tables.orderline.find_by_oid(&(w_id, d_id, o_id));
@@ -473,7 +476,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
                             ol.ol_delivery_d = now;
                             info!("[{:?}][DELIVERY] UPDATEING ORDERLINE [OL_AMOUNT_SUM: {:?}]", tid, ol_amount_sum);
-                            tx.write(ol_row, ol);
+                            //tx.write(ol_row, ol);
+                            tx.write_field(ol_row, ol, vec![OL_DELIVERY_D]);
                         }
 
 
@@ -483,7 +487,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                         c.c_delivery_cnt += Numeric::new(1, 4, 0);
 
                         info!("[{:?}][DELIVERY] UPDATEING CUSTOEMR [CID: {}, DELIVERY_CNT: {:?}]", tid, o_c_id, c.c_delivery_cnt);
-                        tx.write(c_row, c);
+                        //tx.write(c_row, c);
+                        tx.write_field(c_row, c, vec![C_BALANCE, C_DELIVERY_CNT]);
                     },
                     None => {}
                 }
@@ -722,7 +727,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 let d_name = district.d_name.clone();
                 district.d_ytd = district.d_ytd + h_amount;
                 info!("[{:?}][TXN-PAYMENT] Update District::YTD\t  {:?}", tid, district.d_ytd);
-                tx.write(district_row,district);
+                tx.write_field(district_row, district, vec![D_YTD]);
+                //tx.write(district_row,district);
                 tx.add_output(Box::new(d_name), 0);
             };
 
@@ -744,7 +750,8 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 let w_name = warehouse.w_name.clone();
                 warehouse.w_ytd = warehouse.w_ytd +  h_amount;
                 info!("[{:?}][TXN-PAYMENT] Update Warehouse::YTD {:?}", tid, warehouse.w_ytd);
-                tx.write(warehouse_row, warehouse);
+                tx.write_field(warehouse_row, warehouse, vec![W_YTD]);
+                //tx.write(warehouse_row, warehouse);
                 
                 tx.add_output(Box::new(w_name), 1);
 
@@ -794,6 +801,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
 
                 let mut c = tx.read::<Customer>(c_row.box_clone()).clone();
                 info!("[{:?}][TXN-PAYMENT] Read Customer\n\t  {:?}", tid, c);
+                let mut c_fields = vec![C_BALANCE, C_YTD_PAYMENT, C_PAYMENT_CNT];
                 c.c_balance -= h_amount;
                 c.c_ytd_payment += h_amount;
                 c.c_payment_cnt += Numeric::new(1, 4, 0);
@@ -808,11 +816,14 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                         let new_data = new_data_str.as_bytes();
                         c.c_data.rotate_right(len);
                         c.c_data[0..len].copy_from_slice(new_data);
+                        c_fields.push(C_DATA);
                     },
                     _ => {},
                 }
                 info!("[{:?}][TXN-PAYMENT] Updating Customer\n\t  {:?}", tid, c);
-                tx.write(c_row, c);
+                //tx.write(c_row, c);
+                tx.write_field(c_row, c, c_fields);
+                
 
                 tx.add_output(Box::new(c_id), 2);
             };

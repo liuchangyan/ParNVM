@@ -64,7 +64,7 @@ pub struct TransactionParOCC
     
     //FIXME: store reference instead
     #[cfg(any(feature= "pmem", feature = "disk"))]
-    records_ :     Vec<Box<dyn TRef>>,
+    records_ :     Vec<(Box<dyn TRef>, Option<FieldArray>)>,
 
     tags_ : HashMap<(ObjectId, Operation), TTag>,
     early_abort_ : bool,
@@ -181,6 +181,12 @@ impl TransactionParOCC
         tag.write::<T>(val);
     }
 
+    pub fn write_field<T:'static + Clone>(&mut self, tobj: Box<dyn TRef>, val:T, fields: FieldArray) {
+        let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), Operation::RWrite);
+        tag.write::<T>(val);
+        tag.set_fields(fields);
+    }
+
     #[inline(always)]
     pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, op: Operation) -> &mut TTag {
         self.tags_.entry((*id, op)).or_insert(TTag::new(*id, tobj_ref))
@@ -247,16 +253,34 @@ impl TransactionParOCC
     #[cfg(any(feature = "pmem", feature = "disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&mut self) {
-        for record in self.records_.drain(..) {
-            let paddr = record.get_pmem_addr();
-            let vaddr = record.get_ptr();
-            let layout  = record.get_layout();
-
+        for (record, fields) in self.records_.drain(..) {
             #[cfg(feature = "pmem")]
-            pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+            match fields {
+                Some(ref fields) => {
+                    for field in fields.iter(){
+                        let paddr = record.get_pmem_field_addr(*field);
+                        let vaddr = record.get_field_ptr(*field);
+                        let size = record.get_field_size(*field);
+
+                        pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                    }
+                },
+                None=> {
+                    let paddr = record.get_pmem_addr();
+                    let vaddr = record.get_ptr();
+                    let layout  = record.get_layout();
+
+                    pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+
+                }
+            }
+
 
             #[cfg(feature = "disk")]
             {
+                let paddr = record.get_pmem_addr();
+                let vaddr = record.get_ptr();
+                let layout  = record.get_layout();
                 pnvm_sys::disk_memcpy(paddr, vaddr, layout.size());
                 pnvm_sys::disk_msync(paddr, layout.size());
             }
@@ -371,7 +395,8 @@ impl TransactionParOCC
         for tag in self.tags_.values() {
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
-                self.records_.push(tag.tobj_ref_.box_clone());
+                self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
+                
             }
         }
 //        let logs = self.records_.iter().map(|(ptr, layout)| {
