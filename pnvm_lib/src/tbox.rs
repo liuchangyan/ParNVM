@@ -229,6 +229,7 @@ impl TRef for TInt {
         panic!("tbox not implemented")
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_field_addr(&self, _i : usize) -> *mut u8 {
         panic!("tbox not implemented")
     }

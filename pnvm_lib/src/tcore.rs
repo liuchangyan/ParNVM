@@ -160,6 +160,7 @@ pub trait TRef : fmt::Debug{
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8;
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_field_addr(&self, usize) -> *mut u8;
 }
 
@@ -524,6 +525,8 @@ impl TTag
                     let pmemaddr = self.tobj_ref_.get_pmem_field_addr(*field);
                     let size = self.tobj_ref_.get_field_size(*field);
                     let vaddr = self.tobj_ref_.get_field_ptr(*field);
+                    warn!("[{:?}] [persit_data] name : {:?}, paddr: {:p}, vaddr: {:p}, size: {}", 
+                          self.tobj_ref_.get_id(), self.name_, pmemaddr, vaddr, size);
                     pnvm_sys::memcpy_nodrain(pmemaddr,
                                              vaddr,
                                              size);

@@ -793,13 +793,16 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         let y = self.fields_offset_[field_idx+1 as usize];
         let diff = y-x;
         assert_eq!(diff> 0, true);
+        assert_eq!(x >= 0, true);
+        assert_eq!(y >= 0, true);
         diff as usize
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn get_pmem_field_addr(&self, field_idx: usize) -> *mut u8 {
         let offset = self.fields_offset_[field_idx as usize];
         assert_eq!(offset >= 0, true);
-        self.get_pmem_addr().wrapping_add(offset as usize) as *mut u8
+        (self.get_pmem_addr() as *mut u8).wrapping_add(offset as usize) as *mut u8
     }
 
     #[inline(always)]
