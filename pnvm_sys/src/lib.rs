@@ -157,6 +157,14 @@ pub fn memcpy_nodrain(pmemaddr: *mut u8, src: *mut u8, len: usize)
     unsafe {pmem_memcpy_nodrain(pmemaddr as *mut c_void, src as *mut c_void, len)};
 }
 
+pub fn memset_persist(pmemaddr: *mut u8, c : i32, len: usize) 
+{
+    unsafe {pmem_memset_persist(pmemaddr as *mut c_void, c as c_int, len)};
+}
+
+pub fn unmap(pmemaddr: *mut u8, len: usize) {
+    unsafe {pmem_unmap(pmemaddr as *mut c_void, len)};
+}
 /* *****************
  *   Mappings
  * ****************/
@@ -184,7 +192,7 @@ extern "C" {
     pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_persist(addr: *const c_void, len: usize);
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
-
+    pub fn pmem_memset_persist(pmemdest : *mut c_void, c: c_int, len: usize) -> *mut c_void;
     pub fn pmem_memcpy_persist(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
     pub fn pmem_memcpy_nodrain(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
 

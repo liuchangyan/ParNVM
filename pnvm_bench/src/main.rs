@@ -8,24 +8,188 @@ extern crate pnvm_sys;
 extern crate log;
 extern crate env_logger;
 extern crate libc;
+extern crate config;
+
+
 use pnvm_sys::*;
 use std::{
     thread,
     sync::Barrier,
     sync::Arc,
+    ptr,
 };
 
 
 fn main() {
     env_logger::init().unwrap();
     //multi_threads(1);
+    let config = parse_config();
 
-    let cus = Customer::new();
-    
-    println!("{:?}", cus.field_offset());
+
+    multi_clwb(&config);
 }
 
 const PMEM_TEST_PATH_ABS: &str = "../data";
+
+fn multi_clwb(config: &Config) {
+    let bench = Arc::new(prep_bench(config));
+    let barrier = Arc::new(Barrier::new(config.nthread));
+
+    //Do Warm up 
+    memset_persist(bench.pmem_addr, 0, bench.size);
+    
+
+    let mut opsps_avg = 0.0;
+    for _j in 0..config.nrepeats {
+        let mut handles = Vec::new();
+        for i in 0..config.nthread {
+            let builder = thread::Builder::new().name(format!("{}", i)); 
+            let barrier = barrier.clone();
+            let chunk_size = config.chunk_size;
+            let nops = config.nops;
+            let bench = bench.clone();
+
+
+            let handle = builder.spawn(move || {
+                barrier.wait();
+
+                let start = Instant::now();
+
+                /* Perform the benchmark for each thread */
+                do_memcpy(bench, chunk_size, nops, i);
+
+                let end = Instant::now();
+                (start, end)
+            }).unwrap();
+
+            handles.push(handle);
+        }
+
+        let total_time = Duration::new(0, 0);
+        let mut starts = vec![];
+        let mut ends = vec![];
+        for handle in handles {
+            match handle.join() {
+                Ok((thd_start, thd_end)) => {
+                    starts.push(thd_start);
+                    ends.push(thd_end);
+                },
+                Err(_) => panic!("thread panics"),
+            }
+        }
+
+
+        /* Sort the times to get the min start and max end */
+        starts.sort_unstable();
+        ends.sort_unstable();
+
+        let total_begin = starts[0];
+        let total_end = ends[config.nthread-1];
+        let dur = total_end.duration_since(total_begin);
+        let total_ops = (config.nops * config.nthread) as f64;
+        let dur_secs = (dur.as_secs() as f64 + dur.subsec_nanos() as f64 / 1_000_000_000.0) as f64;
+        opsps_avg +=  total_ops/ dur_secs;
+    }
+
+    let bandwidth = opsps_avg/config.nrepeats as f64 *config.chunk_size as f64 / (1024 * 1024) as f64;
+    println!("{},{},{},{},{}", config.mode,config.nthread, config.nops, config.chunk_size, bandwidth) ;
+
+}
+
+fn do_memcpy(bench: Arc<Bench>,  chunk_size: usize, nops: usize, thd_idx: usize) {
+    for i in 0..nops {
+        let offset = thd_idx * nops + bench.rand_offsets[i];
+        let src = bench.src_addr.wrapping_add( offset * chunk_size);
+        let dest = bench.pmem_addr.wrapping_add(offset * chunk_size);
+        memcpy_nodrain(dest,src, chunk_size);
+    }
+}
+
+fn prep_bench(config: &Config) -> Bench{ 
+    let size = config.nthread * config.chunk_size * config.nops;
+    let pmem_addr =  mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
+
+    let src_addr = Box::into_raw(vec!['x';size].into_boxed_slice()) as *mut u8;
+
+    check_continuous(src_addr as *mut char, 'x', size);
+
+    let n_rand_offsets = config.nthread * config.nops;
+
+    let rand_offsets :Vec<usize> = (0..n_rand_offsets)
+        .map(|_| {
+            rand::random::<usize>() % config.nops
+        }).collect();
+
+
+   let bench =  Bench {
+       pmem_addr,
+       src_addr,
+       rand_offsets,
+       size,
+    };
+
+    //println!("Bench: {:?}", bench);
+    bench
+}
+
+fn check_continuous(addr : *mut char, c: char, len:usize) {
+    unsafe{
+        for i in 0..len {
+            assert_eq!(ptr::read(addr), c);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Bench {
+    pmem_addr: *mut u8,
+    src_addr: *mut u8,
+    rand_offsets: Vec<usize>,
+    size: usize,
+}
+
+impl Drop for Bench {
+    fn drop(&mut self) {
+        /* Unmap the file */  
+        unsafe { unmap(self.pmem_addr, self.size)};
+
+        /* Box the src */
+        let x = unsafe {Vec::from_raw_parts(self.src_addr, self.size, self.size)};
+    }
+}
+
+unsafe impl Sync for Bench{}
+unsafe impl Send for Bench{}
+
+
+#[derive(Clone, Debug)]
+struct Config {
+    nthread: usize,
+    chunk_size : usize,
+    nops: usize,
+    nrepeats : usize,
+    mode : String,
+}
+
+
+fn parse_config() -> Config {
+    
+    let mut settings = config::Config::default();
+    settings
+        .merge(config::File::with_name("Settings"))
+        .unwrap()
+        .merge(config::Environment::with_prefix("BENCH"))
+        .unwrap();
+
+
+    Config {
+        nthread : settings.get_int("THREAD_NUM").unwrap() as usize,
+        chunk_size : settings.get_int("CHUNK_SIZE").unwrap() as usize,
+        nops: settings.get_int("OPS_NUM").unwrap() as usize,
+        nrepeats: settings.get_int("REPEAT_NUM").unwrap() as usize,
+        mode : settings.get_str("MODE").unwrap(),
+    }
+}
 
 #[repr(C)]
 #[derive(Clone)]
@@ -194,3 +358,5 @@ fn multi_threads(thread_num : usize) {
         handle.join().unwrap();
     }
 }
+
+
