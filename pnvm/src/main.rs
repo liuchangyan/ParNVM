@@ -468,13 +468,17 @@ fn run_occ_tpcc(conf: Config) {
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 barrier.wait();
-                let start = Instant::now();
-                BenchmarkCounter::start();
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
 
+                let get_time = util_get_avg_get_time();
+                let start = Instant::now();
+                BenchmarkCounter::set_get_time(get_time);
+                BenchmarkCounter::start();
+
                 //for j in 0..conf.round_num {
                 while start.elapsed() < duration {
+                    BenchmarkCounter::get_time();
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
                     let tid = tid.clone();
@@ -611,6 +615,7 @@ fn report_stat(
     let mut total_pc_abort = 0;
     let mut total_pc_success = 0;
     let mut total_time = time::Duration::new(0, 0);
+    let mut total_mmap_cnt = 0;
     
 
     let mut total_new_order = 0; 
@@ -624,7 +629,8 @@ fn report_stat(
                 total_pc_abort += per_thd.abort_piece_cnt;
                 total_pc_success += per_thd.success_piece_cnt;
                 total_new_order += per_thd.new_order_cnt;
-                total_time = std::cmp::max(total_time, per_thd.duration);
+                total_mmap_cnt += per_thd.mmap_cnt;
+                total_time = std::cmp::max(total_time, per_thd.duration - per_thd.avg_get_time * per_thd.get_time_cnt);
             }
             Err(_) => warn!("thread panics"),
         }
@@ -632,13 +638,14 @@ fn report_stat(
 
 
     println!(
-        "{}, {}, {},{},{}, {}, {:?}",
+        "{}, {}, {},{},{}, {}, {},{:?}",
         conf.thread_num,
         conf.wh_num,
         total_success,
         total_abort,
         total_pc_success,
         total_pc_abort,
+        total_mmap_cnt,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
         )
     //let total_time =  start.elapsed() - spin_time;

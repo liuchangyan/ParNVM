@@ -37,7 +37,7 @@ use std::{
 
 use num::iter::Range;
 
-use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef, Operation};
+use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef, Operation, BenchmarkCounter};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
 use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
@@ -453,6 +453,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             let size =  cap *  mem::size_of::<Entry>();
             //path.push_str(name);
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
+            BenchmarkCounter::mmap();
 
             if pmem_root.is_null() {
                 panic!("Bucket::with_capacity(): failed, len: {}", size);

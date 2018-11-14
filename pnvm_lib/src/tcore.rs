@@ -54,8 +54,11 @@ pub struct BenchmarkCounter {
     pub success_cnt: u32,
     pub abort_cnt:   u32,
     pub new_order_cnt : u32,
+    pub get_time_cnt: u32,
+    pub mmap_cnt: u32,
     pub duration:    time::Duration,
     pub start : time::Instant,
+    pub avg_get_time: time::Duration,
 }
 
 //#[cfg(benchmark)]
@@ -67,8 +70,11 @@ impl BenchmarkCounter {
             success_piece_cnt: 0, 
             abort_piece_cnt: 0,
             new_order_cnt : 0,
+            get_time_cnt : 0,
+            mmap_cnt : 0,
             start:    time::Instant::now(),
             duration: time::Duration::default(),
+            avg_get_time: time::Duration::default(),
         }
     }
 
@@ -76,6 +82,27 @@ impl BenchmarkCounter {
     pub fn success() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).success_cnt += 1;
+        });
+    }
+
+    #[inline(always)]
+    pub fn get_time() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).get_time_cnt += 1;
+        });
+    }
+
+    #[inline(always)]
+    pub fn set_get_time(t: time::Duration) {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).avg_get_time =t;
+        });
+    }
+
+    #[inline(always)]
+    pub fn mmap() {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).mmap_cnt += 1;
         });
     }
 

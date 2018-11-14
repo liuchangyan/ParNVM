@@ -10,6 +10,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
     iter::FromIterator,
+    time::{Instant,Duration},
 };
 use std::{
     fmt::Debug,
@@ -557,4 +558,16 @@ pub fn read_env() -> Config {
         wh_num: settings.get_int("WH_NUM").unwrap() as i32,
         d_num : settings.get_int("D_NUM").unwrap() as i32,
     }
+}
+
+const N_PROBES_GET_TIME: u32 = 100_000_000;
+pub fn util_get_avg_get_time() -> Duration {
+
+    let start = Instant::now();
+
+    for _i in 0..N_PROBES_GET_TIME {
+        let _now = start.elapsed();
+    }
+
+    start.elapsed() / N_PROBES_GET_TIME
 }
