@@ -261,6 +261,7 @@ impl TransactionParOCC
                         let paddr = record.get_pmem_field_addr(*field);
                         let vaddr = record.get_field_ptr(*field);
                         let size = record.get_field_size(*field);
+                        BenchmarkCounter::flush(size);
 
                         pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
                     }
@@ -269,6 +270,8 @@ impl TransactionParOCC
                     let paddr = record.get_pmem_addr();
                     let vaddr = record.get_ptr();
                     let layout  = record.get_layout();
+                    
+                    BenchmarkCounter::flush(layout.size());
 
                     pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
 

@@ -5,6 +5,7 @@ use std::{
     ptr::{self, Unique},
 };
 use txn::Tid;
+use super::tcore::BenchmarkCounter;
 
 //This is the nightly api. Waiting for alloc::allocator::Layout to be stable
 use core::alloc::Layout;
@@ -113,6 +114,7 @@ pub fn into_iovec(log: PLog) -> (libc::iovec, libc::iovec) {
         iov_len:  log.data.size,
     };
 
+    BenchmarkCounter::log(log.data.size + size_of::<PLogHeader>());
     (iovp_header, iovp_data)
 }
 

@@ -616,6 +616,8 @@ fn report_stat(
     let mut total_pc_success = 0;
     let mut total_time = time::Duration::new(0, 0);
     let mut total_mmap_cnt = 0;
+    let mut total_flush = 0;
+    let mut total_log = 0;
     
 
     let mut total_new_order = 0; 
@@ -630,6 +632,8 @@ fn report_stat(
                 total_pc_success += per_thd.success_piece_cnt;
                 total_new_order += per_thd.new_order_cnt;
                 total_mmap_cnt += per_thd.mmap_cnt;
+                total_flush += per_thd.pmem_flush_size;
+                total_log += per_thd.pmem_log_size;
                 total_time = std::cmp::max(total_time, per_thd.duration - per_thd.avg_get_time * per_thd.get_time_cnt);
             }
             Err(_) => warn!("thread panics"),
@@ -638,7 +642,7 @@ fn report_stat(
 
 
     println!(
-        "{}, {}, {},{},{}, {}, {},{:?}",
+        "{}, {}, {},{},{}, {},{},{:?},{},{}",
         conf.thread_num,
         conf.wh_num,
         total_success,
@@ -647,6 +651,8 @@ fn report_stat(
         total_pc_abort,
         total_mmap_cnt,
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+        total_log / 1024 / 1024  / total_time.as_secs() as u32,
+        total_flush / 1024 / 1024  / total_time.as_secs() as u32
         )
     //let total_time =  start.elapsed() - spin_time;
    // println!(

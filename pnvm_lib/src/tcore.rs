@@ -56,6 +56,8 @@ pub struct BenchmarkCounter {
     pub new_order_cnt : u32,
     pub get_time_cnt: u32,
     pub mmap_cnt: u32,
+    pub pmem_flush_size: u32,
+    pub pmem_log_size: u32,
     pub duration:    time::Duration,
     pub start : time::Instant,
     pub avg_get_time: time::Duration,
@@ -72,6 +74,8 @@ impl BenchmarkCounter {
             new_order_cnt : 0,
             get_time_cnt : 0,
             mmap_cnt : 0,
+            pmem_flush_size : 0,
+            pmem_log_size : 0,
             start:    time::Instant::now(),
             duration: time::Duration::default(),
             avg_get_time: time::Duration::default(),
@@ -82,6 +86,20 @@ impl BenchmarkCounter {
     pub fn success() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).success_cnt += 1;
+        });
+    }
+
+    #[inline(always)]
+    pub fn flush(len : usize) {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).pmem_flush_size += len as u32;
+        });
+    }
+
+    #[inline(always)]
+    pub fn log(len : usize) {
+        COUNTER.with(|c| {
+            (*c.borrow_mut()).pmem_log_size += len as u32;
         });
     }
 
@@ -554,6 +572,7 @@ impl TTag
                     let vaddr = self.tobj_ref_.get_field_ptr(*field);
                     warn!("[{:?}] [persit_data] name : {:?}, paddr: {:p}, vaddr: {:p}, size: {}", 
                           self.tobj_ref_.get_id(), self.name_, pmemaddr, vaddr, size);
+                    BenchmarkCounter::flush(size);
                     pnvm_sys::memcpy_nodrain(pmemaddr,
                                              vaddr,
                                              size);
@@ -561,9 +580,10 @@ impl TTag
                 }
             }, 
             None => {
-                    pnvm_sys::memcpy_nodrain(self.tobj_ref_.get_pmem_addr(),
-                                             self.tobj_ref_.get_ptr(),
-                                             self.tobj_ref_.get_layout().size());
+                BenchmarkCounter::flush(self.tobj_ref_.get_layout().size());
+                pnvm_sys::memcpy_nodrain(self.tobj_ref_.get_pmem_addr(),
+                self.tobj_ref_.get_ptr(),
+                self.tobj_ref_.get_layout().size());
             }
         }
 
