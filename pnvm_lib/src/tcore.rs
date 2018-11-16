@@ -47,7 +47,7 @@ thread_local!{
 }
 
 //#[cfg(benchmark)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct BenchmarkCounter {
     pub success_piece_cnt: u32,
     pub abort_piece_cnt:   u32,
@@ -61,6 +61,7 @@ pub struct BenchmarkCounter {
     pub duration:    time::Duration,
     pub start : time::Instant,
     pub avg_get_time: time::Duration,
+    pub success_over_time: Vec<u32>,
 }
 
 //#[cfg(benchmark)]
@@ -79,6 +80,7 @@ impl BenchmarkCounter {
             start:    time::Instant::now(),
             duration: time::Duration::default(),
             avg_get_time: time::Duration::default(),
+            success_over_time: Vec::with_capacity(16),
         }
     }
 
@@ -88,6 +90,15 @@ impl BenchmarkCounter {
             (*c.borrow_mut()).success_cnt += 1;
         });
     }
+
+    #[inline(always)]
+    pub fn timestamp() {
+        COUNTER.with(|c| {
+            let mut c = &mut(*c.borrow_mut());
+            c.success_over_time.push(c.success_cnt);
+        });
+    }
+
 
     #[inline(always)]
     pub fn flush(len : usize) {
@@ -167,7 +178,7 @@ impl BenchmarkCounter {
             let mut g = c.borrow_mut();
             let dur = g.start.elapsed();
             g.duration = dur;
-            *g
+            g.clone()
         })
     }
 

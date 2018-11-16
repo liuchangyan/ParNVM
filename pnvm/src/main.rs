@@ -475,9 +475,16 @@ fn run_occ_tpcc(conf: Config) {
                 let start = Instant::now();
                 BenchmarkCounter::set_get_time(get_time);
                 BenchmarkCounter::start();
-
+                let mut elapsed  = Duration::default();
+                let mut prev_timestamp = 0;
                 //for j in 0..conf.round_num {
-                while start.elapsed() < duration {
+                while elapsed < duration {
+                    elapsed = start.elapsed();
+                    if elapsed.as_secs() == prev_timestamp + 2 {
+                        BenchmarkCounter::timestamp();
+                        prev_timestamp = elapsed.as_secs();
+                    }
+
                     BenchmarkCounter::get_time();
                     let tid = TidFac::get_thd_next();
                     let tx = &mut occ_txn::TransactionOCC::new(tid);
@@ -618,6 +625,7 @@ fn report_stat(
     let mut total_mmap_cnt = 0;
     let mut total_flush = 0;
     let mut total_log = 0;
+    let mut total_timestamps = vec![0;17];
     
 
     let mut total_new_order = 0; 
@@ -635,6 +643,9 @@ fn report_stat(
                 total_flush += per_thd.pmem_flush_size;
                 total_log += per_thd.pmem_log_size;
                 total_time = std::cmp::max(total_time, per_thd.duration - per_thd.avg_get_time * per_thd.get_time_cnt);
+                for i in 0..per_thd.success_over_time.len() {
+                    total_timestamps[i+1] += per_thd.success_over_time[i];
+                }
             }
             Err(_) => warn!("thread panics"),
         }
@@ -653,7 +664,9 @@ fn report_stat(
         total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
         total_log / 1024 / 1024  / total_time.as_secs() as u32,
         total_flush / 1024 / 1024  / total_time.as_secs() as u32
-        )
+        );
+
+    println!("{:?}", total_timestamps);
     //let total_time =  start.elapsed() - spin_time;
    // println!(
    //     "{},{},{}, {}, {}, {}, {}, {:?}, {}",

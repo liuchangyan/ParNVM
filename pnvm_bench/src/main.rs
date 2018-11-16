@@ -19,6 +19,13 @@ use std::{
     ptr,
 };
 
+use rand::{
+    rngs::SmallRng,
+    thread_rng,
+    SeedableRng,
+    Rng,
+};
+
 
 fn main() {
     env_logger::init().unwrap();
@@ -26,10 +33,43 @@ fn main() {
     let config = parse_config();
 
 
-    multi_clwb(&config);
+    //multi_clwb(&config);
+    rng_test(&config);
 }
 
 const PMEM_TEST_PATH_ABS: &str = "../data";
+
+fn rng_test(config: &Config) {
+    let bench = Arc::new(prep_bench(config));
+    let barrier = Arc::new(Barrier::new(config.nthread));
+
+    let mut handles = Vec::new();
+    for i in 0..config.nthread {
+        let builder = thread::Builder::new().name(format!("{}", i)); 
+        let barrier = barrier.clone();
+    
+        let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
+
+        let handle = builder.spawn(move || {
+            barrier.wait();
+
+            let start = Instant::now();
+
+            for j in 1..10 {
+                let k :u32 = rng.gen::<u32>();
+                println!("[T-{}] [{}] - [{}]", i, j, k);
+            }
+        }).unwrap();
+
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+
+}
 
 fn multi_clwb(config: &Config) {
     let bench = Arc::new(prep_bench(config));
