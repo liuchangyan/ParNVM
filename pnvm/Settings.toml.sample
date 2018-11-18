@@ -5,6 +5,7 @@ TEST_NAME="TPCC_NVM"
 DURATION = 5
 WH_NUM = 1
 D_NUM = 10
+NO_WARMUP = false
 
 
 # For MicroBench

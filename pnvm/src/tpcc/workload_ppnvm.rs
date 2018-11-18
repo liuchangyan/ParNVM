@@ -67,15 +67,20 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
     let mut qty = [0 as i32;15];
 
     for i in 0..ol_cnt as usize {
-        //supware[i] = if urand(1, 100, rng) > 1 {
-        supware[i] = if true {
+        supware[i] = if urand(1, 100, rng) > 1 {
             w_id
         } else {
             urandexcept(1, num_wh, w_id, rng)
         };
         itemid[i] = nurand(8191, 1, 100000, rng);
         qty[i] = urand(1, 10, rng);
+        
+        #[cfg(feature = "noconflict")]
+        {
+            supware[i] = w_id;
+        }
     }
+
 
     NewOrderInput {
         w_id_: w_id,
@@ -209,6 +214,9 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             for i in 0..ol_cnt as usize {
                 if w_id != src_whs[i] {
                     all_local = 0;
+
+                    #[cfg(feature = "noconflict")]
+                    panic!("no conflict!");
                 }
             }
 
@@ -658,11 +666,17 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
             let w_id = w_home;
             let d_id = urand(1, num_dis, rng);
 
-            let x = urand(1, 100, rng);
+            let mut x = urand(1, 100, rng);
             let y = urand(1, 100, rng);
 
             let c_w_id : i32;
             let c_d_id : i32;
+
+
+            #[cfg(feature = "noconflict")]
+            {
+                x = 1;
+            }
 
             if num_wh == 1 || x <= 85 {
                 //85% paying throuhg won house
@@ -674,6 +688,7 @@ pub fn pc_new_order_input(w_home: i32, rng: &mut SmallRng)
                 assert!(c_w_id != w_id);
                 c_d_id = urand(1, 10, rng);
             }
+
 
             let h_amount = rand_numeric(1.00, 5000.00, 10, 2, rng);
             let h_date = gen_now();     

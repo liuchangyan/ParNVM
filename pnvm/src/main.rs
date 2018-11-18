@@ -357,6 +357,9 @@ fn run_pc_tpcc(conf: Config) {
         let wh_num = conf.wh_num;
         let d_num = conf.d_num;
 
+        let mut no_warmup = conf.no_warmup;
+        let warm_up_time = conf.warmup_time;
+
         /* Spawn worker thread */
         let handle = builder
             .spawn(move || {
@@ -367,7 +370,6 @@ fn run_pc_tpcc(conf: Config) {
 
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-                barrier.wait();
                 
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
@@ -381,13 +383,37 @@ fn run_pc_tpcc(conf: Config) {
                 let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
                 let stocklevel_base = tpcc::workload_ppnvm::pc_stocklevel_base(&tables, w_home, d_home, thd);
                 
-                let start = Instant::now();
+                let get_time = util_get_avg_get_time();
+                barrier.wait();
+
+                let mut start = Instant::now();
+                BenchmarkCounter::set_get_time(get_time);
                 BenchmarkCounter::start();
+                let mut elapsed  = Duration::default();
+                let mut prev_timestamp = 0;
+
                 
                 /* Run the workload */
-                while start.elapsed() < duration {
+                while elapsed < duration {
+                    elapsed = start.elapsed();
                     let tid = TidFac::get_thd_next();
                     let j : u32= rng.gen::<u32>() % 100;
+                    
+                    if !no_warmup {
+                        if elapsed.as_secs() == warm_up_time {
+                            no_warmup = true;
+                            BenchmarkCounter::reset_cnt();
+                            start = Instant::now();
+                            elapsed = start.elapsed();
+                            prev_timestamp = 0;
+                        }
+                    }
+
+                    if elapsed.as_secs() == prev_timestamp + 2 {
+                        BenchmarkCounter::timestamp();
+                        prev_timestamp = elapsed.as_secs();
+                    }
+
                     
                     //FIXME: pass by ref rather than box it
                     let mut tx = match j {
@@ -454,9 +480,14 @@ fn run_occ_tpcc(conf: Config) {
         let barrier = barrier.clone();
         let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
         let tables = tables.clone();
+
+        //Configuration
         let duration_in_secs = conf.duration;
         let wh_num = conf.wh_num;
         let d_num = conf.d_num;
+        let mut no_warmup = conf.no_warmup;
+        let warm_up_time = conf.warmup_time;
+
 
 
         let handle = builder
@@ -467,19 +498,36 @@ fn run_occ_tpcc(conf: Config) {
                 tpcc::workload_occ::num_district_set(d_num);
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-                barrier.wait();
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
 
                 let get_time = util_get_avg_get_time();
-                let start = Instant::now();
+                barrier.wait();
+
+                let mut start = Instant::now();
                 BenchmarkCounter::set_get_time(get_time);
                 BenchmarkCounter::start();
                 let mut elapsed  = Duration::default();
                 let mut prev_timestamp = 0;
                 //for j in 0..conf.round_num {
+               
+
+                //Warm up for each thread
+                
                 while elapsed < duration {
                     elapsed = start.elapsed();
+
+                    //Warm up for x seconds
+                    if !no_warmup {
+                        if elapsed.as_secs() == warm_up_time {
+                            no_warmup = true;
+                            BenchmarkCounter::reset_cnt();
+                            start = Instant::now();
+                            elapsed = start.elapsed();
+                            prev_timestamp = 0;
+                        }
+                    }
+
                     if elapsed.as_secs() == prev_timestamp + 2 {
                         BenchmarkCounter::timestamp();
                         prev_timestamp = elapsed.as_secs();
@@ -665,8 +713,14 @@ fn report_stat(
         total_log / 1024 / 1024  / total_time.as_secs() as u32,
         total_flush / 1024 / 1024  / total_time.as_secs() as u32
         );
-
-    println!("{:?}", total_timestamps);
+    
+    for i in (1..total_timestamps.len()).rev() {
+        if total_timestamps[i] > total_timestamps[i-1] {
+            total_timestamps[i] -= total_timestamps[i-1]; 
+        }
+    }
+    //println!("{:?}", total_timestamps);
+    //
     //let total_time =  start.elapsed() - spin_time;
    // println!(
    //     "{},{},{}, {}, {}, {}, {}, {:?}, {}",

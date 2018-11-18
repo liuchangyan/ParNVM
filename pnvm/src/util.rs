@@ -532,6 +532,8 @@ pub struct Config {
     pub duration: u64,
     pub wh_num: i32,
     pub d_num: i32,
+    pub no_warmup: bool,
+    pub warmup_time :u64,
 }
 
 pub fn read_env() -> Config {
@@ -557,6 +559,9 @@ pub fn read_env() -> Config {
         duration: settings.get_int("DURATION").unwrap() as u64,
         wh_num: settings.get_int("WH_NUM").unwrap() as i32,
         d_num : settings.get_int("D_NUM").unwrap() as i32,
+        no_warmup: settings.get_bool("NO_WARMUP").unwrap(),
+        warmup_time : settings.get_int("WARMUP_TIME").unwrap_or(10) as u64,
+
     }
 }
 

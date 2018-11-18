@@ -85,6 +85,24 @@ impl BenchmarkCounter {
     }
 
     #[inline(always)]
+    pub fn reset_cnt() {
+        COUNTER.with(|c| {
+            let mut c  = &mut (*c.borrow_mut());
+            c.success_cnt = 0;
+            c.abort_cnt = 0;
+            c.success_piece_cnt =0;
+            c.abort_piece_cnt = 0;
+            c.new_order_cnt = 0;
+            c.mmap_cnt = 0;
+            c.pmem_flush_size  = 0;
+            c.pmem_log_size = 0;
+            c.get_time_cnt = 0;
+            c.start = time::Instant::now();
+            c.success_over_time.clear();
+        });
+    }
+
+    #[inline(always)]
     pub fn success() {
         COUNTER.with(|c| {
             (*c.borrow_mut()).success_cnt += 1;
