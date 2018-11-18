@@ -402,6 +402,7 @@ pub const O_OL_CNT :usize =  6;
 pub const O_ALL_LOCAL :usize =  7;
 
 
+//48 B
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Order {

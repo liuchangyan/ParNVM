@@ -1,0 +1,6 @@
+
+THREAD_NUM = 4
+CHUNK_SIZE = 256
+OPS_NUM = 1000000
+REPEAT_NUM = 5
+MODE = "movnt-clflush"
