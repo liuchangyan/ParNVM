@@ -188,11 +188,11 @@ impl TxnInfo {
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn has_persist(&self) -> bool {
-        self.persist_.load(Ordering::SeqCst)
+        self.persist_.load(Ordering::Acquire)
     }
 
     pub fn has_commit(&self) -> bool {
-        self.committed_.load(Ordering::SeqCst)
+        self.committed_.load(Ordering::Acquire)
     }
     
     //if deps just started rank 3
@@ -200,32 +200,32 @@ impl TxnInfo {
     //  txn ready to start rank 2 can safely go
     //  dep.cur_rank  > txn.rank_to_run
     pub fn has_started(&self, rank: usize) -> bool {
-        self.rank_.load(Ordering::SeqCst) > rank
+        self.rank_.load(Ordering::Acquire) > rank
     }
 
     pub fn has_lock(&self) -> bool {
-        self.locked_.load(Ordering::SeqCst)
+        self.locked_.load(Ordering::Acquire)
     }
 
     pub fn lock(&self) {
-        self.locked_.store(true, Ordering::SeqCst);
+        self.locked_.store(true, Ordering::Release);
     }
 
     pub fn unlock(&self) {
-        self.locked_.store(false, Ordering::SeqCst);
+        self.locked_.store(false, Ordering::Release);
     }
 
     pub fn commit(&self) {
-        self.committed_.store(true, Ordering::SeqCst);
+        self.committed_.store(true, Ordering::Release);
     }
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn persist(&self) {
-        self.persist_.store(true, Ordering::SeqCst);
+        self.persist_.store(true, Ordering::Release);
     }
 
     pub fn start(&self, rank: usize) {
-        self.rank_.store(rank, Ordering::SeqCst);
+        self.rank_.store(rank, Ordering::Release);
     }
 
     pub fn id(&self) -> &Tid {
@@ -233,7 +233,7 @@ impl TxnInfo {
     }
 
     pub fn rank(&self) -> usize {
-        self.rank_.load(Ordering::SeqCst)
+        self.rank_.load(Ordering::Acquire)
     }
 
 }

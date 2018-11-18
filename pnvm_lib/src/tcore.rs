@@ -288,17 +288,17 @@ impl TVersion {
     #[inline(always)]
     pub fn lock(&self, tid: Tid) -> bool{
         let tid : u32 = tid.into();
-        assert_eq!(tid != 0 , true);
+        debug_assert!(tid != 0 , true);
         match self.lock_owner_.compare_exchange(0, tid, Ordering::SeqCst, Ordering::SeqCst) {
             Ok(_cur) => {
-                assert_eq!(self.count_.load(Ordering::SeqCst), 0);
-                self.count_.fetch_add(1, Ordering::SeqCst);
+                debug_assert!(self.count_.load(Ordering::Acquire) == 0, true);
+                self.count_.fetch_add(1, Ordering::AcqRel);
                 true
             },
             Err(cur) => {
                 if cur == tid {
-                    assert_eq!(self.count_.load(Ordering::SeqCst) > 0, true);
-                    self.count_.fetch_add(1, Ordering::SeqCst);
+                    debug_assert!(self.count_.load(Ordering::Acquire) > 0, true);
+                    self.count_.fetch_add(1, Ordering::AcqRel);
                     true
                 } else {
                     false /* Lock by others */
@@ -310,10 +310,10 @@ impl TVersion {
     //Caution: whoever has access to self can unlock
     #[inline(always)]
     pub fn unlock(&self) {
-        if self.count_.fetch_sub(1, Ordering::SeqCst) == 1 {
-            assert_eq!(self.lock_owner_.load(Ordering::SeqCst) != 0,  true);
-            assert_eq!(self.count_.load(Ordering::SeqCst), 0);
-            self.lock_owner_.store(0, Ordering::SeqCst);
+        if self.count_.fetch_sub(1, Ordering::AcqRel) == 1 {
+            debug_assert!(self.lock_owner_.load(Ordering::Acquire) != 0,  true);
+            debug_assert!(self.count_.load(Ordering::Acquire) == 0, true);
+            self.lock_owner_.store(0, Ordering::Release);
         }
     }
 
