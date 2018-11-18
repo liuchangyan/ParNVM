@@ -817,43 +817,20 @@ impl  TRef for OrderLineRef  {
 
 impl  TRef for ItemRef  {
     fn install(&self, id: Tid) {
-        match self.table_ref_ {
-            Some(ref table) => {
-                let row = self.inner_.clone();
-                let bucket_idx = self.bucket_idx_.unwrap();
-                table.item.get_bucket(bucket_idx).set_version(row.get_version());
-                table.item.get_bucket(bucket_idx).push(row);
-            },
-            None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
-            }
-        }
+        panic!("Item is read only");
     }
 
+
     fn lock(&self, tid: Tid) -> bool {
-        match self.table_ref_ {
-            None => self.inner_.lock(tid),
-            Some(ref table) => {
-                table.item.get_bucket(self.bucket_idx_.unwrap()).lock(tid)
-            }
-        }
+        panic!("Item is read only");
     }
 
     fn unlock(&self) {
-        match self.table_ref_ {
-            None => self.inner_.unlock(),
-            Some(ref table) => {
-                table.item.get_bucket(self.bucket_idx_.unwrap()).unlock();
-            }
-        }
+        panic!("Item is read only");
     }
 
     fn check(&self, vers: u32, tid: u32) -> bool {
-        if self.table_ref_.is_none() {
-            self.inner_.check(vers, tid)
-        } else {
-            true
-        }
+        true
     }
 
     fn box_clone(&self) -> Box<dyn TRef> {
@@ -895,10 +872,7 @@ impl  TRef for ItemRef  {
     }
 
     fn write(&mut self, val: Box<Any>) {
-        match val.downcast::<Item>() {
-            Ok(val) => self.data_ = Some(val),
-            Err(_) => panic!("ItemRef::write value should be Box<Warehouse>")
-        }
+        panic!("Item is read only")
     }
 
     fn read(&self) -> &Any {
@@ -907,7 +881,8 @@ impl  TRef for ItemRef  {
 
 
     fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
-        self.inner_.set_access_info(txn_info);
+        //Noop for Item
+        //self.inner_.set_access_info(txn_info);
     }
 
     fn get_access_info(&self) -> Arc<TxnInfo> {

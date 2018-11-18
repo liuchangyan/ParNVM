@@ -176,6 +176,7 @@ impl TransactionParOCC
         tag.get_data()
     }
 
+
     pub fn write<T: 'static + Clone>(&mut self, tobj: Box<dyn TRef>, val : T) {
         let tag = self.retrieve_tag(tobj.get_id(), tobj.box_clone(), Operation::RWrite);
         tag.write::<T>(val);
@@ -200,6 +201,7 @@ impl TransactionParOCC
             if !txn_info.has_commit() {
                 let id : u32= txn_info.id().into();
                 if me != id { /* Do not add myself into it */
+                    println!("[ME]: {:?} \n[ERROR DEP] : {:?}", self.txn_info_, txn_info);
                     if !self.deps_.contains_key(&id) {
                         warn!("add_dep:: {:?} will wait on {:?}", me, id);
                         self.deps_.insert(id, txn_info);
