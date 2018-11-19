@@ -69,7 +69,7 @@ if __name__ == '__main__':
             #"zipf": np.linspace(0.000001, 1.0, num=10),
             "name": 'TPCC_OCC',
             "wh_num" : [1, 1, 2, 4,8],
-            "duration": 20,
+            "duration": 15,
             "no_warmup" : 'false',
             "warmup_time" : 10,
             }

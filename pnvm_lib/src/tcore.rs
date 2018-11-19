@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use std::{
     sync::{Arc, Mutex, RwLock,
-        atomic::{AtomicU32, Ordering}
+        atomic::{AtomicU32, Ordering, AtomicBool}
     },
     ops::Deref,
     any::Any,
@@ -11,7 +11,7 @@ use crossbeam::sync::ArcCell;
 
 //use std::rc::Rc;
 //use std::cell::RefCell;
-use tbox::TBox;
+//use tbox::TBox;
 use txn::{Tid, TxnInfo};
 
 #[allow(unused_imports)]
@@ -272,6 +272,17 @@ pub struct TVersion {
     pub lock_owner_: AtomicU32, 
     pub txn_info_ : ArcCell<TxnInfo>, /* Info of the last writer's txn_ info */
     pub count_ : AtomicU32, /* This to allow multiple times of locking */
+
+
+    /* For two phase locking's constructs */
+    //tpl_cr_reader_: AtomicBool,         //Mutex for updating reader
+    //tpl_cr_writer_: AtomicBool,         //Mutex for updating writer 
+    tpl_cr_: AtomicBool,                //Mutex for updating
+    tpl_reader_ :  AtomicU32,           //current max reader
+    tpl_reader_cnt_: AtomicU32,         //Reader count
+    tpl_writer_ : AtomicU32,            //current writer
+    //tpl_rwlock_ : AtomicU32,            //lock value
+    //tpl_writer_cnt_: AtomicU32,         //Recursive write lock count
 }
 
 
@@ -282,6 +293,14 @@ impl TVersion {
             lock_owner_ : AtomicU32::new(0),
             txn_info_: ArcCell::new(txn_info),
             count_: AtomicU32::new(0),
+
+
+            //tpl_writer_cnt_ : AtomicU32::new(0),
+            //tpl_rwlock_ : AtomicU32::new(0),
+            tpl_cr_: AtomicBool::new(false),
+            tpl_writer_ : AtomicU32::new(0),
+            tpl_reader_: AtomicU32::new(0),
+            tpl_reader_cnt_: AtomicU32::new(0),
         }
     }
 
@@ -330,24 +349,6 @@ impl TVersion {
         ((self.lock_owner_.load(Ordering::Acquire) == 0 || 
           self.lock_owner_.load(Ordering::Acquire) == tid)
          && self.last_writer_.load(Ordering::Acquire) == cur)
-
-       // if locker != 0 {
-       //     return locker;
-       // } else {
-       //     let writer = self.last_writer_.load(Ordering::Acquire);
-       //     return 
-       // }
-       // match (tid, self.last_writer_, self.lock_owner_) {
-       //     (Some(ref cur_tid), Some(ref tid), None) => {
-       //         if *cur_tid == *tid {
-       //             true
-       //         } else {
-       //             false
-       //         }
-       //     }
-       //     (None, None, None) => true,
-       //     (_, _, _) => false,
-       // }
     }
 
     //What if the last writer is own? -> Extension
@@ -371,6 +372,116 @@ impl TVersion {
     pub fn set_access_info(&self, txn_info : Arc<TxnInfo>) {
         self.txn_info_.set(txn_info);
     }
+
+
+    /* Interface for the 2PL */
+    //Rlock
+    //------Unfair Vers------
+    //1. If currently wlock => writer'tid
+    //2. If currently rlock => update, max reader tid 
+    //------Fair Version(this)------
+    //1. If currently wlock is me or none => ok 
+    //2. IF currently wlock by others 
+    //      => abort when i am smaller 
+    //      => spinning when I am bigger
+    pub fn read_lock(&self, tid: u32) -> bool {
+        loop {
+            //Enter Reader updating CR
+            self.enter_cr();
+
+            match self.tpl_writer_.load(Ordering::SeqCst)
+            {
+                0  => {
+                    self.tpl_reader_.fetch_max(tid, Ordering::SeqCst);
+                    self.tpl_reader_cnt_.fetch_add(1, Ordering::SeqCst);
+                    self.exit_cr();
+                    return true;
+                },
+                x => {
+                    let writer =  self.tpl_writer_.load(Ordering::SeqCst);
+                    //Wait-die Ddlck prevention
+                    if writer > tid  {
+                        self.exit_cr();
+                        return false;
+                    } else if writer == tid {
+                        self.tpl_reader_.fetch_max(tid, Ordering::SeqCst);
+                        self.tpl_reader_cnt_.fetch_add(1, Ordering::SeqCst);
+                        self.exit_cr();
+                        return true;
+                    }
+                }
+            }
+
+            self.exit_cr();
+        }
+    }
+
+    //FIXME: what if the upgrade case 
+    pub fn read_unlock(&self, tid: u32) {
+        self.enter_cr();
+        if self.tpl_reader_cnt_.fetch_sub(1,Ordering::SeqCst) == 1 {
+            self.tpl_reader_.store(0, Ordering::SeqCst);
+        }
+        self.exit_cr();
+    }
+
+    //Wlock
+    pub fn write_lock(&self, tid: u32) -> bool {
+        loop {
+            self.enter_cr();
+            //DO NOT Allow Recursive write locks
+            if self.tpl_writer_.load(Ordering::SeqCst) == tid {
+                self.exit_cr();
+                panic!("No recusrive wlock");
+            }
+
+            match self.tpl_reader_.load(Ordering::SeqCst) {
+               0 => {
+                    assert_eq!(self.tpl_reader_cnt_.load(Ordering::SeqCst) == 0,
+                    true);
+                    self.tpl_writer_.store(tid, Ordering::SeqCst);
+               },
+               tid => { /* Upgrade read lock to write lock */
+                   assert_eq!(self.tpl_writer_.load(Ordering::SeqCst), 0);
+                   self.tpl_writer_.store(tid, Ordering::SeqCst);
+
+                   while self.tpl_reader_cnt_.load(Ordering::SeqCst) != 1 {
+                       self.exit_cr();
+                       self.enter_cr();
+                   }
+
+                   //In the critical section
+                   self.exit_cr();
+                   return true;
+               },
+               max_reader => { 
+                   //Wait-die Dlck prevention
+                   if max_reader > tid {
+                       self.exit_cr();
+                       return false;
+                   }
+               }
+            }
+
+            self.exit_cr();
+        }
+    }
+
+
+    pub fn write_unlock(&self, tid : u32) {
+        self.enter_cr();
+        self.tpl_writer_.compare_exchange(tid, 0, Ordering::SeqCst, Ordering::SeqCst).expect("Write lock poisoned");
+        self.exit_cr();
+    }
+
+    fn enter_cr(&self) {
+        while self.tpl_cr_.compare_and_swap(false, true, Ordering::SeqCst) {}
+    }
+
+    fn exit_cr(&self) {
+        self.tpl_cr_.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).expect("Critical Session invalid");
+    }
+
 }
 
 
@@ -381,6 +492,11 @@ impl Default for TVersion {
             lock_owner_ : AtomicU32::new(0),
             txn_info_: ArcCell::new(Arc::new(TxnInfo::default())),
             count_: AtomicU32::new(0),
+
+            tpl_cr_: AtomicBool::new(false),
+            tpl_writer_ : AtomicU32::new(0),
+            tpl_reader_: AtomicU32::new(0),
+            tpl_reader_cnt_: AtomicU32::new(0),
         }
     }
 }

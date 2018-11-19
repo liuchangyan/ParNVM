@@ -1,6 +1,7 @@
 //pub mod sched;
 #![allow(dead_code, unused_imports)]
 #![feature(allocator_api)]
+#![feature(atomic_min_max)]
 #![feature(libc)]
 #![feature(test)]
 #![feature(ptr_internals)]
