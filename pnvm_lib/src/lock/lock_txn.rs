@@ -125,9 +125,7 @@ impl Transaction2PL {
 
     pub fn commit(&mut self) {
         //Unlocks
-        
-
-        //Clena up
+        self.unlock();
     }
 
 
