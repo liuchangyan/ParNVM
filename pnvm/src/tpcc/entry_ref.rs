@@ -255,6 +255,10 @@ impl  TRef for WarehouseRef {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
+
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -377,6 +381,9 @@ impl  TRef for DistrictRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -500,6 +507,9 @@ impl  TRef for CustomerRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -659,6 +669,9 @@ impl  TRef for NewOrderRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -780,6 +793,9 @@ impl  TRef for OrderRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -900,6 +916,9 @@ impl  TRef for OrderLineRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -996,6 +1015,9 @@ impl  TRef for ItemRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -1114,6 +1136,9 @@ impl  TRef for HistoryRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }
@@ -1232,6 +1257,9 @@ impl  TRef for StockRef  {
     }
 
     /* For 2 Phase Locking */
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("TODO");
+    }
     fn read_lock(&self, tid: u32) -> bool {
         panic!("not implemented")
     }

@@ -62,6 +62,7 @@ use pnvm_lib::{
     tbox::*,
     tcore::*,
     txn::*,
+    lock::*,
 };
 
 //#[cfg(feature = "pmem")]
@@ -88,8 +89,69 @@ fn main() {
         "PNVM_OCC" => run_nvm_occ_micro(conf),
         "TPCC_OCC" => run_occ_tpcc(conf),
         "TPCC_NVM" => run_pc_tpcc(conf),
+        "MICRO_2PL" => run_micro_2pl(conf),
         _ => panic!("unknown test name"),
     }
+}
+
+fn run_micro_2pl(conf: Config) {
+    //Prepare object pools
+    let values : Vec<Arc<TBox<u32>>> = (0..conf.obj_num as u32)
+        .map(|x| TBox::new(x))
+        .collect();
+
+    let keys = util::generate_data(&conf);
+
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
+    let mut handles = vec![];
+
+    for i in 1..=conf.thread_num {
+        let builder = thread::Builder::new().name(format!("TXN-{}", i + 1));
+        let conf = conf.clone();
+        let barrier = barrier.clone();
+        let values = values.clone();
+        let duration_in_secs = conf.duration;
+        let thd_keys = keys[i-1].clone();
+
+        handles.push(
+            builder
+            .spawn(move || {
+                let duration = Duration::new(duration_in_secs, 0);
+                     
+                BenchmarkCounter::start();
+                let start = Instant::now();
+                let elapsed = Duration::default();
+
+
+                while elapsed < duration {
+                    'work: loop {
+                        let tid = TidFac::get_thd_next();
+                        let tx = &mut lock_txn::Transaction2PL::new(tid);
+
+                        /* Read */
+                        for k in thd_keys.read_keys.iter(){
+                            let tbox = &values[*k as usize];
+                            let tref = tbox.clone().into_box_ref();
+                            match tx.read::<u32>(&tref) {
+                                Some(v) => {
+                                    println!("READ {} : {}", k, v);
+                                },
+                                None => {
+                                    tx.abort();
+                                    continue 'work;
+                                }
+                            }
+                        }
+
+                        tx.commit();
+                        break;
+                    }
+                }
+                BenchmarkCounter::copy()
+            }).unwrap());
+    }
+
+    report_stat(handles, conf);
 }
 
 //fn run_nvm(conf: Config) {

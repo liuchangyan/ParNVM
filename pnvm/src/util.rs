@@ -406,7 +406,7 @@ impl WorkloadNVM {
     }
 }
 
-fn generate_data(conf : &Config) -> Vec<ThreadData> {
+pub fn generate_data(conf : &Config) -> Vec<ThreadData> {
 
     let mut dataset : Vec<ThreadData> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
 
