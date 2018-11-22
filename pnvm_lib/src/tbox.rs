@@ -235,6 +235,13 @@ impl TRef for TInt {
         }
     }
 
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        match val.downcast::<u32>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be u32 at write_throught")
+        }
+    }
+
     fn lock(&self, tid: Tid) -> bool {
         self.inner_.lock(tid)
     }

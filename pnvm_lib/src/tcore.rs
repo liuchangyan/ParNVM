@@ -237,6 +237,7 @@ pub trait TRef : fmt::Debug{
     fn read_unlock(&self);
     fn write_lock(&self, u32)-> bool;
     fn write_unlock(&self, u32);
+    fn write_through(&self, Box<Any>, Tid);
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8;

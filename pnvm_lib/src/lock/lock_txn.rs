@@ -1,10 +1,10 @@
 
 
 use std::{
-
+    collections::HashMap,
 };
 
-use tx::{self, AbortReason, Tid, TxState, TxnInfo, Transaction};
+use txn::{self, AbortReason, Tid, TxState, TxnInfo, Transaction};
 use tcore::{
     self,
     ObjectId, 
@@ -25,51 +25,57 @@ pub struct Transaction2PL {
 
 impl Transaction2PL {
 
-    pub new(id: Tid) -> Transaction2PL {
+    pub fn new(id: Tid) -> Transaction2PL {
         Transaction2PL {
             tid_ : id,
             state_ : TxState::EMBRYO,
-            refs_ : HashMap::new();
+            refs_ : HashMap::new(),
         }
     }
 
     fn lock(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
         let me :u32 = self.id().into();
         let id = self.id();
-        let oid = tref.get_id();
+        let oid = *tref.get_id();
 
-        match self.refs_.get(&(oid, lock_type)) {
-            Some(tref) => {
-                /* Already Locked */
-                true
-            },
-            None => {
-                let ok = match lock_type {
-                    Read => tref.read_lock(me),
-                    Write => tref.write_lock(me),
-                }
-                if ok {
-                    self.refs_.insert((oid, lock_type), tref.box_clone());
-                }
-                ok
+        if !self.refs_.contains_key(&(oid, lock_type)) {
+            let ok = match lock_type {
+                LockType::Read => tref.read_lock(me),
+                LockType::Write => tref.write_lock(me),
+            };
+            if ok {
+                self.refs_.insert((oid, lock_type), tref.box_clone());
             }
+            ok
+
+        } else {
+            true
         }
+
     }
 
-    fn unlock(&mut self, tref: &Box<dyn TRef>) {
-
-
+    fn unlock(&mut self) {
+        let me : u32 = self.id().into();
+        for ((_id, lock_type), tref) in self.refs_.drain() {
+            match lock_type {
+                LockType::Read => tref.read_unlock(),
+                LockType::Write => tref.write_unlock(me),
+            }
+        }
     }
 
 
    
     //Read the underlying value of the reference
     //Return none when failed locking  
-    pub fn read<T:'static+Clone>(&mut self, tref: Box<dyn TRef>) -> Option<&T> {
+    pub fn read<'a, T:'static+Clone>(&mut self, tref: &'a Box<dyn TRef>) -> Option<&'a T> {
         /* Lock */
         match self.lock(&tref, LockType::Read) {
             true => {
-                Some(tref.read())
+                match tref.read().downcast_ref::<T>() {
+                    Some(data) => Some(data),
+                    None => panic!("inconsistent type at read"),
+                }
             } ,
             false => {
                 None
@@ -79,20 +85,30 @@ impl Transaction2PL {
 
     //Write a value into the underlying reference
     //Return Result.Err if failed
-   // pub fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) -> Result {
+   pub fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) -> bool {
+       match self.lock(&tref, LockType::Write) {
+           true => {
+               tref.write_through(Box::new(val), self.id().clone());
+               //Make records for persist later
+               true
+           },
+           false => {
+               false
+           }
+       }
 
-   // }
+   }
     
-    pub fn write_field<T:'static + Clone)(&mut self, tref: Box<dyn TRef>, val: T, fields: FieldArray) -> Result {
+    pub fn write_field<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T, fields: FieldArray) -> bool {
 
        match self.lock(&tref, LockType::Write) {
            true => {
-               tref.write_through(val);
                //Make records for persist later
-               Ok
+               tref.write_through(Box::new(val), self.id().clone());
+               true
            },
            false => {
-                Err()
+               false
            }
        }
     }
@@ -104,9 +120,7 @@ impl Transaction2PL {
     
     //FIXME: should I randomize the input once abort?
     pub fn abort(&mut self) {
-        //Unlocks
-
-        //Clean up
+        self.unlock();
     }
 
     pub fn commit(&mut self) {
@@ -117,11 +131,9 @@ impl Transaction2PL {
     }
 
 
-    fn unlock(&mut self) {
-
-    }
 }
 
+#[derive(Eq, PartialEq, Hash, Copy, Clone)]
 enum LockType {
     Read,
     Write,

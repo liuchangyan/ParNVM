@@ -44,6 +44,7 @@ pub mod tcore;
 pub mod txn;
 pub mod occ;
 pub mod parnvm;
+pub mod lock;
 
 #[cfg(test)]
 mod tests {
