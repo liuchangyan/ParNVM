@@ -232,6 +232,12 @@ pub trait TRef : fmt::Debug{
     fn set_access_info(&mut self, Arc<TxnInfo>);
     fn get_name(&self) -> String;
 
+    /* 2PL locking functions */
+    fn read_lock(&self, u32) -> bool;
+    fn read_unlock(&self);
+    fn write_lock(&self, u32)-> bool;
+    fn write_unlock(&self, u32);
+
     #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8;
     #[cfg(any(feature = "pmem", feature = "disk"))]
@@ -417,7 +423,7 @@ impl TVersion {
     }
 
     //FIXME: what if the upgrade case 
-    pub fn read_unlock(&self, tid: u32) {
+    pub fn read_unlock(&self) {
         self.enter_cr();
         if self.tpl_reader_cnt_.fetch_sub(1,Ordering::SeqCst) == 1 {
             self.tpl_reader_.store(0, Ordering::SeqCst);
@@ -468,7 +474,7 @@ impl TVersion {
     }
 
 
-    pub fn write_unlock(&self, tid : u32) {
+    pub fn write_unlock(&self, tid: u32) {
         self.enter_cr();
         self.tpl_writer_.compare_exchange(tid, 0, Ordering::SeqCst, Ordering::SeqCst).expect("Write lock poisoned");
         self.exit_cr();

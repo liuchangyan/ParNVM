@@ -258,6 +258,24 @@ impl TRef for TInt {
     fn get_name(&self) -> String {
         String::from("int")
     }
+
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
+    }
 }
 
 impl TInt {

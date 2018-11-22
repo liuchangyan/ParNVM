@@ -253,6 +253,23 @@ impl  TRef for WarehouseRef {
     fn get_name(&self) -> String {
         String::from("warehouse")
     }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
+    }
 }
 
 
@@ -357,6 +374,23 @@ impl  TRef for DistrictRef  {
     }
     fn get_name(&self) -> String {
         String::from("district")
+    }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
     }
 }
 
@@ -463,6 +497,23 @@ impl  TRef for CustomerRef  {
 
     fn get_name(&self) -> String {
         String::from("customer")
+    }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
     }
 }
 
@@ -606,6 +657,23 @@ impl  TRef for NewOrderRef  {
     fn get_name(&self) -> String {
         String::from("neworder")
     }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
+    }
 }
 
 impl  TRef for OrderRef  {
@@ -710,6 +778,23 @@ impl  TRef for OrderRef  {
     fn get_name(&self) -> String {
         String::from("order")
     }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
+    }
 }
 
 impl  TRef for OrderLineRef  {
@@ -813,6 +898,23 @@ impl  TRef for OrderLineRef  {
     fn get_name(&self) -> String {
         String::from("orderline")
     }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
+    }
 }
 
 impl  TRef for ItemRef  {
@@ -891,6 +993,23 @@ impl  TRef for ItemRef  {
 
     fn get_name(&self) -> String {
         String::from("item")
+    }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
     }
 }
 
@@ -993,6 +1112,23 @@ impl  TRef for HistoryRef  {
     fn get_name(&self) -> String {
         String::from("history")
     }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
+    }
 }
 impl  TRef for StockRef  {
     fn install(&self, id: Tid) {
@@ -1093,6 +1229,23 @@ impl  TRef for StockRef  {
     }
     fn get_name(&self) -> String {
         String::from("stock")
+    }
+
+    /* For 2 Phase Locking */
+    fn read_lock(&self, tid: u32) -> bool {
+        panic!("not implemented")
+    }
+
+    fn read_unlock(&self) {
+        panic!("TODO");
+    }
+
+    fn write_lock(&self, tid: u32) -> bool {
+        panic!("TODO");
+    }
+
+    fn write_unlock(&self, tid: u32)  {
+        panic!("TODO");
     }
 }
 
