@@ -234,7 +234,7 @@ pub trait TRef : fmt::Debug{
 
     /* 2PL locking functions */
     fn read_lock(&self, u32) -> bool;
-    fn read_unlock(&self);
+    fn read_unlock(&self, u32);
     fn write_lock(&self, u32)-> bool;
     fn write_unlock(&self, u32);
     fn write_through(&self, Box<Any>, Tid);
@@ -394,7 +394,7 @@ impl TVersion {
     pub fn read_lock(&self, tid: u32) -> bool {
         loop {
             //Enter Reader updating CR
-            self.enter_cr();
+            self.enter_cr(tid,);
 
             match self.tpl_writer_.load(Ordering::SeqCst)
             {
@@ -404,8 +404,7 @@ impl TVersion {
                     self.exit_cr();
                     return true;
                 },
-                x => {
-                    let writer =  self.tpl_writer_.load(Ordering::SeqCst);
+                writer  => {
                     //Wait-die Ddlck prevention
                     if writer > tid  {
                         self.exit_cr();
@@ -415,6 +414,8 @@ impl TVersion {
                         self.tpl_reader_cnt_.fetch_add(1, Ordering::SeqCst);
                         self.exit_cr();
                         return true;
+                    } else {
+                        /* NO-OP for writer < tid */
                     }
                 }
             }
@@ -424,8 +425,8 @@ impl TVersion {
     }
 
     //FIXME: what if the upgrade case 
-    pub fn read_unlock(&self) {
-        self.enter_cr();
+    pub fn read_unlock(&self, tid: u32) {
+        self.enter_cr(tid);
         if self.tpl_reader_cnt_.fetch_sub(1,Ordering::SeqCst) == 1 {
             self.tpl_reader_.store(0, Ordering::SeqCst);
         }
@@ -434,59 +435,86 @@ impl TVersion {
 
     //Wlock
     pub fn write_lock(&self, tid: u32) -> bool {
-        loop {
-            self.enter_cr();
+        'start: loop {
+            self.enter_cr(tid);
             //DO NOT Allow Recursive write locks
-            if self.tpl_writer_.load(Ordering::SeqCst) == tid {
-                self.exit_cr();
-                panic!("No recusrive wlock");
+
+            /* Check writer */
+            let cur_writer = self.tpl_writer_.load(Ordering::SeqCst);
+            match cur_writer {
+                0 =>  {}, /* Fall thruogh */
+                blocker => {
+                    /* Wait die ddl prevention */
+                    if blocker > tid {
+                        self.exit_cr();
+                        return false;
+                    } else if blocker == tid {
+                        self.exit_cr();
+                        println!("No recusrive wlock {}", tid);
+                        panic!();
+                    } else {
+                        /* Wait for cur writer to release */
+                        self.exit_cr();
+                        continue 'start;
+                    }
+                }
             }
 
+
+            /* Check reader */
             match self.tpl_reader_.load(Ordering::SeqCst) {
                0 => {
                     assert_eq!(self.tpl_reader_cnt_.load(Ordering::SeqCst) == 0,
                     true);
                     self.tpl_writer_.store(tid, Ordering::SeqCst);
-               },
-               tid => { /* Upgrade read lock to write lock */
-                   assert_eq!(self.tpl_writer_.load(Ordering::SeqCst), 0);
-                   self.tpl_writer_.store(tid, Ordering::SeqCst);
-
-                   while self.tpl_reader_cnt_.load(Ordering::SeqCst) != 1 {
-                       self.exit_cr();
-                       self.enter_cr();
-                   }
-
-                   //In the critical section
-                   self.exit_cr();
-                   return true;
+                    self.exit_cr();
+                    return true;
                },
                max_reader => { 
                    //Wait-die Dlck prevention
                    if max_reader > tid {
                        self.exit_cr();
                        return false;
+                   } else if max_reader == tid { assert_eq!(self.tpl_writer_.load(Ordering::SeqCst), 0);
+                       self.tpl_writer_.store(tid, Ordering::SeqCst);
+
+                       while self.tpl_reader_cnt_.load(Ordering::SeqCst) != 1 {
+                           self.exit_cr();
+                           std::thread::yield_now();
+                           self.enter_cr(tid);
+                       }
+
+                       //In the critical section
+                       self.exit_cr();
+                       return true;
+                   } else {
+                       // No op if I should be waiting 
                    }
                }
             }
-
             self.exit_cr();
+
         }
     }
 
 
     pub fn write_unlock(&self, tid: u32) {
-        self.enter_cr();
+        self.enter_cr(tid);
         self.tpl_writer_.compare_exchange(tid, 0, Ordering::SeqCst, Ordering::SeqCst).expect("Write lock poisoned");
         self.exit_cr();
     }
 
-    fn enter_cr(&self) {
-        while self.tpl_cr_.compare_and_swap(false, true, Ordering::SeqCst) {}
+    fn enter_cr(&self, tid: u32) {
+        while self.tpl_cr_.compare_and_swap(false, true, Ordering::SeqCst) 
+        {
+        }
     }
 
     fn exit_cr(&self) {
-        self.tpl_cr_.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).expect("Critical Session invalid");
+        self.tpl_cr_.compare_exchange(true, false,
+                                      Ordering::SeqCst, 
+                                      Ordering::SeqCst)
+            .expect("Critical Session invalid");
     }
 
 }

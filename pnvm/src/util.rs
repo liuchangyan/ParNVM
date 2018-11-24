@@ -406,6 +406,12 @@ impl WorkloadNVM {
     }
 }
 
+pub fn zipf_keys(set_size: usize, obj_num: usize, zipf: f64) -> Vec<usize> {
+    let mut rng = rand::thread_rng();
+    let dis = ZipfDistribution::new(obj_num - 1, zipf).unwrap();
+    (0..set_size).map(|_x| dis.sample(&mut rng) as usize).collect()
+}
+
 pub fn generate_data(conf : &Config) -> Vec<ThreadData> {
 
     let mut dataset : Vec<ThreadData> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();

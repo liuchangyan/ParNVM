@@ -117,30 +117,54 @@ fn run_micro_2pl(conf: Config) {
             builder
             .spawn(move || {
                 let duration = Duration::new(duration_in_secs, 0);
-                     
-                BenchmarkCounter::start();
-                let start = Instant::now();
-                let elapsed = Duration::default();
+                TidFac::set_thd_mask(i as u32);
+                OidFac::set_obj_mask(i as u64);
 
+                BenchmarkCounter::start();
+
+                let mut counter = 0;
+                let start = Instant::now();
+                let mut elapsed = Duration::default();
 
                 while elapsed < duration {
+                    elapsed = start.elapsed();
+                    let read_keys = util::zipf_keys(conf.set_size, conf.obj_num, conf.zipf_coeff);
+                    let write_keys = util::zipf_keys(conf.set_size, conf.obj_num, conf.zipf_coeff);
+                    let tid = TidFac::get_thd_next();
+
                     'work: loop {
-                        let tid = TidFac::get_thd_next();
                         let tx = &mut lock_txn::Transaction2PL::new(tid);
 
                         /* Read */
-                        for k in thd_keys.read_keys.iter(){
+                        for k in read_keys.iter(){
                             let tbox = &values[*k as usize];
                             let tref = tbox.clone().into_box_ref();
                             match tx.read::<u32>(&tref) {
                                 Some(v) => {
-                                    println!("READ {} : {}", k, v);
+                                   info!("{:?} READ {} : {}", tid, k, v);
                                 },
                                 None => {
                                     tx.abort();
                                     continue 'work;
                                 }
                             }
+                        }
+
+
+                        for k in write_keys.iter() {
+                            let tbox = &values[*k as usize];
+                            let tref = tbox.clone().into_box_ref();
+                            debug!("{:?} to write {:?}", tid, k);
+                            match tx.write::<u32>(&tref, i as u32) {
+                                true => {
+                                    info!("Write {} : {}", k, i);
+                                },
+                                false => {
+                                    tx.abort();
+                                    continue 'work;
+                                }
+                            }
+                            debug!("{:?} written {:?}", tid, k);
                         }
 
                         tx.commit();

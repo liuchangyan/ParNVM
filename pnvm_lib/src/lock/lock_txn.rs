@@ -11,6 +11,7 @@ use tcore::{
     TTag, 
     TRef, 
     FieldArray,
+    BenchmarkCounter,
 };
 
 
@@ -43,6 +44,7 @@ impl Transaction2PL {
                 LockType::Read => tref.read_lock(me),
                 LockType::Write => tref.write_lock(me),
             };
+
             if ok {
                 self.refs_.insert((oid, lock_type), tref.box_clone());
             }
@@ -56,9 +58,10 @@ impl Transaction2PL {
 
     fn unlock(&mut self) {
         let me : u32 = self.id().into();
+        info!("{} is unlocking", me);
         for ((_id, lock_type), tref) in self.refs_.drain() {
             match lock_type {
-                LockType::Read => tref.read_unlock(),
+                LockType::Read => tref.read_unlock(me),
                 LockType::Write => tref.write_unlock(me),
             }
         }
@@ -70,7 +73,7 @@ impl Transaction2PL {
     //Return none when failed locking  
     pub fn read<'a, T:'static+Clone>(&mut self, tref: &'a Box<dyn TRef>) -> Option<&'a T> {
         /* Lock */
-        match self.lock(&tref, LockType::Read) {
+        match self.lock(tref, LockType::Read) {
             true => {
                 match tref.read().downcast_ref::<T>() {
                     Some(data) => Some(data),
@@ -85,8 +88,8 @@ impl Transaction2PL {
 
     //Write a value into the underlying reference
     //Return Result.Err if failed
-   pub fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) -> bool {
-       match self.lock(&tref, LockType::Write) {
+   pub fn write<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T) -> bool {
+       match self.lock(tref, LockType::Write) {
            true => {
                tref.write_through(Box::new(val), self.id().clone());
                //Make records for persist later
@@ -120,11 +123,13 @@ impl Transaction2PL {
     
     //FIXME: should I randomize the input once abort?
     pub fn abort(&mut self) {
+        BenchmarkCounter::abort();
         self.unlock();
     }
 
     pub fn commit(&mut self) {
         //Unlocks
+        BenchmarkCounter::success();
         self.unlock();
     }
 

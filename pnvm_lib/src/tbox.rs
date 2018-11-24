@@ -269,19 +269,19 @@ impl TRef for TInt {
 
     /* For 2 Phase Locking */
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
-    fn read_unlock(&self) {
-        panic!("TODO");
+    fn read_unlock(&self, tid: u32) {
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        self.inner_.vers_.write_lock(tid)
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        self.inner_.vers_.write_unlock(tid)
     }
 }
 

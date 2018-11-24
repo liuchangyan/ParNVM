@@ -263,7 +263,7 @@ impl  TRef for WarehouseRef {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -388,7 +388,7 @@ impl  TRef for DistrictRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -514,7 +514,7 @@ impl  TRef for CustomerRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -676,7 +676,7 @@ impl  TRef for NewOrderRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -800,7 +800,7 @@ impl  TRef for OrderRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -923,7 +923,7 @@ impl  TRef for OrderLineRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -1022,7 +1022,7 @@ impl  TRef for ItemRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -1143,7 +1143,7 @@ impl  TRef for HistoryRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
@@ -1264,7 +1264,7 @@ impl  TRef for StockRef  {
         panic!("not implemented")
     }
 
-    fn read_unlock(&self) {
+    fn read_unlock(&self, tid: u32) {
         panic!("TODO");
     }
 
