@@ -670,22 +670,55 @@ impl  TRef for NewOrderRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<NewOrder>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be NewOrder")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.neworder.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.neworder.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.neworder.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.neworder.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 

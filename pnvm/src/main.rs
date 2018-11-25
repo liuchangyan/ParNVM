@@ -87,7 +87,8 @@ fn main() {
         "OCC" => run_occ_micro(conf),
         "SINGLE" => run_single(conf),
         "PNVM_OCC" => run_nvm_occ_micro(conf),
-        "TPCC_OCC" => run_occ_tpcc(conf),
+        "TPCC_OCC" => run_tpcc(conf, TxnType::OCC),
+        "TPCC_2PL" => run_tpcc(conf, TxnType::Lock),
         "TPCC_NVM" => run_pc_tpcc(conf),
         "MICRO_2PL" => run_micro_2pl(conf),
         _ => panic!("unknown test name"),
@@ -549,7 +550,7 @@ fn run_pc_tpcc(conf: Config) {
 }
 
 //Run the OCC contention management TPCC workload
-fn run_occ_tpcc(conf: Config) {
+fn run_tpcc(conf: Config, txn_type: TxnType) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     let tables = tpcc::workload_common::prepare_workload(&conf, &mut rng);
 
@@ -621,36 +622,53 @@ fn run_occ_tpcc(conf: Config) {
 
                     BenchmarkCounter::get_time();
                     let tid = TidFac::get_thd_next();
-                    let tx = &mut occ_txn::TransactionOCC::new(tid);
-                    let tid = tid.clone();
                     let j : u32= rng.gen::<u32>() % 100;
+                    
+                    match txn_type {
+                        TxnType::OCC => {
+                            let tid = tid.clone();
+                            let tx = &mut occ_txn::TransactionOCC::new(tid);
+                            while {
+                                info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
+                                if j > 55 {
+                                    tpcc::workload_occ::new_order_random(tx, &tables, w_home,  &mut rng);
+                                } else if j < 4 {
+                                    tpcc::workload_occ::orderstatus_random(tx, &tables, w_home, &mut rng);
+                                } else if j < 8  {
+                                    let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
+                                    tpcc::workload_occ::delivery(tx, &tables, w_home, o_carrier_id);
+                                } else if j < 12 {
+                                    let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
+                                    tpcc::workload_occ::stocklevel(tx, &tables, w_home, d_home, thd);
+                                }
+                                else{
+                                    tpcc::workload_occ::payment_random(tx, &tables,w_home  ,  &mut rng);
+                                }
 
+                                let res = tx.try_commit();
 
-                    while {
-                        info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
-                        if j > 55 {
-                            tpcc::workload_occ::new_order_random(tx, &tables, w_home,  &mut rng);
-                        } else if j < 4 {
-                            tpcc::workload_occ::orderstatus_random(tx, &tables, w_home, &mut rng);
-                        } else if j < 8  {
-                            let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
-                            tpcc::workload_occ::delivery(tx, &tables, w_home, o_carrier_id);
-                        } else if j < 12 {
-                            let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
-                            tpcc::workload_occ::stocklevel(tx, &tables, w_home, d_home, thd);
+                                if res && j > 55  {
+                                    BenchmarkCounter::new_order_done();
+                                }
+
+                                !res
+                            } {}
+                        },
+                        TxnType::Lock => {
+                            let tid = tid.clone();
+                            let tx = &mut lock_txn::Transaction2PL::new(tid);
+                            while {
+                                info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
+                                if tpcc::workload_2pl::new_order_random(tx, &tables, w_home,  &mut rng) {
+                                    tx.commit();
+                                    true
+                                } else {
+                                    tx.abort();
+                                    false
+                                }
+                            } {}
                         }
-                        else{
-                            tpcc::workload_occ::payment_random(tx, &tables,w_home  ,  &mut rng);
-                        }
-
-                        let res = tx.try_commit();
-                        
-                        if res && j > 55  {
-                            BenchmarkCounter::new_order_done();
-                        }
-
-                        !res
-                    } {}
+                    }
 
                     info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
                 }
@@ -820,4 +838,10 @@ fn report_stat(
    //     total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
    //     total_new_order,
    //     )
+}
+
+#[derive(Copy, Clone)]
+enum TxnType{
+    OCC,
+    Lock,
 }

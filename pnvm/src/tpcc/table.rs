@@ -428,7 +428,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     rows: UnsafeCell<Vec<Arc<Row<Entry, Index>>>>,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
-    vers_ : TVersion,
+    pub vers_ : TVersion,
     #[cfg(any(feature ="pmem", feature="disk"))]
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
     pmem_cap_ : AtomicUsize,
@@ -676,7 +676,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 {
     //data_: UnsafeCell<Entry>,
     data_ : NonNull<Entry>,
-    vers_: TVersion,
+    pub vers_: TVersion,
     id_ : ObjectId,
     index_ : Index,
 

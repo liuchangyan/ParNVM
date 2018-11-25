@@ -37,7 +37,7 @@ fn new_order(tx: &mut Transaction2PL,
              item_ids: &[i32],
              qty: &[i32],
              now: i32)
-    ->Result
+    -> bool
 {
     let tid = tx.id();
     let dis_num = num_district_get();
@@ -45,13 +45,13 @@ fn new_order(tx: &mut Transaction2PL,
     //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
     let w_tax = match tx.read::<Warehouse>(&warehouse_ref) {
         Ok(v) => v.w_tax,
-        Err(..) => return Err(())
+        Err(..) => return false
     };
     
     let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id)).unwrap().into_table_ref(None, None);
     let c_discount = match tx.read::<Customer>(&customer_ref) {
         Ok(v) => v.c_discount,
-        Err(..) => return Err(())
+        Err(..) => return false
     };
     
     info!("[{:?}][TXN-NEWORDER] Read Customer {:?}", tid, c_id);
@@ -61,7 +61,7 @@ fn new_order(tx: &mut Transaction2PL,
     let mut district = match tx.read::<District>(&district_ref)
     {
         Ok(d) => d.clone(),
-        Err(_) => return Err(())
+        Err(_) => return false
     };
 
     let o_id = district.d_next_o_id;
@@ -70,7 +70,7 @@ fn new_order(tx: &mut Transaction2PL,
     //tx.write(district_ref, district);
     match tx.write_field(&district_ref, district, vec![D_NEXT_O_ID]) {
         Ok(_) => {},
-        Err(_) => return Err(()),
+        Err(_) => return false,
     }
 
      let mut all_local :i64 = 1;
@@ -93,14 +93,14 @@ fn new_order(tx: &mut Transaction2PL,
                    o_all_local: Numeric::new(all_local, 1, 0)
                },
                tables).is_err() {
-            return Err(());
+            return false;
          }
 
      info!("[{:?}][TXN-NEWORDER] push_lock NEWORDER  {:?}", tid, o_id);
      if tables.neworder.push_lock(tx,
                           NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id },
                           tables).is_err() {
-        return Err(());
+        return false;
      }
 
      for i in 0..ol_cnt as usize {
@@ -111,13 +111,13 @@ fn new_order(tx: &mut Transaction2PL,
          //println!("READ : ITEM : {:?}", item_ref.get_id());
          let i_price = match tx.read::<Item>(&item_ref){
             Ok(v) => v.i_price,
-            Err(_) => return Err(()),
+            Err(_) => return false,
          };
 
          let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
          let mut stock = match tx.read::<Stock>(&stock_ref) {
             Ok(v) => v.clone(),
-            Err(_) => return Err(()),
+            Err(_) => return false,
          };
          let s_quantity = stock.s_quantity;
          let s_remote_cnt = stock.s_remote_cnt;
@@ -151,7 +151,7 @@ fn new_order(tx: &mut Transaction2PL,
          info!("[{:?}][TXN-NEWORDER] Update STOCK \n\t {:?}", tid, stock);
          //tx.write(stock_ref, stock);
          if tx.write_field(&stock_ref, stock, vec![S_QUANTITY, S_ORDER_CNT, S_REMOTE_CNT]).is_err() {
-            return Err(());
+            return false;
          }
          let ol_amount = qty * i_price * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
              (Numeric::new(1, 1, 0) - c_discount);
@@ -168,18 +168,18 @@ fn new_order(tx: &mut Transaction2PL,
                        ol_dist_info: s_dist
                    },
                    tables).is_err() {
-                return Err(());
+                return false;
              }
      }
-
-     Ok(())
+    
+     true
 }
 
 pub fn new_order_random(tx: &mut Transaction2PL,
                         tables: &Arc<Tables>, 
                         w_home : i32,
                         rng: &mut SmallRng) 
-    -> Result
+    -> bool 
 {
     let num_wh = num_warehouse_get();
     let num_dis = num_district_get();
