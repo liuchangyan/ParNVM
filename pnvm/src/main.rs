@@ -140,10 +140,10 @@ fn run_micro_2pl(conf: Config) {
                             let tbox = &values[*k as usize];
                             let tref = tbox.clone().into_box_ref();
                             match tx.read::<u32>(&tref) {
-                                Some(v) => {
+                                Ok(v) => {
                                    info!("{:?} READ {} : {}", tid, k, v);
                                 },
-                                None => {
+                                Err(..) => {
                                     tx.abort();
                                     continue 'work;
                                 }
@@ -156,10 +156,10 @@ fn run_micro_2pl(conf: Config) {
                             let tref = tbox.clone().into_box_ref();
                             debug!("{:?} to write {:?}", tid, k);
                             match tx.write::<u32>(&tref, i as u32) {
-                                true => {
+                                Ok(..) => {
                                     info!("Write {} : {}", k, i);
                                 },
-                                false => {
+                                Err(..) => {
                                     tx.abort();
                                     continue 'work;
                                 }
