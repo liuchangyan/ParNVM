@@ -83,7 +83,7 @@ fn new_order(tx: &mut Transaction2PL,
          }
      }
       
-     info!("[{:?}][TXN-NEWORDER] push_lock ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
+     info!("[{:?}][TXN-NEWORDER] PUSH ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
      if tables.order
          .push_lock(tx,
                Order {
@@ -96,7 +96,7 @@ fn new_order(tx: &mut Transaction2PL,
             return false;
          }
 
-     info!("[{:?}][TXN-NEWORDER] push_lock NEWORDER  {:?}", tid, o_id);
+     info!("[{:?}][TXN-NEWORDER] PUSH NEWORDER  {:?}", tid, o_id);
      if tables.neworder.push_lock(tx,
                           NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id },
                           tables).is_err() {
@@ -157,7 +157,7 @@ fn new_order(tx: &mut Transaction2PL,
              (Numeric::new(1, 1, 0) - c_discount);
             
          //println!("{}", s_dist);
-         info!("[{:?}][TXN-NEWORDER] push_lockING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
+         info!("[{:?}][TXN-NEWORDER] PUSHING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
          if tables.orderline
              .push_lock(tx, 
                    OrderLine {

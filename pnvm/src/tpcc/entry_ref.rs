@@ -256,24 +256,57 @@ impl  TRef for WarehouseRef {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<Warehouse>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be warehouse")
+        }
     }
-
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.warehouse.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.warehouse.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.warehouse.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.warehouse.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
+
 }
 
 
@@ -382,22 +415,55 @@ impl  TRef for DistrictRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<District>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be Distric")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.district.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.district.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.district.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.district.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 
@@ -508,22 +574,55 @@ impl  TRef for CustomerRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<Customer>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be Distric")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.customer.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.customer.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.customer.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.customer.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 
@@ -827,22 +926,55 @@ impl  TRef for OrderRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<Order>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be NewOrder")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.order.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.order.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.order.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.order.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 
@@ -950,22 +1082,55 @@ impl  TRef for OrderLineRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<OrderLine>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be NewOrder")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.orderline.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.orderline.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.orderline.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.orderline.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 
@@ -1049,22 +1214,21 @@ impl  TRef for ItemRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        panic!("not implemented")
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        true
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        true
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        panic!("not implemented")
     }
 }
 
@@ -1170,22 +1334,55 @@ impl  TRef for HistoryRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<History>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be NewOrder")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.history.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.history.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.history.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.history.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 impl  TRef for StockRef  {
@@ -1291,22 +1488,55 @@ impl  TRef for StockRef  {
 
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
-        panic!("TODO");
+        match val.downcast::<Stock>() {
+            Ok(val) => self.inner_.install(&val, tid),
+            Err(_) => panic!("runtime value should be NewOrder")
+        }
     }
     fn read_lock(&self, tid: u32) -> bool {
-        panic!("not implemented")
+        self.inner_.vers_.read_lock(tid)
     }
 
     fn read_unlock(&self, tid: u32) {
-        panic!("TODO");
+        self.inner_.vers_.read_unlock(tid)
     }
 
     fn write_lock(&self, tid: u32) -> bool {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.stock.get_bucket(bkt_idx).vers_.write_lock(tid)
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_lock(tid)
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.stock.get_bucket(bkt_idx).vers_.write_lock(tid)
+                    && self.inner_.vers_.write_lock(tid)
+            }
+        }
     }
 
     fn write_unlock(&self, tid: u32)  {
-        panic!("TODO");
+        match self.ops_ {
+            Operation::Push => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                table.stock.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            },
+            Operation::RWrite => {
+                self.inner_.vers_.write_unlock(tid);
+            },
+            Operation::Delete => {
+                let table = self.table_ref_.as_ref().unwrap();
+                let bkt_idx = self.bucket_idx_.unwrap();
+                self.inner_.vers_.write_unlock(tid);
+                table.stock.get_bucket(bkt_idx).vers_.write_unlock(tid);
+            }
+        }
     }
 }
 

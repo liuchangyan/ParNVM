@@ -280,6 +280,19 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
 
+   // pub fn retrieve_lock(&self, tx: &mut Transaction2PL, index: &Index, bucket_idx: uisize) 
+   //     -> Result<Option<Arc<Row<Entry, Index>>>, ()>
+   // {
+   //     let row = self.retrieve(index, bucket_idx);
+
+   //     let table_ref = row.into_retrieve_table_ref(bkt_idx, tables.clone());
+   //     let tid = tx.id().clone();
+
+   //     if tx.lock(&table_ref, LockType::Read) {
+   //         
+   //     }
+   // }
+
     pub fn push_lock(&self, tx: &mut Transaction2PL, entry: Entry, tables: &Arc<Tables>)
         -> Result<(), ()>
         where Arc<Row<Entry, Index>>: BucketPushRef 
@@ -489,8 +502,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
      * */
     pub fn push(&self, row_arc : Arc<Row<Entry, Index>>) {
         debug!("[PUSH ROW] : {:?}", *row_arc);
-        assert_eq!(self.vers_.get_count() > 0 , true);
-        assert_eq!(self.vers_.get_locker() == 0, false);
+        //assert_eq!(self.vers_.get_count() > 0 , true);
+        //assert_eq!(self.vers_.get_locker() == 0, false);
         let idx_elem = row_arc.get_data().primary_key();
         unsafe {
             let rows = self.rows.get().as_mut().unwrap();
@@ -504,8 +517,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     }
 
     pub fn delete(&self, row_arc: Arc<Row<Entry, Index>>) {
-        assert_eq!(self.vers_.get_count() > 0 , true);
-        assert_eq!(self.vers_.get_locker() == 0, false);
+        //assert_eq!(self.vers_.get_count() > 0 , true);
+        //assert_eq!(self.vers_.get_locker() == 0, false);
         let idx_elem = row_arc.get_data().primary_key();
 
         /* FIXME: Leave the data in the rows */
@@ -551,7 +564,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         }
 
     }
-
+    
 
     pub fn retrieve(&self, index_elem: &Index) -> Option<Arc<Row<Entry, Index>>> { 
         //Check out of bound
@@ -561,9 +574,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             Some(idx) => {
                 let rows = unsafe {self.rows.get().as_ref().unwrap()};
                 Some(rows.get(*idx).expect("row should not be empty. inconsistent with index").clone())
-                //unsafe {
-                //    rows.ptr().offset(*idx as isize).as_ref()
-                //}
             }
         }
     }
