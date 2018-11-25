@@ -19,7 +19,7 @@ use std::{
 };
 use super::table::*;
 use super::entry::*;
-use super::workload_occ::*;
+use super::workload_common::*;
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;

@@ -8,7 +8,7 @@
 //******************************
 
 
-use super::workload_occ::*;
+use super::workload_common::*;
 use super::numeric::*;
 use super::entry::*;
 use super::table::*;

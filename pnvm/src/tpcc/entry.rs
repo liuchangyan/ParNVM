@@ -13,7 +13,7 @@ use std::{
     mem::size_of_val,
 };
 use table::{Key, Table};
-use workload_occ::{num_district_get, num_warehouse_get};
+use workload_common::{num_district_get, num_warehouse_get};
 
 use pnvm_lib::{tcore::*, txn::TxnInfo};
 

@@ -424,7 +424,7 @@ fn run_occ_micro(conf: Config) {
 fn run_pc_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     //FIXME: rename the function, parepare workload
-    let tables = tpcc::workload_occ::prepare_workload(&conf, &mut rng);
+    let tables = tpcc::workload_common::prepare_workload(&conf, &mut rng);
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
@@ -451,8 +451,8 @@ fn run_pc_tpcc(conf: Config) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
-                tpcc::workload_occ::num_warehouse_set(wh_num);
-                tpcc::workload_occ::num_district_set(d_num);
+                tpcc::workload_common::num_warehouse_set(wh_num);
+                tpcc::workload_common::num_district_set(d_num);
 
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
@@ -551,7 +551,7 @@ fn run_pc_tpcc(conf: Config) {
 //Run the OCC contention management TPCC workload
 fn run_occ_tpcc(conf: Config) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-    let tables = tpcc::workload_occ::prepare_workload(&conf, &mut rng);
+    let tables = tpcc::workload_common::prepare_workload(&conf, &mut rng);
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let mut handles = vec![];
@@ -580,8 +580,8 @@ fn run_occ_tpcc(conf: Config) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
-                tpcc::workload_occ::num_warehouse_set(wh_num);
-                tpcc::workload_occ::num_district_set(d_num);
+                tpcc::workload_common::num_warehouse_set(wh_num);
+                tpcc::workload_common::num_district_set(d_num);
                 let duration = Duration::new(duration_in_secs, 0);
                 let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
                 let w_home = (i as i32 )% wh_num +1;
