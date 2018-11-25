@@ -23,6 +23,7 @@ use super::workload_common::*;
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
+use pnvm_lib::lock::lock_txn::Transaction2PL;
 use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
 
 #[derive(Debug)]
@@ -172,10 +173,17 @@ impl NewOrderTable {
         self.table_.push_pc(tx, entry, tables);
     }
 
+
     pub fn push(&self, tx: &mut TransactionOCC, entry: NewOrder, tables: &Arc<Tables>)
     where Arc<Row<NewOrder, (i32, i32, i32)>>: TableRef 
     {
         self.table_.push(tx, entry, tables);
+    }
+
+    pub fn push_lock(&self, tx: &mut Transaction2PL, entry: NewOrder, tables: &Arc<Tables>)
+    -> Result<(), ()> 
+    {
+        self.table_.push_lock(tx, entry, tables)
     }
 
 
@@ -322,6 +330,11 @@ impl OrderLineTable {
             self.table_.push_pc(tx, entry, tables);
         }
 
+    pub fn push_lock(&self, tx: &mut Transaction2PL, entry: OrderLine, tables: &Arc<Tables>)
+    -> Result<(), ()> 
+    {
+        self.table_.push_lock(tx, entry, tables)
+    }
 
     pub fn push(&self, tx: &mut TransactionOCC, entry: OrderLine, tables: &Arc<Tables>)
         where Arc<Row<OrderLine, (i32, i32, i32, i32)>> : TableRef
@@ -454,6 +467,12 @@ impl OrderTable {
         where Arc<Row<Order, (i32, i32, i32)>> : TableRef
     {
         self.table_.push_pc(tx, entry, tables) 
+    }
+
+    pub fn push_lock(&self, tx: &mut Transaction2PL, entry: Order, tables: &Arc<Tables>)
+    -> Result<(), ()> 
+    {
+        self.table_.push_lock(tx, entry, tables)
     }
 
     pub fn push(&self, tx: &mut TransactionOCC, entry: Order, tables: &Arc<Tables>) 

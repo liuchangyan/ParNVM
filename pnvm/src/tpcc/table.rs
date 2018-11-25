@@ -40,6 +40,7 @@ use num::iter::Range;
 use pnvm_lib::tcore::{TVersion, ObjectId, OidFac, TRef, Operation, BenchmarkCounter};
 use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
+use pnvm_lib::lock::lock_txn::*;
 use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
 use super::entry::*;
 
@@ -278,6 +279,25 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
+
+    pub fn push_lock(&self, tx: &mut Transaction2PL, entry: Entry, tables: &Arc<Tables>)
+        -> Result<(), ()>
+        where Arc<Row<Entry, Index>>: BucketPushRef 
+        {
+            let bkt_idx = entry.bucket_key() % self.bucket_num;
+
+            //Make into row and then make into a RowRef
+            let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
+            let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
+            let tid = tx.id().clone();
+
+            if tx.lock(&table_ref, LockType::Write) {
+                table_ref.install(tid);
+                return Ok(());
+            } else {
+                return Err(());
+            }
+        }
 
     pub fn push(&self, tx: &mut TransactionOCC, entry: Entry, tables: &Arc<Tables>)
     where Arc<Row<Entry, Index>> :BucketPushRef 

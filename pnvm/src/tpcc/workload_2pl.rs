@@ -4,10 +4,27 @@ use super::{
     table::*,
     entry::*,
     tpcc_tables::*,
+    numeric::*,
     workload_common::*,
 };
 
+use pnvm_lib::{
+    lock::lock_txn::*,
+};
 
+use std::{
+    result,
+    time,
+    sync::Arc,
+};
+
+use rand::{
+    thread_rng,
+    rngs::SmallRng,
+    Rng,
+};
+
+type Result = result::Result<(), ()>;
 
 
 fn new_order(tx: &mut Transaction2PL, 
@@ -20,27 +37,41 @@ fn new_order(tx: &mut Transaction2PL,
              item_ids: &[i32],
              qty: &[i32],
              now: i32)
-    ->Result<()> 
+    ->Result
 {
     let tid = tx.id();
     let dis_num = num_district_get();
     let warehouse_ref = tables.warehouse.retrieve(&w_id, w_id as usize).unwrap().into_table_ref(None, None);
     //println!("READ : WAREHOUSE : {:?}", warehouse_ref.get_id());
-    let w_tax = tx.read::<Warehouse>(warehouse_ref)?.w_tax;
+    let w_tax = match tx.read::<Warehouse>(&warehouse_ref) {
+        Ok(v) => v.w_tax,
+        Err(..) => return Err(())
+    };
     
     let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id)).unwrap().into_table_ref(None, None);
-    let c_discount = tx.read::<Customer>(customer_ref).c_discount;
-     info!("[{:?}][TXN-NEWORDER] Read Customer {:?}", tid, c_id);
+    let c_discount = match tx.read::<Customer>(&customer_ref) {
+        Ok(v) => v.c_discount,
+        Err(..) => return Err(())
+    };
+    
+    info!("[{:?}][TXN-NEWORDER] Read Customer {:?}", tid, c_id);
 
     let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize).unwrap().into_table_ref(None, None);
     //println!("READ : DISTRICT : {:?}", district_ref.get_id());
-    let mut district = tx.read::<District>(district_ref.box_clone()).clone();
+    let mut district = match tx.read::<District>(&district_ref)
+    {
+        Ok(d) => d.clone(),
+        Err(_) => return Err(())
+    };
 
     let o_id = district.d_next_o_id;
     let d_tax = district.d_tax;
     district.d_next_o_id = o_id +1;
     //tx.write(district_ref, district);
-    tx.write_field(district_ref, district, vec![D_NEXT_O_ID]);
+    match tx.write_field(&district_ref, district, vec![D_NEXT_O_ID]) {
+        Ok(_) => {},
+        Err(_) => return Err(()),
+    }
 
      let mut all_local :i64 = 1;
      for i in 0..ol_cnt as usize {
@@ -52,18 +83,25 @@ fn new_order(tx: &mut Transaction2PL,
          }
      }
       
-     info!("[{:?}][TXN-NEWORDER] Push ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
-     tables.order.push(tx,
-                       Order {
-                           o_id: o_id, o_d_id: d_id, o_w_id: w_id, o_c_id: c_id, o_entry_d: now,
-                           o_carrier_id: 0, o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
-                           o_all_local: Numeric::new(all_local, 1, 0)
-                       },
-                       tables);
-     info!("[{:?}][TXN-NEWORDER] Push NEWORDER  {:?}", tid, o_id);
-     tables.neworder.push(tx,
+     info!("[{:?}][TXN-NEWORDER] push_lock ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
+     if tables.order
+         .push_lock(tx,
+               Order {
+                   o_id: o_id, o_d_id: d_id, o_w_id: w_id, 
+                   o_c_id: c_id, o_entry_d: now,
+                   o_carrier_id: 0, o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
+                   o_all_local: Numeric::new(all_local, 1, 0)
+               },
+               tables).is_err() {
+            return Err(());
+         }
+
+     info!("[{:?}][TXN-NEWORDER] push_lock NEWORDER  {:?}", tid, o_id);
+     if tables.neworder.push_lock(tx,
                           NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id },
-                          tables);
+                          tables).is_err() {
+        return Err(());
+     }
 
      for i in 0..ol_cnt as usize {
          //let i_price = tables.item.retrieve(item_ids[i]).unwrap().read(tx).i_price;
@@ -71,10 +109,16 @@ fn new_order(tx: &mut Transaction2PL,
          let item_arc = tables.item.retrieve(&id, id as usize ).unwrap();
          let item_ref = item_arc.into_table_ref(None, None);
          //println!("READ : ITEM : {:?}", item_ref.get_id());
-         let i_price = tx.read::<Item>(item_ref).i_price;
+         let i_price = match tx.read::<Item>(&item_ref){
+            Ok(v) => v.i_price,
+            Err(_) => return Err(()),
+         };
 
          let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
-         let mut stock = tx.read::<Stock>(stock_ref.box_clone()).clone();
+         let mut stock = match tx.read::<Stock>(&stock_ref) {
+            Ok(v) => v.clone(),
+            Err(_) => return Err(()),
+         };
          let s_quantity = stock.s_quantity;
          let s_remote_cnt = stock.s_remote_cnt;
          let s_order_cnt = stock.s_order_cnt;
@@ -106,24 +150,37 @@ fn new_order(tx: &mut Transaction2PL,
          }
          info!("[{:?}][TXN-NEWORDER] Update STOCK \n\t {:?}", tid, stock);
          //tx.write(stock_ref, stock);
-         tx.write_field(stock_ref, stock, vec![S_QUANTITY, S_ORDER_CNT, S_REMOTE_CNT]);
-
+         if tx.write_field(&stock_ref, stock, vec![S_QUANTITY, S_ORDER_CNT, S_REMOTE_CNT]).is_err() {
+            return Err(());
+         }
          let ol_amount = qty * i_price * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
              (Numeric::new(1, 1, 0) - c_discount);
             
          //println!("{}", s_dist);
-         info!("[{:?}][TXN-NEWORDER] PUSHING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
-         tables.orderline.push(tx, 
-                               OrderLine {
-                                   ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, ol_number: i as i32 + 1, ol_i_id: item_ids[i],
-                                   ol_supply_w_id: src_whs[i], ol_delivery_d: 0, ol_quantity: qty, ol_amount: ol_amount,
-                                   ol_dist_info: s_dist
-                               },
-                               tables);
+         info!("[{:?}][TXN-NEWORDER] push_lockING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
+         if tables.orderline
+             .push_lock(tx, 
+                   OrderLine {
+                       ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, 
+                       ol_number: i as i32 + 1, ol_i_id: item_ids[i],
+                       ol_supply_w_id: src_whs[i], ol_delivery_d: 0, 
+                       ol_quantity: qty, ol_amount: ol_amount,
+                       ol_dist_info: s_dist
+                   },
+                   tables).is_err() {
+                return Err(());
+             }
      }
+
+     Ok(())
 }
 
-pub fn new_order_random(tx: &mut TransactionOCC, tables: &Arc<Tables>, w_home : i32,rng: &mut SmallRng) {
+pub fn new_order_random(tx: &mut Transaction2PL,
+                        tables: &Arc<Tables>, 
+                        w_home : i32,
+                        rng: &mut SmallRng) 
+    -> Result
+{
     let num_wh = num_warehouse_get();
     let num_dis = num_district_get();
     let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     

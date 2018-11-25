@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    sync::Arc,
 };
 
 use txn::{self, AbortReason, Tid, TxState, TxnInfo, Transaction};
@@ -21,6 +22,8 @@ pub struct Transaction2PL {
     tid_ : Tid,
     state_ : TxState,
     refs_ : HashMap<(ObjectId, LockType), Box<dyn TRef>>,
+    fields_ : HashMap<ObjectId, FieldArray>,
+    txn_info_ : Arc<TxnInfo>,
 }
 
 
@@ -31,10 +34,12 @@ impl Transaction2PL {
             tid_ : id,
             state_ : TxState::EMBRYO,
             refs_ : HashMap::new(),
+            fields_ : HashMap::new(),
+            txn_info_: Arc::new(TxnInfo::default()),
         }
     }
 
-    fn lock(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
+    pub fn lock(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
         let me :u32 = self.id().into();
         let id = self.id();
         let oid = *tref.get_id();
@@ -104,16 +109,18 @@ impl Transaction2PL {
 
    }
     
-    pub fn write_field<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T, fields: FieldArray) -> bool {
+    pub fn write_field<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T, fields: FieldArray) -> Result<(), ()> {
 
        match self.lock(&tref, LockType::Write) {
            true => {
                //Make records for persist later
                tref.write_through(Box::new(val), self.id().clone());
-               true
+               //Replace current fields
+               self.fields_.insert(*tref.get_id(), fields);
+               Ok(())
            },
            false => {
-               false
+               Err(())
            }
        }
     }
@@ -121,6 +128,10 @@ impl Transaction2PL {
 
     pub fn id(&self) -> Tid {
         self.tid_
+    }
+
+    pub fn txn_info(&self) -> &Arc<TxnInfo> {
+        &self.txn_info_
     }
     
     //FIXME: should I randomize the input once abort?
@@ -139,7 +150,7 @@ impl Transaction2PL {
 }
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone)]
-enum LockType {
+pub enum LockType {
     Read,
     Write,
 }
