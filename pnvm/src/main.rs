@@ -661,10 +661,10 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
                                 info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
                                 if tpcc::workload_2pl::new_order_random(tx, &tables, w_home,  &mut rng) {
                                     tx.commit();
-                                    true
+                                    false
                                 } else {
                                     tx.abort();
-                                    false
+                                    true
                                 }
                             } {}
                         }

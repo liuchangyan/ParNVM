@@ -298,17 +298,22 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         where Arc<Row<Entry, Index>>: BucketPushRef 
         {
             let bkt_idx = entry.bucket_key() % self.bucket_num;
+            let tid :u32= tx.id().into();
 
             //Make into row and then make into a RowRef
             let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
-            let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
-            let tid = tx.id().clone();
+            let bucket = &self.buckets[bkt_idx];
+            let oid = *bucket.get_id();
+            if tx.has_lock(&(oid, LockType::Write)) || bucket.vers_.write_lock(tid) {
+                /* Txn added locks info */  
+                tx.add_locks((oid, LockType::Write), bucket.vers_.clone());
 
-            if tx.lock(&table_ref, LockType::Write) {
-                table_ref.install(tid);
-                return Ok(());
+                /* Apply the change */
+                bucket.push(row);
+
+                Ok(())
             } else {
-                return Err(());
+                Err(())
             }
         }
 
@@ -441,7 +446,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     rows: UnsafeCell<Vec<Arc<Row<Entry, Index>>>>,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
-    pub vers_ : TVersion,
+    pub vers_ : Arc<TVersion>,
     #[cfg(any(feature ="pmem", feature="disk"))]
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
     pmem_cap_ : AtomicUsize,
@@ -471,7 +476,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             index: UnsafeCell::new(HashMap::with_capacity(cap)),
 
             id_ : OidFac::get_obj_next(),
-            vers_ : TVersion::default(),
+            vers_ : Arc::new(TVersion::default()),
 
             #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_root_: RefCell::new(Vec::new()),
@@ -686,7 +691,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 {
     //data_: UnsafeCell<Entry>,
     data_ : NonNull<Entry>,
-    pub vers_: TVersion,
+    pub vers_: Arc<TVersion>,
     id_ : ObjectId,
     index_ : Index,
 
@@ -760,7 +765,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         Row{
             //data_: UnsafeCell::new(entry),
             data_ : Box::into_raw_non_null(Box::new(entry)),
-            vers_: TVersion::default(), /* FIXME: this can carry txn info */
+            vers_: Arc::new(TVersion::default()), /* FIXME: this can carry txn info */
             id_ : OidFac::get_obj_next(),
             index_ : key, 
 
@@ -777,7 +782,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         Row {
             //data_ : UnsafeCell::new(entry),
             data_ : Box::into_raw_non_null(Box::new(entry)),
-            vers_ : TVersion::new_with_info(txn_info),
+            vers_ : Arc::new(TVersion::new_with_info(txn_info)),
             id_ : OidFac::get_obj_next(),
             index_ : key,
 

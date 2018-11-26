@@ -22,7 +22,7 @@ use tcore::{
 pub struct Transaction2PL {
     tid_ : Tid,
     state_ : TxState,
-    refs_ : HashMap<(ObjectId, LockType), Arc<TVersion>>,
+    locks_ : HashMap<(ObjectId, LockType), Arc<TVersion>>,
     fields_ : HashMap<ObjectId, FieldArray>,
     txn_info_ : Arc<TxnInfo>,
 }
@@ -34,10 +34,18 @@ impl Transaction2PL {
         Transaction2PL {
             tid_ : id,
             state_ : TxState::EMBRYO,
-            refs_ : HashMap::new(),
+            locks_ : HashMap::new(),
             fields_ : HashMap::new(),
             txn_info_: Arc::new(TxnInfo::default()),
         }
+    }
+
+    pub fn add_locks(&mut self, key: (ObjectId, LockType), val: Arc<TVersion>) {
+        self.locks_.insert(key, val);
+    }
+
+    pub fn has_lock(&mut self, key: &(ObjectId, LockType)) -> bool {
+        self.locks_.contains_key(key)
     }
 
     pub fn lock_tref(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
@@ -45,14 +53,14 @@ impl Transaction2PL {
         let id = self.id();
         let oid = *tref.get_id();
 
-        if !self.refs_.contains_key(&(oid, lock_type)) {
+        if !self.locks_.contains_key(&(oid, lock_type)) {
             let ok = match lock_type {
                 LockType::Read => tref.read_lock(me),
                 LockType::Write => tref.write_lock(me),
             };
 
             if ok {
-                self.refs_.insert((oid, lock_type), tref.get_tvers().clone());
+                self.locks_.insert((oid, lock_type), tref.get_tvers().clone());
             }
             ok
 
@@ -65,7 +73,7 @@ impl Transaction2PL {
     fn unlock(&mut self) {
         let me : u32 = self.id().into();
         info!("{} is unlocking", me);
-        for ((_id, lock_type), vers) in self.refs_.drain() {
+        for ((_id, lock_type), vers) in self.locks_.drain() {
             match lock_type {
                 LockType::Read => vers.read_unlock(me),
                 LockType::Write => vers.write_unlock(me),
