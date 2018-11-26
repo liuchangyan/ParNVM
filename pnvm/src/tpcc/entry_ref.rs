@@ -200,6 +200,10 @@ impl  TRef for WarehouseRef {
         self.inner_.get_version()
     }
 
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
+
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
@@ -363,6 +367,9 @@ impl  TRef for DistrictRef  {
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
     }
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
 
     fn read(&self) -> &Any {
         self.inner_.get_data()
@@ -522,6 +529,9 @@ impl  TRef for CustomerRef  {
         self.inner_.get_version()
     }
 
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
@@ -742,6 +752,9 @@ impl  TRef for NewOrderRef  {
         self.inner_.get_version()
     }
 
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
@@ -896,6 +909,9 @@ impl  TRef for OrderRef  {
         self.inner_.get_id()
     }
 
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
     }
@@ -1054,6 +1070,9 @@ impl  TRef for OrderLineRef  {
         self.inner_.get_id()
     }
 
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
     }
@@ -1185,6 +1204,9 @@ impl  TRef for ItemRef  {
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
     }
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
 
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
@@ -1306,6 +1328,9 @@ impl  TRef for HistoryRef  {
         self.inner_.get_id()
     }
 
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
+    }
     fn get_version(&self) -> u32 {
         self.inner_.get_version()
     }
@@ -1457,6 +1482,9 @@ impl  TRef for StockRef  {
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
+    }
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
     }
 
     fn get_version(&self) -> u32 {

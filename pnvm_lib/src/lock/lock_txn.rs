@@ -12,6 +12,7 @@ use tcore::{
     TTag, 
     TRef, 
     FieldArray,
+    TVersion,
     BenchmarkCounter,
 };
 
@@ -21,7 +22,7 @@ use tcore::{
 pub struct Transaction2PL {
     tid_ : Tid,
     state_ : TxState,
-    refs_ : HashMap<(ObjectId, LockType), Box<dyn TRef>>,
+    refs_ : HashMap<(ObjectId, LockType), Arc<TVersion>>,
     fields_ : HashMap<ObjectId, FieldArray>,
     txn_info_ : Arc<TxnInfo>,
 }
@@ -39,7 +40,7 @@ impl Transaction2PL {
         }
     }
 
-    pub fn lock(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
+    pub fn lock_tref(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
         let me :u32 = self.id().into();
         let id = self.id();
         let oid = *tref.get_id();
@@ -51,7 +52,7 @@ impl Transaction2PL {
             };
 
             if ok {
-                self.refs_.insert((oid, lock_type), tref.box_clone());
+                self.refs_.insert((oid, lock_type), tref.get_tvers().clone());
             }
             ok
 
@@ -64,10 +65,10 @@ impl Transaction2PL {
     fn unlock(&mut self) {
         let me : u32 = self.id().into();
         info!("{} is unlocking", me);
-        for ((_id, lock_type), tref) in self.refs_.drain() {
+        for ((_id, lock_type), vers) in self.refs_.drain() {
             match lock_type {
-                LockType::Read => tref.read_unlock(me),
-                LockType::Write => tref.write_unlock(me),
+                LockType::Read => vers.read_unlock(me),
+                LockType::Write => vers.write_unlock(me),
             }
         }
     }
@@ -78,7 +79,7 @@ impl Transaction2PL {
     //Return none when failed locking  
     pub fn read<'a, T:'static+Clone>(&mut self, tref: &'a Box<dyn TRef>) -> Result<&'a T, ()> {
         /* Lock */
-        match self.lock(tref, LockType::Read) {
+        match self.lock_tref(tref, LockType::Read) {
             true => {
                 match tref.read().downcast_ref::<T>() {
                     Some(data) => Ok(data),
@@ -96,7 +97,7 @@ impl Transaction2PL {
    pub fn write<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T) 
        -> Result<(), ()> 
        {
-       match self.lock(tref, LockType::Write) {
+       match self.lock_tref(tref, LockType::Write) {
            true => {
                tref.write_through(Box::new(val), self.id().clone());
                //Make records for persist later
@@ -111,7 +112,7 @@ impl Transaction2PL {
     
     pub fn write_field<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T, fields: FieldArray) -> Result<(), ()> {
 
-       match self.lock(&tref, LockType::Write) {
+       match self.lock_tref(&tref, LockType::Write) {
            true => {
                //Make records for persist later
                tref.write_through(Box::new(val), self.id().clone());

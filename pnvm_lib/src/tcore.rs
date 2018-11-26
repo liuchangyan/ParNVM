@@ -222,6 +222,7 @@ pub trait TRef : fmt::Debug{
     fn install(&self, id: Tid);
     fn box_clone(&self) -> Box<dyn TRef>;
     fn get_id(&self) -> &ObjectId;
+    fn get_tvers(&self) -> &Arc<TVersion>;
     fn get_version(&self) -> u32;
     fn read(&self) -> &Any;
     fn write(&mut self, Box<Any>);
@@ -450,7 +451,9 @@ impl TVersion {
                         return false;
                     } else if blocker == tid {
                         self.exit_cr();
-                        println!("No recusrive wlock {}", tid);
+                        //FIXME: HACK:this is to allow TableRef to lock bucket
+                        //repetively
+                        println!("recusrive wlock {}", tid);
                         panic!();
                     } else {
                         /* Wait for cur writer to release */
@@ -500,6 +503,7 @@ impl TVersion {
 
     pub fn write_unlock(&self, tid: u32) {
         self.enter_cr(tid);
+        //Multiple unlock might be called
         self.tpl_writer_.compare_exchange(tid, 0, Ordering::SeqCst, Ordering::SeqCst).expect("Write lock poisoned");
         self.exit_cr();
     }

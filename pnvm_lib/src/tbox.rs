@@ -22,7 +22,7 @@ where
     T: Clone,
 {
     tvalue_: TValue<T>,
-    vers_:   TVersion,
+    vers_:   Arc<TVersion>,
     id_:     ObjectId,
 }
 
@@ -121,7 +121,7 @@ where
         Arc::new(TBox {
             tvalue_: TValue::new(val),
             id_:     id,
-            vers_:   TVersion::default(),
+            vers_:   Arc::new(TVersion::default()),
         })
     }
 
@@ -135,7 +135,7 @@ where
         TBox {
             tvalue_ : TValue::new(val),
             id_ : id,
-            vers_: TVersion::default(),
+            vers_: Arc::new(TVersion::default()),
         }
     }
 }
@@ -205,6 +205,10 @@ impl TRef for TInt {
 
     fn get_id(&self) -> &ObjectId {
         self.inner_.get_id()
+    }
+
+    fn get_tvers(&self) -> &Arc<TVersion> {
+        &self.inner_.vers_
     }
 
     fn get_version(&self) -> u32 {
