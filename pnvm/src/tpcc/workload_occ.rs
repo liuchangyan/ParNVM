@@ -357,7 +357,7 @@ pub fn orderstatus_random(tx: &mut TransactionOCC,
     
     let y = urand(1, 100, rng);
     
-    if false {
+    if y <= 60 {
         let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
         orderstatus(tx, tables, w_id, d_id, w_id , d_id, Some(c_last), None);
     } else {

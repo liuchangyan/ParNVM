@@ -393,6 +393,7 @@ impl TVersion {
     //      => abort when i am smaller 
     //      => spinning when I am bigger
     pub fn read_lock(&self, tid: u32) -> bool {
+        let mut count: u64 = 0;
         loop {
             //Enter Reader updating CR
             self.enter_cr(tid,);
@@ -417,11 +418,20 @@ impl TVersion {
                         return true;
                     } else {
                         /* NO-OP for writer < tid */
+                        count += 1;
+                        if count == 100_000_000 {
+                            println!("spinning in read lock for too lock");
+                        }
+                        
+                        if count >= 200_000_000 {
+                            panic!("spinning in read lock for too lock");
+                        }
+                        self.exit_cr();
+                        std::thread::yield_now();
                     }
                 }
             }
-
-            self.exit_cr();
+            
         }
     }
 
@@ -436,6 +446,7 @@ impl TVersion {
 
     //Wlock
     pub fn write_lock(&self, tid: u32) -> bool {
+        let mut count: u64 = 0;
         'start: loop {
             self.enter_cr(tid);
             //DO NOT Allow Recursive write locks
@@ -458,11 +469,19 @@ impl TVersion {
                     } else {
                         /* Wait for cur writer to release */
                         self.exit_cr();
+                        std::thread::yield_now();
+                        count +=1;
+                        if count == 100_000_000 {
+                            warn!("spinning in write_lock - blocker: {:?}, tid: {:?}", blocker, tid);
+                        }
+                        if count >= 200_000_000 {
+                            panic!("spinning in write_lock - blocker: {:?}, tid: {:?}", blocker, tid);
+                        }
                         continue 'start;
                     }
                 }
             }
-
+            
 
             /* Check reader */
             match self.tpl_reader_.load(Ordering::SeqCst) {
@@ -478,11 +497,16 @@ impl TVersion {
                    if max_reader > tid {
                        self.exit_cr();
                        return false;
-                   } else if max_reader == tid { assert_eq!(self.tpl_writer_.load(Ordering::SeqCst), 0);
+                   } else if max_reader == tid { 
+                       assert_eq!(self.tpl_writer_.load(Ordering::SeqCst), 0);
                        self.tpl_writer_.store(tid, Ordering::SeqCst);
 
                        while self.tpl_reader_cnt_.load(Ordering::SeqCst) != 1 {
                            self.exit_cr();
+                           count +=1;
+                           if count >= 100_000_000 {
+                               panic!("spinning in write_lock - max_reader: {:?}, tid: {:?}", max_reader, tid);
+                           }
                            std::thread::yield_now();
                            self.enter_cr(tid);
                        }
@@ -492,6 +516,10 @@ impl TVersion {
                        return true;
                    } else {
                        // No op if I should be waiting 
+                       count +=1;
+                       if count >= 100_000_000 {
+                           panic!("spinning in write_lock - max_reader: {:?}, tid: {:?}", max_reader, tid);
+                       }
                    }
                }
             }
@@ -509,8 +537,13 @@ impl TVersion {
     }
 
     fn enter_cr(&self, tid: u32) {
+        let mut count :u64 =0;
         while self.tpl_cr_.compare_and_swap(false, true, Ordering::SeqCst) 
         {
+            count +=1;
+            if count >= 100_000_000 {
+                panic!("spinning enter cr {:?}", tid);
+            }
         }
     }
 

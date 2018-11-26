@@ -62,13 +62,13 @@ def run_exp(env, command, out_fd):
 
 
 if __name__ == '__main__':
-    high_con_wh = [1, 1, 2, 4, 8]
-    low_con_wh = [1, 4, 8, 16, 30]
+    high_con_wh = [1, 1, 2, 4]
+    low_con_wh = [1, 4, 8, 16]
     bench_config = {
-            "thread_num" :[1, 4, 8,16, 30],
+            "thread_num" :[1, 4, 8,16],
             #"zipf": np.linspace(0.000001, 1.0, num=10),
-            "name": 'TPCC_OCC',
-            "wh_num" : [1, 1, 2, 4,8],
+            "name": 'TPCC_2PL',
+            "wh_num" : [1, 1, 2, 4],
             "duration": 15,
             "no_warmup" : 'false',
             "warmup_time" : 10,
@@ -78,13 +78,13 @@ if __name__ == '__main__':
 
     # Run OCC-PMEM High-cont
     bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-occ-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-2pl-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 
     # Run OCC-PMEM low-cont
     bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-occ-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-2pl-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 
@@ -108,16 +108,16 @@ if __name__ == '__main__':
     os.system(compile_vol)
 
     # Run OCC-VOL High
-    bench_config['name'] ='TPCC_OCC'
+    bench_config['name'] ='TPCC_2PL'
     bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-vol-occ-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-vol-2pl-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 
     # Run OCC-VOL Low
-    bench_config['name'] ='TPCC_OCC'
+    bench_config['name'] ='TPCC_2PL'
     bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-vol-occ-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-vol-2pl-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 

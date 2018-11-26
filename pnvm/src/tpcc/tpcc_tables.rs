@@ -235,7 +235,11 @@ impl NewOrderTable {
                 },
 
                 Some(vecs) => {
-                    assert_eq!(vecs.len()> 0, true);
+                    //assert_eq!(vecs.len()> 0, true);
+                    if vecs.len() == 0 {
+                        self.wd_index_.unlock_bucket(index);
+                        return None;
+                    }
                     let min_no = vecs[0];    
                     let ret =self.table_.retrieve(&min_no, (min_no.0 * dis_num + min_no.1) as usize);
                     self.wd_index_.unlock_bucket(index);
@@ -249,6 +253,13 @@ impl NewOrderTable {
         let dis_num = num_district_get();
         let bucket_idx = index.0 * dis_num  + index.1;
         self.table_.delete(tx, index, tables, bucket_idx as usize)
+    }
+
+    pub fn delete_lock(&self, tx: &mut Transaction2PL, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
+    {
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num  + index.1;
+        self.table_.delete_lock(tx, index, tables, bucket_idx as usize)
     }
 
     pub fn delete_pc(&self, tx: &mut TransactionParOCC, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool

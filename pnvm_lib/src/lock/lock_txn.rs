@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+
 use txn::{self, AbortReason, Tid, TxState, TxnInfo, Transaction};
 use tcore::{
     self,
@@ -16,6 +17,14 @@ use tcore::{
     BenchmarkCounter,
 };
 
+#[cfg(any(feature = "pmem", feature = "disk"))]
+use pnvm_sys;
+
+#[cfg(any(feature = "pmem", feature = "disk"))]
+use plog::{
+    PLog,
+    self
+};
 
 
 
@@ -23,8 +32,10 @@ pub struct Transaction2PL {
     tid_ : Tid,
     state_ : TxState,
     locks_ : HashMap<(ObjectId, LockType), Arc<TVersion>>,
-    fields_ : HashMap<ObjectId, FieldArray>,
     txn_info_ : Arc<TxnInfo>,
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    refs_ : Vec<(Box<dyn TRef>, Option<FieldArray>)>,
+    //fields_ : HashMap<ObjectId, FieldArray>,
 }
 
 
@@ -35,8 +46,9 @@ impl Transaction2PL {
             tid_ : id,
             state_ : TxState::EMBRYO,
             locks_ : HashMap::new(),
-            fields_ : HashMap::new(),
             txn_info_: Arc::new(TxnInfo::default()),
+            #[cfg(any(feature = "pmem", feature = "disk"))]
+            refs_ : Vec::new(),
         }
     }
 
@@ -108,6 +120,7 @@ impl Transaction2PL {
        match self.lock_tref(tref, LockType::Write) {
            true => {
                tref.write_through(Box::new(val), self.id().clone());
+               self.refs_.push((tref.box_clone(), None));
                //Make records for persist later
                Ok(()) 
            },
@@ -119,13 +132,12 @@ impl Transaction2PL {
    }
     
     pub fn write_field<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T, fields: FieldArray) -> Result<(), ()> {
-
        match self.lock_tref(&tref, LockType::Write) {
            true => {
                //Make records for persist later
                tref.write_through(Box::new(val), self.id().clone());
                //Replace current fields
-               self.fields_.insert(*tref.get_id(), fields);
+               self.refs_.push((tref.box_clone(), Some(fields)));
                Ok(())
            },
            false => {
@@ -146,14 +158,85 @@ impl Transaction2PL {
     //FIXME: should I randomize the input once abort?
     pub fn abort(&mut self) {
         BenchmarkCounter::abort();
+        
+        #[cfg(any(feature = "pmem", feature = "disk"))]
+        self.refs_.clear();
+
         self.unlock();
     }
 
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    pub fn add_ref(&mut self, tref: Box<dyn TRef>) {
+        self.refs_.push((tref,None));
+    }
+
+
     pub fn commit(&mut self) {
         //Unlocks
+        #[cfg(any(feature = "pmem", feature = "disk"))]
+        {
+            self.persist_log();
+            self.persist_data();
+            self.persist_commit();
+        }
+
         BenchmarkCounter::success();
         self.unlock();
     }
+    
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn persist_data(&self) {
+        #[cfg(feature = "pmem")]
+        for (tref, fields) in self.refs_.iter() {
+            match fields {
+                Some(fields) => {
+                    for field in fields.iter() {
+                        let pmemaddr = tref.get_pmem_field_addr(*field);
+                        let size = tref.get_field_size(*field);
+                        let vaddr =tref.get_field_ptr(*field);
+                        BenchmarkCounter::flush(size);
+                        pnvm_sys::memcpy_nodrain(pmemaddr, vaddr, size);
+                    }
+                },
+                None => {
+                    BenchmarkCounter::flush(tref.get_layout().size());
+                    pnvm_sys::memcpy_nodrain(
+                        tref.get_pmem_addr(),
+                        tref.get_ptr(),
+                        tref.get_layout().size());
+                }
+            }
+        }
+
+
+        #[cfg(feature = "disk")]
+        panic!("not impelmented for disk");
+    }
+
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn persist_commit(&self) {
+        #[cfg(feature = "pmem")]
+        pnvm_sys::drain();
+
+        plog::persist_txn(self.id().into());
+    }
+
+    #[cfg(any(feature = "pmem", feature = "disk"))]
+    fn persist_log(&self) {
+        let mut logs = vec![];
+        for (tref, _field) in self.refs_.iter() {
+            logs.push(PLog::new(
+                tref.get_ptr() as *mut u8,
+                tref.get_layout(),
+                self.id()));
+
+        }
+
+        plog::persist_log(logs);
+        
+    }
+
+
 
 
 }

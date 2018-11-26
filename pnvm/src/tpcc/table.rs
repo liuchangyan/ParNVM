@@ -307,10 +307,15 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             if tx.has_lock(&(oid, LockType::Write)) || bucket.vers_.write_lock(tid) {
                 /* Txn added locks info */  
                 tx.add_locks((oid, LockType::Write), bucket.vers_.clone());
+                
+                let tref = row.into_push_table_ref(bkt_idx, tables.clone());
 
+                /* Added for persistent */
+                #[cfg(any(feature = "pmem", feature = "disk"))]
+                tx.add_ref(tref.box_clone());
+                
                 /* Apply the change */
-                bucket.push(row);
-
+                tref.install(tx.id());
                 Ok(())
             } else {
                 Err(())
@@ -330,6 +335,53 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Push);
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
+    }
+
+    pub fn delete_lock(&self, tx: &mut Transaction2PL, index: &Index, tables: &Arc<Tables>, bucket_idx: usize) 
+        -> bool 
+        where Arc<Row<Entry, Index>> : BucketDeleteRef
+    {
+        let bucket_idx = bucket_idx % self.bucket_num;
+        let bucket = &self.buckets[bucket_idx];
+        let row = match bucket.retrieve(index){
+            None => { 
+                warn!("tx_delete: no element {:?}", index);
+                return false;
+            },
+            Some(row) => row
+        };
+
+        let bk_oid = *bucket.get_id();
+        let r_oid = *row.get_id();
+        let tid :u32= tx.id().into();
+    
+        /* Lock  */
+        if !tx.has_lock(&(bk_oid,LockType::Write)){
+            if bucket.vers_.write_lock(tid) {
+                tx.add_locks((bk_oid, LockType::Write), bucket.vers_.clone());
+            } else {
+                return false;
+            }
+        }
+        if !tx.has_lock(&(r_oid, LockType::Write)) {
+            if row.vers_.write_lock(tid) {
+                tx.add_locks((r_oid, LockType::Write), row.vers_.clone());
+            } else {
+                return false;
+            }
+        }
+
+        /* Lock held */
+        let tref = row.into_delete_table_ref(
+            bucket_idx,
+            tables.clone(),
+            );
+
+        #[cfg(any(feature = "pmem", feature = "disk"))]
+        tx.add_ref(tref.box_clone());
+
+        tref.install(tx.id());
+        true
     }
 
     pub fn delete_pc(&self, tx: &mut TransactionParOCC, index: &Index, tables: &Arc<Tables>, bucket_idx: usize) -> bool

@@ -623,7 +623,8 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
                     BenchmarkCounter::get_time();
                     let tid = TidFac::get_thd_next();
                     let j : u32= rng.gen::<u32>() % 100;
-                    
+                    let mut abort_cnt = 0;
+
                     match txn_type {
                         TxnType::OCC => {
                             let tid = tid.clone();
@@ -659,11 +660,28 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
                             let tx = &mut lock_txn::Transaction2PL::new(tid);
                             while {
                                 info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
-                                if tpcc::workload_2pl::new_order_random(tx, &tables, w_home,  &mut rng) {
+                                let res = if j > 55 {
+                                    tpcc::workload_2pl::new_order_random(tx, &tables, w_home,  &mut rng)
+                                } else if j < 4 {
+                                    tpcc::workload_2pl::orderstatus_random(tx, &tables, w_home, &mut rng)
+                                } else if j < 8  {
+                                    let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
+                                    tpcc::workload_2pl::delivery(tx, &tables, w_home, o_carrier_id)
+                                } else if j < 12 {
+                                    let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
+                                    tpcc::workload_2pl::stocklevel(tx, &tables, w_home, d_home, thd)
+                                }
+                                else{
+                                    tpcc::workload_2pl::payment_random(tx, &tables,w_home  ,  &mut rng)
+                                };
+
+                                if res {
                                     tx.commit();
+                                    warn!("[THREAD {:} - TXN {:?}] COMMITS", i , tid);
                                     false
                                 } else {
                                     tx.abort();
+                                    warn!("[THREAD {:} - TXN {:?}] ABORTS ", i , tid);
                                     true
                                 }
                             } {}
