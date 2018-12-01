@@ -67,24 +67,24 @@ if __name__ == '__main__':
     bench_config = {
             "thread_num" :[1, 4, 8,16],
             #"zipf": np.linspace(0.000001, 1.0, num=10),
-            "name": 'TPCC_2PL',
+            "name": 'TPCC_OCC',
             "wh_num" : [1, 1, 2, 4],
             "duration": 15,
             "no_warmup" : 'false',
-            "warmup_time" : 10,
+            "warmup_time" : 8,
             }
     compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem"'
     os.system(compile_pmem)
 
     # Run OCC-PMEM High-cont
     bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-2pl-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-occ-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 
     # Run OCC-PMEM low-cont
     bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-2pl-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-occ-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 
@@ -103,21 +103,52 @@ if __name__ == '__main__':
         run(bench_config, out_fd)
 
 
+    # Run 2PL-PMEM High
+    bench_config['name'] ='NO_2PL'
+    bench_config['wh_num'] = high_con_wh
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-2pl-no-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(bench_config, out_fd)
+
+
+    # Run 2PL-PMEM Low
+    bench_config['name'] ='NO_2PL'
+    bench_config['wh_num'] = low_con_wh
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-2pl-no-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(bench_config, out_fd)
+
+
+    # Run PPNVM-PMEM-NO High
+    bench_config['name'] ='NO_NVM'
+    bench_config['wh_num'] = high_con_wh
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-ppnvm-no-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(bench_config, out_fd)
+
+
+    # Run PPNVM-PMEM-NO Low
+    bench_config['name'] ='NO_NVM'
+    bench_config['wh_num'] =low_con_wh
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-ppnvm-no-output.csv"), "w+") as out_fd:
+        print_header(out_fd)
+        run(bench_config, out_fd)
+
     # Recompile for VOL version
     compile_vol = 'cargo clean && cargo +nightly build --release --features unstable'
     os.system(compile_vol)
 
     # Run OCC-VOL High
-    bench_config['name'] ='TPCC_2PL'
+    bench_config['name'] ='TPCC_OCC'
     bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-vol-2pl-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-vol-occ-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 
     # Run OCC-VOL Low
-    bench_config['name'] ='TPCC_2PL'
+    bench_config['name'] ='TPCC_OCC'
     bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-vol-2pl-output.csv"), "w+") as out_fd:
+    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-vol-occ-output.csv"), "w+") as out_fd:
         print_header(out_fd)
         run(bench_config, out_fd)
 

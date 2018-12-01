@@ -88,8 +88,9 @@ fn main() {
         "SINGLE" => run_single(conf),
         "PNVM_OCC" => run_nvm_occ_micro(conf),
         "TPCC_OCC" => run_tpcc(conf, TxnType::OCC),
-        "TPCC_2PL" => run_tpcc(conf, TxnType::Lock),
-        "TPCC_NVM" => run_pc_tpcc(conf),
+        "TPCC_NVM" => run_pc_tpcc(conf, WorkloadType::Full),
+        "NO_2PL" => run_tpcc(conf, TxnType::Lock),
+        "NO_NVM" => run_pc_tpcc(conf, WorkloadType::NewOrder),
         "MICRO_2PL" => run_micro_2pl(conf),
         _ => panic!("unknown test name"),
     }
@@ -136,36 +137,48 @@ fn run_micro_2pl(conf: Config) {
                     'work: loop {
                         let tx = &mut lock_txn::Transaction2PL::new(tid);
 
-                        /* Read */
+                        /* Read Lock*/
+                        let mut read_trefs = vec![];
                         for k in read_keys.iter(){
                             let tbox = &values[*k as usize];
                             let tref = tbox.clone().into_box_ref();
-                            match tx.read::<u32>(&tref) {
-                                Ok(v) => {
-                                   info!("{:?} READ {} : {}", tid, k, v);
+                            match tx.read_lock_tref(&tref) {
+                                Ok(_) => {
+                                    read_trefs.push(tref);
                                 },
-                                Err(..) => {
+                                Err(_) => {
                                     tx.abort();
                                     continue 'work;
                                 }
                             }
                         }
 
-
-                        for k in write_keys.iter() {
+                        /* Write Lock*/
+                        let mut write_trefs = vec![];
+                        for k in write_keys.iter(){
                             let tbox = &values[*k as usize];
                             let tref = tbox.clone().into_box_ref();
-                            debug!("{:?} to write {:?}", tid, k);
-                            match tx.write::<u32>(&tref, i as u32) {
-                                Ok(..) => {
-                                    info!("Write {} : {}", k, i);
+                            match tx.write_lock_tref(&tref) {
+                                Ok(_) => {
+                                    write_trefs.push(tref);
                                 },
-                                Err(..) => {
+                                Err(_) => {
                                     tx.abort();
                                     continue 'work;
                                 }
                             }
-                            debug!("{:?} written {:?}", tid, k);
+                        }
+                        
+                        let tid :u32 = tid.into();
+                        for tref in read_trefs.iter() {
+                            let v  = tx.read::<u32>(&tref);
+                            info!("Read {} : {}", tid, v);
+                        }
+
+                        for tref in write_trefs.iter() {
+                            let oid = tref.get_id();
+                            tx.write::<u32>(&tref, tid);
+                            info!("Write {:?} : {} ", oid, tid);
                         }
 
                         tx.commit();
@@ -422,7 +435,7 @@ fn run_occ_micro(conf: Config) {
 
 
 //Running of TPCC with PPNVM piece contention management
-fn run_pc_tpcc(conf: Config) {
+fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     //FIXME: rename the function, parepare workload
     let tables = tpcc::workload_common::prepare_workload(&conf, &mut rng);
@@ -503,30 +516,43 @@ fn run_pc_tpcc(conf: Config) {
 
                     
                     //FIXME: pass by ref rather than box it
-                    let mut tx = match j {
-                        12...55 => {
-                            let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
-                            TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
-                        },
-                        0...4 => {
-                            let inputs = tpcc::workload_ppnvm::pc_orderstatus_input(w_home, &mut rng);
-                            TransactionParOCC::new_from_base(&orderstatus_base, tid, Box::new(inputs))
-                        },
-                        4...8 => {
-                            let inputs = tpcc::workload_ppnvm::pc_delivery_input(w_home, &mut rng);
-                            TransactionParOCC::new_from_base(&delivery_base, tid, Box::new(inputs))
-                        },
-                        8...12 => {
-                            TransactionParOCC::new_from_base(&stocklevel_base, tid, Box::new(-1))
-                        },
-                        55...100 => {
-                            let inputs = tpcc::workload_ppnvm::pc_payment_input(w_home, &mut rng);
-                            TransactionParOCC::new_from_base(&payment_base, tid, Box::new(inputs))
-                        },
-                        _ => panic!("invalid tx mix")
-                    };
+                    match kind {
+                        WorkloadType::Full => {
+                            let mut tx = match j {
+                                12...55 => {
+                                    let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
+                                    TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
+                                },
+                                0...4 => {
+                                    let inputs = tpcc::workload_ppnvm::pc_orderstatus_input(w_home, &mut rng);
+                                    TransactionParOCC::new_from_base(&orderstatus_base, tid, Box::new(inputs))
+                                },
+                                4...8 => {
+                                    let inputs = tpcc::workload_ppnvm::pc_delivery_input(w_home, &mut rng);
+                                    TransactionParOCC::new_from_base(&delivery_base, tid, Box::new(inputs))
+                                },
+                                8...12 => {
+                                    TransactionParOCC::new_from_base(&stocklevel_base, tid, Box::new(-1))
+                                },
+                                55...100 => {
+                                    let inputs = tpcc::workload_ppnvm::pc_payment_input(w_home, &mut rng);
+                                    TransactionParOCC::new_from_base(&payment_base, tid, Box::new(inputs))
+                                },
+                                _ => panic!("invalid tx mix")
+                            };
 
-                    tx.execute_txn();
+                            tx.execute_txn();
+                        },
+                        WorkloadType::NewOrder => {
+                            let mut tx ={
+                                let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
+                                TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
+                            };
+
+                            tx.execute_txn();
+                        },
+                
+                    }
                     info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
                 }
 
@@ -660,22 +686,23 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
                             let tx = &mut lock_txn::Transaction2PL::new(tid);
                             while {
                                 info!("\n------------------TXN[{:?} Starts-----------------\n", tid);
-                                let res = if j > 55 {
-                                    tpcc::workload_2pl::new_order_random(tx, &tables, w_home,  &mut rng)
-                                } else if j < 4 {
-                                    tpcc::workload_2pl::orderstatus_random(tx, &tables, w_home, &mut rng)
-                                } else if j < 8  {
-                                    let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
-                                    tpcc::workload_2pl::delivery(tx, &tables, w_home, o_carrier_id)
-                                } else if j < 12 {
-                                    let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
-                                    tpcc::workload_2pl::stocklevel(tx, &tables, w_home, d_home, thd)
-                                }
-                                else{
-                                    tpcc::workload_2pl::payment_random(tx, &tables,w_home  ,  &mut rng)
-                                };
+                                let res = tpcc::workload_2pl::new_order_random(tx, &tables, w_home, &mut rng);
+                                //let res = if j > 55 {
+                                //    tpcc::workload_2pl::new_order_random(tx, &tables, w_home,  &mut rng)
+                                //} else if j < 4 {
+                                //    tpcc::workload_2pl::orderstatus_random(tx, &tables, w_home, &mut rng)
+                                //} else if j < 8  {
+                                //    let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
+                                //    tpcc::workload_2pl::delivery(tx, &tables, w_home, o_carrier_id)
+                                //} else if j < 12 {
+                                //    let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
+                                //    tpcc::workload_2pl::stocklevel(tx, &tables, w_home, d_home, thd)
+                                //}
+                                //else{
+                                //    tpcc::workload_2pl::payment_random(tx, &tables,w_home  ,  &mut rng)
+                                //};
 
-                                if res {
+                                if res.is_ok() {
                                     tx.commit();
                                     warn!("[THREAD {:} - TXN {:?}] COMMITS", i , tid);
                                     false
@@ -862,4 +889,10 @@ fn report_stat(
 enum TxnType{
     OCC,
     Lock,
+}
+
+#[derive(Copy, Clone)]
+enum WorkloadType {
+    Full,
+    NewOrder,
 }

@@ -174,6 +174,7 @@ impl NewOrderTable {
     }
 
 
+
     pub fn push(&self, tx: &mut TransactionOCC, entry: NewOrder, tables: &Arc<Tables>)
     where Arc<Row<NewOrder, (i32, i32, i32)>>: TableRef 
     {
@@ -181,7 +182,6 @@ impl NewOrderTable {
     }
 
     pub fn push_lock(&self, tx: &mut Transaction2PL, entry: NewOrder, tables: &Arc<Tables>)
-    -> Result<(), ()> 
     {
         self.table_.push_lock(tx, entry, tables)
     }
@@ -209,6 +209,7 @@ impl NewOrderTable {
         self.wd_index_.unlock_bucket(&idx_key);
     }
 
+
     pub fn retrieve(&self, index: &(i32, i32, i32)) 
         -> Option<Arc<Row<NewOrder, (i32, i32,i32)>>>
         {
@@ -217,6 +218,11 @@ impl NewOrderTable {
             self.table_.retrieve(index, bucket_idx as usize)
         }
 
+    pub fn retrieve_bucket(&self, bucket: &(i32, i32)) -> &Bucket<NewOrder, (i32, i32, i32)> {
+        let dis_num = num_district_get();
+        let bucket_idx = bucket.0 * dis_num + bucket.1;
+        self.get_bucket(bucket_idx as usize)
+    }
 
     pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<NewOrder, (i32, i32, i32)>
     {
@@ -255,12 +261,12 @@ impl NewOrderTable {
         self.table_.delete(tx, index, tables, bucket_idx as usize)
     }
 
-    pub fn delete_lock(&self, tx: &mut Transaction2PL, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
-    {
-        let dis_num = num_district_get();
-        let bucket_idx = index.0 * dis_num  + index.1;
-        self.table_.delete_lock(tx, index, tables, bucket_idx as usize)
-    }
+    //pub fn delete_lock(&self, tx: &mut Transaction2PL, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
+    //{
+    //    let dis_num = num_district_get();
+    //    let bucket_idx = index.0 * dis_num  + index.1;
+    //    self.table_.delete_lock(tx, index, tables, bucket_idx as usize)
+    //}
 
     pub fn delete_pc(&self, tx: &mut TransactionParOCC, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
     {
@@ -342,7 +348,6 @@ impl OrderLineTable {
         }
 
     pub fn push_lock(&self, tx: &mut Transaction2PL, entry: OrderLine, tables: &Arc<Tables>)
-    -> Result<(), ()> 
     {
         self.table_.push_lock(tx, entry, tables)
     }
@@ -379,6 +384,12 @@ impl OrderLineTable {
         let dis_num = num_district_get();
         let bucket_idx = index.0 * dis_num + index.1;
        self.table_.retrieve(index, bucket_idx as usize)
+    }
+
+    pub fn retrieve_bucket(&self, bucket: &(i32, i32)) -> &Bucket<OrderLine, (i32, i32, i32, i32)> {
+        let dis_num = num_district_get();
+        let bucket_idx = bucket.0 * dis_num + bucket.1;
+        self.get_bucket(bucket_idx as usize)
     }
 
     pub fn get_bucket(&self, bkt_idx : usize) -> &Bucket<OrderLine, (i32, i32, i32, i32)>
@@ -481,7 +492,6 @@ impl OrderTable {
     }
 
     pub fn push_lock(&self, tx: &mut Transaction2PL, entry: Order, tables: &Arc<Tables>)
-    -> Result<(), ()> 
     {
         self.table_.push_lock(tx, entry, tables)
     }
@@ -497,6 +507,12 @@ impl OrderTable {
         let dis_num = num_district_get();
         let bucket_idx = index.0 * dis_num + index.1;
         self.table_.retrieve(index, bucket_idx as usize)
+    }
+
+    pub fn retrieve_bucket(&self, bucket: &(i32, i32)) -> &Bucket<Order, (i32, i32, i32)> {
+        let dis_num = num_district_get();
+        let bucket_idx = bucket.0 * dis_num + bucket.1;
+        self.get_bucket(bucket_idx as usize)
     }
 
     pub fn get_bucket(&self, bkt_idx: usize) -> &Bucket<Order, (i32, i32, i32)>

@@ -53,14 +53,32 @@ impl Transaction2PL {
     }
 
     pub fn add_locks(&mut self, key: (ObjectId, LockType), val: Arc<TVersion>) {
-        self.locks_.insert(key, val);
+        if !self.has_lock(&key) {
+            self.locks_.insert(key, val);
+        }
     }
 
-    pub fn has_lock(&mut self, key: &(ObjectId, LockType)) -> bool {
+    fn has_lock(&mut self, key: &(ObjectId, LockType)) -> bool {
         self.locks_.contains_key(key)
     }
 
-    pub fn lock_tref(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
+    pub fn read_lock_tref(&mut self, tref: &Box<dyn TRef>) -> Result<(), ()>{
+        if self.lock_tref(tref, LockType::Read) {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn write_lock_tref(&mut self, tref: &Box<dyn TRef>) -> Result<(), ()> {
+        if self.lock_tref(tref, LockType::Write) {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn lock_tref(&mut self, tref: &Box<dyn TRef>, lock_type: LockType) -> bool {
         let me :u32 = self.id().into();
         let id = self.id();
         let oid = *tref.get_id();
@@ -97,53 +115,28 @@ impl Transaction2PL {
    
     //Read the underlying value of the reference
     //Return none when failed locking  
-    pub fn read<'a, T:'static+Clone>(&mut self, tref: &'a Box<dyn TRef>) -> Result<&'a T, ()> {
-        /* Lock */
-        match self.lock_tref(tref, LockType::Read) {
-            true => {
-                match tref.read().downcast_ref::<T>() {
-                    Some(data) => Ok(data),
-                    None => panic!("inconsistent type at read"),
-                }
-            } ,
-            false => {
-               Err(()) 
-            }
+    pub fn read<'a, T:'static+Clone>(&mut self, tref: &'a Box<dyn TRef>) -> &'a T {
+        match tref.read().downcast_ref::<T>() {
+            Some(data) => data,
+            None => panic!("inconsistent type at read"),
         }
     }
 
     //Write a value into the underlying reference
     //Return Result.Err if failed
    pub fn write<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T) 
-       -> Result<(), ()> 
        {
-       match self.lock_tref(tref, LockType::Write) {
-           true => {
-               tref.write_through(Box::new(val), self.id().clone());
-               self.refs_.push((tref.box_clone(), None));
-               //Make records for persist later
-               Ok(()) 
-           },
-           false => {
-               Err(()) 
-           }
-       }
-
+           tref.write_through(Box::new(val), self.id().clone());
+           #[cfg(any(feature = "pmem", feature = "disk"))]
+           self.refs_.push((tref.box_clone(), None));
    }
     
-    pub fn write_field<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T, fields: FieldArray) -> Result<(), ()> {
-       match self.lock_tref(&tref, LockType::Write) {
-           true => {
-               //Make records for persist later
-               tref.write_through(Box::new(val), self.id().clone());
-               //Replace current fields
-               self.refs_.push((tref.box_clone(), Some(fields)));
-               Ok(())
-           },
-           false => {
-               Err(())
-           }
-       }
+    pub fn write_field<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T, fields: FieldArray) {
+        //Make records for persist later
+        tref.write_through(Box::new(val), self.id().clone());
+        //Replace current fields
+        #[cfg(any(feature = "pmem", feature = "disk"))]
+        self.refs_.push((tref.box_clone(), Some(fields)));
     }
 
 
@@ -183,6 +176,7 @@ impl Transaction2PL {
         BenchmarkCounter::success();
         self.unlock();
     }
+
     
     #[cfg(any(feature = "pmem", feature = "disk"))]
     fn persist_data(&self) {

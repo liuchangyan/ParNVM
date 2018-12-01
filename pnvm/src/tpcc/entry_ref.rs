@@ -1569,6 +1569,7 @@ impl  TRef for StockRef  {
 }
 
 
+
 impl TableRef for Arc<Row<Warehouse, i32>> {
     fn into_table_ref(
         self,
