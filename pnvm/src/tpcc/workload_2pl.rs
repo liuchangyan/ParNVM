@@ -65,6 +65,10 @@ fn new_order(tx: &mut Transaction2PL,
     let mut item_trefs = vec![];
     let mut stock_trefs = vec![];
     
+    let ol_bucket = tables.orderline.retrieve_bucket(&(w_id, d_id));
+    ol_bucket.write_lock(tx.id().into())?;
+    tx.add_locks((*ol_bucket.get_id(), LockType::Write), ol_bucket.get_tvers());
+
     for i in 0..ol_cnt as usize {
         let id = item_ids[i];
         let item_ref = tables.item.retrieve(&id, id as usize).unwrap().into_table_ref(None, None);
@@ -74,11 +78,9 @@ fn new_order(tx: &mut Transaction2PL,
         let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
         tx.write_lock_tref(&stock_ref)?;
         stock_trefs.push(stock_ref);
-
-        let ol_bucket = tables.orderline.retrieve_bucket(&(w_id, d_id));
-        ol_bucket.write_lock(tx.id().into())?;
-        tx.add_locks((*ol_bucket.get_id(), LockType::Write), ol_bucket.get_tvers());
     }
+
+
     /* Locks Acquired */
     let w_tax = tx.read::<Warehouse>(&warehouse_ref).w_tax;
     let c_discount = tx.read::<Customer>(&customer_ref).c_discount;

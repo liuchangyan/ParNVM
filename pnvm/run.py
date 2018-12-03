@@ -73,101 +73,80 @@ if __name__ == '__main__':
             "no_warmup" : 'false',
             "warmup_time" : 8,
             }
+
+    runs = {
+            "proto" : ['TPCC_OCC', 'TPCC_NVM', 'NO_2PL', 'NO_NVM'],
+            "proto_names": ['occ', 'ppnvm', 'no-2pl', 'no-ppnvm'],
+            "cont" : [[1, 1, 2, 4], [1, 4, 8, 16]],
+            "cont_names": ['high', 'low'],
+    }
     compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem"'
     os.system(compile_pmem)
 
-    # Run OCC-PMEM High-cont
-    bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-occ-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
 
-    # Run OCC-PMEM low-cont
-    bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-occ-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
+    for (i, proto) in enumerate(runs["proto"]):
+        protocol_name = runs["proto_names"][i]
+        bench_config["name"] = proto
+        for (j,cont) in enumerate(runs["cont"]):
+            bench_config["wh_num"] = cont
+            cont_name = runs["cont_names"][j]
+            path  = "$PNVM_ROOT/pnvm/benchmark/{}-pmem-{}-output.csv".format(cont_name, protocol_name)
+            with open(os.path.expandvars(path), "w+") as out_fd:
+                print_header(out_fd)
+                run(bench_config, out_fd)
 
-    # Run PPNVM-PMEM High
-    bench_config['name'] ='TPCC_NVM'
-    bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-ppnvm-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-    # Run PPNVM-PMEM Low
-    bench_config['name'] ='TPCC_NVM'
-    bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-ppnvm-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-
-    # Run 2PL-PMEM High
-    bench_config['name'] ='NO_2PL'
-    bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-2pl-no-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-
-    # Run 2PL-PMEM Low
-    bench_config['name'] ='NO_2PL'
-    bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-2pl-no-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-
-    # Run PPNVM-PMEM-NO High
-    bench_config['name'] ='NO_NVM'
-    bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-pmem-ppnvm-no-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-
-    # Run PPNVM-PMEM-NO Low
-    bench_config['name'] ='NO_NVM'
-    bench_config['wh_num'] =low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-pmem-ppnvm-no-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-    # Recompile for VOL version
     compile_vol = 'cargo clean && cargo +nightly build --release --features unstable'
     os.system(compile_vol)
 
-    # Run OCC-VOL High
-    bench_config['name'] ='TPCC_OCC'
-    bench_config['wh_num'] = high_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-vol-occ-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
+    for (i, proto) in enumerate(runs["proto"]):
+        protocol_name = runs["proto_names"][i]
+        bench_config["name"] = proto
+        for (j,cont) in enumerate(runs["cont"]):
+            bench_config["wh_num"] = cont
+            cont_name = runs["cont_names"][j]
+            path  = "$PNVM_ROOT/pnvm/benchmark/{}-vol-{}-output.csv".format(cont_name, protocol_name)
+            with open(os.path.expandvars(path), "w+") as out_fd:
+                print_header(out_fd)
+                run(bench_config, out_fd)
 
-    # Run OCC-VOL Low
-    bench_config['name'] ='TPCC_OCC'
-    bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-vol-occ-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
+    ####################
+    # For no conflcit
+    ####################
+    runs = {
+            "proto" : ['TPCC_OCC', 'TPCC_NVM', 'NO_2PL', 'NO_NVM'],
+            "proto_names": ['occ', 'ppnvm', '2pl', 'ppnvm'],
+            "cont" : [[1, 4, 8, 16]],
+            "cont_names": ['noconf'],
+    }
 
-    # Run PPNVM-VOL High
-    bench_config['name'] ='TPCC_NVM'
-    bench_config['wh_num'] = high_con_wh
-    bench_config['no_warmup'] = 'true'
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/high-vol-ppnvm-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
-
-    # Run PPNVM-VOL Low
-    bench_config['name'] ='TPCC_NVM'
-    bench_config['wh_num'] = low_con_wh
-    with open(os.path.expandvars("$PNVM_ROOT/pnvm/benchmark/low-vol-ppnvm-output.csv"), "w+") as out_fd:
-        print_header(out_fd)
-        run(bench_config, out_fd)
+    compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem noconflict"'
+    os.system(compile_pmem)
 
 
+    for (i, proto) in enumerate(runs["proto"]):
+        protocol_name = runs["proto_names"][i]
+        bench_config["name"] = proto
+        for (j,cont) in enumerate(runs["cont"]):
+            bench_config["wh_num"] = cont
+            cont_name = runs["cont_names"][j]
+            path  = "$PNVM_ROOT/pnvm/benchmark/{}-pmem-{}-output.csv".format(cont_name, protocol_name)
+            with open(os.path.expandvars(path), "w+") as out_fd:
+                print_header(out_fd)
+                run(bench_config, out_fd)
+
+    compile_vol = 'cargo clean && cargo +nightly build --release --features "unstable noconflict"'
+    os.system(compile_vol)
+
+    for (i, proto) in enumerate(runs["proto"]):
+        protocol_name = runs["proto_names"][i]
+        bench_config["name"] = proto
+        for (j,cont) in enumerate(runs["cont"]):
+            bench_config["wh_num"] = cont
+            cont_name = runs["cont_names"][j]
+            path  = "$PNVM_ROOT/pnvm/benchmark/{}-vol-{}-output.csv".format(cont_name, protocol_name)
+            with open(os.path.expandvars(path), "w+") as out_fd:
+                print_header(out_fd)
+                run(bench_config, out_fd)
 
 
 

@@ -201,7 +201,7 @@ impl TransactionParOCC
             if !txn_info.has_commit() {
                 let id : u32= txn_info.id().into();
                 if me != id { /* Do not add myself into it */
-                    if !self.deps_.contains_key(&id) {
+                    if !self.deps_.contains_key(&id) && tag.has_write() {
                         warn!("add_dep:: {:?} will wait on {:?}", me, id);
                         self.deps_.insert(id, txn_info);
                     } 
@@ -233,7 +233,7 @@ impl TransactionParOCC
     fn commit_piece(&mut self) -> bool {
         tcore::BenchmarkCounter::success_piece();
        
-        #[cfg(any(feature = "pmem", feature = "disk"))]
+        #[cfg(all(any(feature = "pmem", feature = "disk"), feature = "plog"))]
         self.persist_logs();
 
         //Install write sets into the underlying data
@@ -242,7 +242,9 @@ impl TransactionParOCC
         //Persist the data
         //FIXME: delay the commit until commiting transaction
         #[cfg(any(feature = "pmem", feature = "disk"))]
-        self.persist_data();
+        {
+            self.persist_data();
+        }
         
 
         //Clean up local data structures.
@@ -252,32 +254,34 @@ impl TransactionParOCC
     }
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
-    #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&mut self) {
         for (record, fields) in self.records_.drain(..) {
             #[cfg(feature = "pmem")]
-            match fields {
-                Some(ref fields) => {
-                    for field in fields.iter(){
-                        let paddr = record.get_pmem_field_addr(*field);
-                        let vaddr = record.get_field_ptr(*field);
-                        let size = record.get_field_size(*field);
-                        BenchmarkCounter::flush(size);
+            {
+                match fields {
+                    Some(ref fields) => {
+                        for field in fields.iter(){
+                            let paddr = record.get_pmem_field_addr(*field);
+                            let vaddr = record.get_field_ptr(*field);
+                            let size = record.get_field_size(*field);
+                            BenchmarkCounter::flush(size);
 
-                        pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                            pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                        }
+                    },
+                    None=> {
+                        let paddr = record.get_pmem_addr();
+                        let vaddr = record.get_ptr();
+                        let layout  = record.get_layout();
+
+                        BenchmarkCounter::flush(layout.size());
+
+                        pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+
                     }
-                },
-                None=> {
-                    let paddr = record.get_pmem_addr();
-                    let vaddr = record.get_ptr();
-                    let layout  = record.get_layout();
-                    
-                    BenchmarkCounter::flush(layout.size());
-
-                    pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
-
                 }
             }
+
 
 
             #[cfg(feature = "disk")]
@@ -391,7 +395,6 @@ impl TransactionParOCC
 
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
-    #[cfg_attr(feature = "profile", flame)]
     pub fn persist_logs(&mut self) {
         let id = *(self.id());
         let mut logs = vec![];
@@ -400,7 +403,6 @@ impl TransactionParOCC
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
                 self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
-                
             }
         }
 //        let logs = self.records_.iter().map(|(ptr, layout)| {

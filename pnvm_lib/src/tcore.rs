@@ -408,7 +408,7 @@ impl TVersion {
                 },
                 writer  => {
                     //Wait-die Ddlck prevention
-                    if writer > tid  {
+                    if writer < tid  {
                         self.exit_cr();
                         return false;
                     } else if writer == tid {
@@ -457,7 +457,7 @@ impl TVersion {
                 0 =>  {}, /* Fall thruogh */
                 blocker => {
                     /* Wait die ddl prevention */
-                    if blocker > tid {
+                    if blocker < tid {
                         self.exit_cr();
                         return false;
                     } else if blocker == tid {

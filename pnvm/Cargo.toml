@@ -22,6 +22,7 @@ unstable = ["pnvm_lib/unstable"]
 pmem = ["pnvm_lib/pmem", "pnvm_sys"]
 disk = ["pnvm_lib/disk", "pnvm_sys"]
 noconflict = []
+plog = ["pnvm_lib/plog"]
 
 [profile.release]
 debug = true

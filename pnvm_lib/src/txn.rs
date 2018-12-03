@@ -111,7 +111,7 @@ impl TidFac {
     }
 
      fn get_next(&mut self) -> Tid {
-        let ret = self.next_id_ | ((self.mask_ ) << 16);
+        let ret = self.next_id_ | ((self.mask_ ) << 24);
         self.next_id_ +=1; 
         Tid::new(ret)
     }

@@ -58,7 +58,7 @@ impl Transaction2PL {
         }
     }
 
-    fn has_lock(&mut self, key: &(ObjectId, LockType)) -> bool {
+    pub fn has_lock(&mut self, key: &(ObjectId, LockType)) -> bool {
         self.locks_.contains_key(key)
     }
 

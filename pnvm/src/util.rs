@@ -540,6 +540,7 @@ pub struct Config {
     pub d_num: i32,
     pub no_warmup: bool,
     pub warmup_time :u64,
+    //pub no_conflict: bool,
 }
 
 pub fn read_env() -> Config {
@@ -566,6 +567,7 @@ pub fn read_env() -> Config {
         wh_num: settings.get_int("WH_NUM").unwrap() as i32,
         d_num : settings.get_int("D_NUM").unwrap() as i32,
         no_warmup: settings.get_bool("NO_WARMUP").unwrap(),
+        //no_conflict: settings.get_bool("NO_CONFLICT").unwrap(),
         warmup_time : settings.get_int("WARMUP_TIME").unwrap_or(10) as u64,
 
     }
