@@ -23,6 +23,7 @@ pmem = ["pnvm_lib/pmem", "pnvm_sys"]
 disk = ["pnvm_lib/disk", "pnvm_sys"]
 noconflict = []
 plog = ["pnvm_lib/plog"]
+dir = ["pnvm_lib/dir"]
 
 [profile.release]
 debug = true

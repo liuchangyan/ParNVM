@@ -58,9 +58,9 @@ const PMEM_FILE_TMPFILE: c_int = 1<<3;
 //    PMEM_ALLOCATOR.with(|pmem_cell| pmem_cell.borrow_mut().dealloc(ptr, layout))
 //}
 
-pub fn flush(ptr: *mut u8, layout: Layout) {
-    trace!("flush {:p} , {}", ptr, layout.size());
-    unsafe { pmem_flush(ptr as *const c_void, layout.size()) };
+pub fn flush(ptr: *mut u8, size: usize) {
+    trace!("flush {:p} , {}", ptr, size);
+    unsafe { pmem_flush(ptr as *const c_void, size) };
 }
 
 pub fn drain() {

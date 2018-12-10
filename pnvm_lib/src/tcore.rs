@@ -790,17 +790,36 @@ impl TTag
                     warn!("[{:?}] [persit_data] name : {:?}, paddr: {:p}, vaddr: {:p}, size: {}", 
                           self.tobj_ref_.get_id(), self.name_, pmemaddr, vaddr, size);
                     BenchmarkCounter::flush(size);
-                    pnvm_sys::memcpy_nodrain(pmemaddr,
-                                             vaddr,
-                                             size);
+
+                    #[cfg(feature = "dir")]
+                    {
+                        pnvm_sys::flush(pmemaddr,size);
+                    }
+
+                    #[cfg(not(feature = "dir"))]
+                    {
+                        pnvm_sys::memcpy_nodrain(pmemaddr,
+                                                 vaddr,
+                                                 size);
+                    }
 
                 }
             }, 
             None => {
-                BenchmarkCounter::flush(self.tobj_ref_.get_layout().size());
-                pnvm_sys::memcpy_nodrain(self.tobj_ref_.get_pmem_addr(),
-                self.tobj_ref_.get_ptr(),
-                self.tobj_ref_.get_layout().size());
+                let pmemaddr = self.tobj_ref_.get_pmem_addr();
+                let layout = self.tobj_ref_.get_layout();
+
+                BenchmarkCounter::flush(layout.size());
+                #[cfg(not(feature = "dir"))]
+                {
+                    pnvm_sys::memcpy_nodrain(pmemaddr,
+                                             self.tobj_ref_.get_ptr(),
+                                             self.tobj_ref_.get_layout().size());
+
+                }
+
+                #[cfg(feature = "dir")]
+                pnvm_sys::flush(pmemaddr,layout.size());
             }
         }
 

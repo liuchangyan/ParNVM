@@ -114,7 +114,7 @@ if __name__ == '__main__':
     ####################
     runs = {
             "proto" : ['TPCC_OCC', 'TPCC_NVM', 'NO_2PL', 'NO_NVM'],
-            "proto_names": ['occ', 'ppnvm', '2pl', 'ppnvm'],
+            "proto_names": ['occ', 'ppnvm', 'no-2pl', 'no-ppnvm'],
             "cont" : [[1, 4, 8, 16]],
             "cont_names": ['noconf'],
     }
@@ -122,7 +122,8 @@ if __name__ == '__main__':
     compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem noconflict"'
     os.system(compile_pmem)
 
-
+    # Prevent memory overflow killed
+    bench_config["duration"] = 10
     for (i, proto) in enumerate(runs["proto"]):
         protocol_name = runs["proto_names"][i]
         bench_config["name"] = proto

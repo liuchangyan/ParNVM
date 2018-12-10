@@ -189,15 +189,25 @@ impl Transaction2PL {
                         let size = tref.get_field_size(*field);
                         let vaddr =tref.get_field_ptr(*field);
                         BenchmarkCounter::flush(size);
+
+                        #[cfg(feature = "dir")]
+                        pnvm_sys::flush(pmemaddr, size);
+
+                        #[cfg(not(feature = "dir"))]
                         pnvm_sys::memcpy_nodrain(pmemaddr, vaddr, size);
                     }
                 },
                 None => {
                     BenchmarkCounter::flush(tref.get_layout().size());
-                    pnvm_sys::memcpy_nodrain(
-                        tref.get_pmem_addr(),
-                        tref.get_ptr(),
-                        tref.get_layout().size());
+                    let paddr = tref.get_pmem_addr();
+                    let vaddr =  tref.get_ptr();
+                    let size = tref.get_layout().size();
+                    
+                    #[cfg(feature = "dir")]
+                    pnvm_sys::flush(paddr, size);
+
+                    #[cfg(not(feature = "dir"))]
+                    pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
                 }
             }
         }

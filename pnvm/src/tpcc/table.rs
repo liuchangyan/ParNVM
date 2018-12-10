@@ -319,6 +319,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let bkt_idx = entry.bucket_key() % self.bucket_num;
 
         //Make into row and then make into a RowRef
+
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
@@ -494,7 +495,6 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
     pmem_cap_ : AtomicUsize,
     pmem_per_size_ : usize,
-
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
@@ -559,8 +559,17 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             let idx_map = self.index.get().as_mut().unwrap();
             idx_map.insert(idx_elem, self.len() -1);
 
-            #[cfg(any(feature ="pmem", feature="disk"))]
-            row_arc.set_pmem_addr(self.get_pmem_addr(self.len() -1));
+            #[cfg(feature = "pmem")]
+            {
+                #[cfg(feature = "dir" )]
+                {
+                    let p = self.get_pmem_addr(self.len()-1);
+                    row_arc.copy_to_ptr(p);
+                }
+                
+                #[cfg(not( feature  = "dir"))]
+                row_arc.set_pmem_addr(self.get_pmem_addr(self.len() -1));
+            }
         }
     }
 
@@ -579,13 +588,28 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     fn push_raw(&self, entry: Entry) {
         let idx_elem = entry.primary_key();
         unsafe {
-            let rows = self.rows.get().as_mut().unwrap();
-            let idx_map = self.index.get().as_mut().unwrap();
-            let arc = Arc::new(Row::new(entry));
-            rows.push(arc.clone());
-            idx_map.insert(idx_elem, self.len()-1);
-            #[cfg(any(feature ="pmem", feature="disk"))]
-            arc.set_pmem_addr(self.get_pmem_addr(self.len()-1));
+            #[cfg(not(all(feature = "pmem", feature = "dir")))]
+            {
+                let rows = self.rows.get().as_mut().unwrap();
+                let idx_map = self.index.get().as_mut().unwrap();
+                let arc = Arc::new(Row::new(entry));
+                rows.push(arc.clone());
+                idx_map.insert(idx_elem, self.len()-1);
+                #[cfg(any(feature ="pmem", feature="disk"))]
+                arc.set_pmem_addr(self.get_pmem_addr(self.len()-1));
+            }
+
+
+            #[cfg(all(feature = "pmem", feature = "dir"))]
+            {
+                let p = self.get_pmem_addr(self.len());
+                p.write(entry);
+                let arc = Arc::new(Row::new_from_ptr(p));
+                let rows = self.rows.get().as_mut().unwrap();
+                let idx_map = self.index.get().as_mut().unwrap();
+                rows.push(arc);
+                idx_map.insert(idx_elem, self.len()-1);
+            }
         }
     }
 
@@ -752,7 +776,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone
 {
     //data_: UnsafeCell<Entry>,
-    data_ : NonNull<Entry>,
+    data_ : AtomicPtr<Entry>,
     pub vers_: Arc<TVersion>,
     id_ : ObjectId,
     index_ : Index,
@@ -771,7 +795,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
      //   unsafe {write!(f, "[OID: {:?}][VERS: {:?}]\n\t[{:?}]", 
      //                  self.id_, self.vers_,self.data_.get().as_ref().unwrap())}
         unsafe {write!(f, "[OID: {:?}][VERS: {:?}]\n\t[{:?}]", 
-                       self.id_, self.vers_,self.data_.as_ref())}
+                       self.id_, self.vers_,self.data_.load(Ordering::SeqCst))}
     }
 }
 
@@ -780,14 +804,14 @@ where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone
 {
     fn drop(&mut self) {
-        if self.data_.as_ptr().is_null() {
+        if self.data_.load(Ordering::SeqCst).is_null() {
             panic!("freeing null pointers")
         } else {
            // if TypeId::of::<Entry>() == TypeId::of::<Customer>() {
            //     println!("{:?}", self.get_data());
            // }
             let _data = self.get_data();
-            unsafe {self.data_.as_ptr().drop_in_place()}
+            unsafe {self.data_.load(Ordering::SeqCst).drop_in_place()}
         }
 
         //println!("{:?}", self);
@@ -826,7 +850,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         let offsets = entry.field_offset();
         Row{
             //data_: UnsafeCell::new(entry),
-            data_ : Box::into_raw_non_null(Box::new(entry)),
+            data_ : AtomicPtr::new(Box::into_raw(Box::new(entry))),
             vers_: Arc::new(TVersion::default()), /* FIXME: this can carry txn info */
             id_ : OidFac::get_obj_next(),
             index_ : key, 
@@ -838,12 +862,35 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         }
     }
 
+    pub fn new_from_ptr(entry_ptr: *mut Entry) -> Row<Entry, Index> {
+        let data = AtomicPtr::new(entry_ptr);
+        unsafe {
+            let key = data.load(Ordering::SeqCst)
+                .as_ref().expect("data ptr should be non null")
+                .primary_key();
+
+            let offsets = data.load(Ordering::SeqCst)
+                .as_ref().expect("data ptr should be nonnull")
+                .field_offset();
+            Row {
+                data_ : data, 
+                vers_: Arc::new(TVersion::default()), /* FIXME: this can carry txn info */
+                id_ : OidFac::get_obj_next(),
+                index_ : key, 
+                fields_offset_: offsets,
+                #[cfg(any(feature ="pmem", feature="disk"))]
+                pmem_addr_: AtomicPtr::default(),
+            }
+        }
+
+    }
+
     pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry, Index> {
         let key = entry.primary_key();
         let offsets = entry.field_offset();
         Row {
             //data_ : UnsafeCell::new(entry),
-            data_ : Box::into_raw_non_null(Box::new(entry)),
+            data_ : AtomicPtr::new(Box::into_raw(Box::new(entry))),
             vers_ : Arc::new(TVersion::new_with_info(txn_info)),
             id_ : OidFac::get_obj_next(),
             index_ : key,
@@ -852,6 +899,15 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
             #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_addr_: AtomicPtr::default(),
+        }
+    }
+    
+    ///Copy data to the pointer and make its data referenced the
+    ///newly copied ptr
+    pub fn copy_to_ptr(&self, p : *mut Entry) {
+        unsafe {
+            self.data_.load(Ordering::SeqCst).copy_to(p, 1);
+            self.data_.store(p, Ordering::SeqCst);
         }
     }
 
@@ -865,19 +921,32 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
     #[cfg(any(feature ="pmem", feature="disk"))]
     pub fn get_pmem_addr(&self) -> *mut Entry {
-        self.pmem_addr_.load(Ordering::SeqCst)
+        #[cfg(feature = "dir")]
+        {
+            self.data_.load(Ordering::SeqCst)
+        }
+
+        #[cfg(not(feature = "dir"))]
+        {
+            self.pmem_addr_.load(Ordering::SeqCst)
+        }
     }
 
     #[inline(always)]
     pub fn get_data(&self) -> &Entry {
         //unsafe { self.data_.get().as_ref().unwrap() }
-        unsafe { self.data_.as_ref() }
+        unsafe { 
+            self.data_
+                .load(Ordering::SeqCst)
+                .as_ref()
+                .expect("get_data(): data ptr should be nonnull")
+        }
     }
 
     #[inline(always)]
     pub fn get_ptr(&self) -> *mut u8 {
         //unsafe {self.data_.get() as *mut u8}
-        self.data_.as_ptr() as *mut u8
+        self.data_.load(Ordering::SeqCst) as *mut u8
     }
 
     pub fn get_field_ptr(&self, field_idx: usize) -> *mut u8 {
@@ -921,7 +990,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             //      tid, self.data_.get().as_ref().unwrap(), val);
 
             //ptr::write(self.data_.get(), val.clone());
-            let data = self.data_.as_ptr() ;
+            let data = self.data_.load(Ordering::SeqCst);
             *data = val.clone();
         }
         self.vers_.set_version(tid.into());

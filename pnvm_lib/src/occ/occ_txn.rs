@@ -190,7 +190,7 @@ impl TransactionOCC
 
         //Persist the write set logs
         #[cfg(any(feature = "pmem", feature="disk"))]
-        self.persist_log();
+        self.do_log();
 
         //Install write sets into the underlying data
         self.install_data();
@@ -221,7 +221,7 @@ impl TransactionOCC
 
     #[cfg(any(feature = "pmem", feature="disk"))]
     #[cfg_attr(feature = "profile", flame)]
-    fn persist_log(&self) {
+    fn do_log(&self) {
         let mut logs = vec![];
         let id = self.id();
         for tag in self.deps_.values() {

@@ -266,8 +266,13 @@ impl TransactionParOCC
                             let size = record.get_field_size(*field);
                             BenchmarkCounter::flush(size);
 
+                            #[cfg(feature = "dir")]
+                            pnvm_sys::flush(paddr, size);
+
+                            #[cfg(not(feature = "dir"))]
                             pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
                         }
+
                     },
                     None=> {
                         let paddr = record.get_pmem_addr();
@@ -275,7 +280,11 @@ impl TransactionParOCC
                         let layout  = record.get_layout();
 
                         BenchmarkCounter::flush(layout.size());
+                        #[cfg(feature = "dir")]
+                        pnvm_sys::flush(paddr, layout.size());
 
+
+                        #[cfg(not(feature = "dir"))]
                         pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
 
                     }
