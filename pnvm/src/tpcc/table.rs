@@ -240,6 +240,13 @@ where Entry: 'static + Key<Index> + Clone + Debug,
     
      //id_ : ObjectId,
     //vers_ : TVersion,
+    
+    //#[cfg(all(feature = "dir", feature = "pmem"))]
+    //{
+    //    pmem_cap_: AtomicUsize,
+    //    pmem_len_:AtomicUsize,
+    //    pmem_root_: NonNull<Entry>,
+    //}
 }
 
 
@@ -319,8 +326,24 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let bkt_idx = entry.bucket_key() % self.bucket_num;
 
         //Make into row and then make into a RowRef
-
+        #[cfg(not(all(feature = "pmem", feature = "dir")))]
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
+
+
+        #[cfg(all(feature = "pmem", feature = "dir"))]
+        let row = {
+            let bkt = self.get_bucket(bkt_idx);
+            let p = bkt.get_pmem_addr(bkt.next_pmem_offset());
+            Arc::new(
+                Row::new_from_pmem(
+                    entry, 
+                    tx.txn_info().clone(), 
+                    p
+                )
+            )
+        };
+
+
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.id().clone();
@@ -328,6 +351,22 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         tag.set_write();
         debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
     }
+
+    
+   // fn get_next_pmem_ptr(&self) -> *mut Entry {
+   //     if self.pmem_len_.load(Ordering::SeqCst) 
+   //         >= self.pmem_cap_.load(Ordering::SeqCst) {
+
+   //             println!("table : {:?} pmem size not enough has  {:?} but {:?}",
+   //                      self.name_, self.pmem_len_.load(Ordering::SeqCst),
+   //                      self.pmem_cap_.load(Ordering::SeqCst));
+   //             panic!();
+   //     }
+
+   //     let pmem_root_
+   //         .as_ptr()
+   //         .offset(self.pmem_len_.fetch_add(1, Ordering::SeqCst) as isize)
+   // }
 
     //pub fn delete_lock(&self, tx: &mut Transaction2PL, index: &Index, tables: &Arc<Tables>, bucket_idx: usize) 
     //    -> bool 
@@ -495,6 +534,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
     pmem_cap_ : AtomicUsize,
     pmem_per_size_ : usize,
+    pmem_offset_ : AtomicUsize,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
@@ -525,6 +565,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             pmem_root_: RefCell::new(Vec::new()),
             pmem_cap_: AtomicUsize::new(cap),
             pmem_per_size_ : cap,
+            pmem_offset_: AtomicUsize::new(0),
         };
 
         /* Get the persistent memory */
@@ -563,12 +604,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             {
                 #[cfg(feature = "dir" )]
                 {
-                    let p = self.get_pmem_addr(self.len()-1);
-                    row_arc.copy_to_ptr(p);
+                    //let p = self.get_pmem_addr(self.next_pmem_offset());
+                    //row_arc.copy_to_ptr(p);
                 }
                 
                 #[cfg(not( feature  = "dir"))]
-                row_arc.set_pmem_addr(self.get_pmem_addr(self.len() -1));
+                row_arc.set_pmem_addr(self.get_pmem_addr(self.next_pmem_offset()));
             }
         }
     }
@@ -596,13 +637,13 @@ where Entry: 'static + Key<Index> + Clone+Debug,
                 rows.push(arc.clone());
                 idx_map.insert(idx_elem, self.len()-1);
                 #[cfg(any(feature ="pmem", feature="disk"))]
-                arc.set_pmem_addr(self.get_pmem_addr(self.len()-1));
+                arc.set_pmem_addr(self.get_pmem_addr(self.next_pmem_offset()));
             }
 
 
             #[cfg(all(feature = "pmem", feature = "dir"))]
             {
-                let p = self.get_pmem_addr(self.len());
+                let p = self.get_pmem_addr(self.next_pmem_offset());
                 p.write(entry);
                 let arc = Arc::new(Row::new_from_ptr(p));
                 let rows = self.rows.get().as_mut().unwrap();
@@ -611,6 +652,10 @@ where Entry: 'static + Key<Index> + Clone+Debug,
                 idx_map.insert(idx_elem, self.len()-1);
             }
         }
+    }
+
+    pub fn next_pmem_offset(&self) -> usize {
+        self.pmem_offset_.fetch_add(1, Ordering::SeqCst)
     }
 
     #[cfg(any(feature ="pmem", feature="disk"))]
@@ -883,6 +928,36 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             }
         }
 
+    }
+
+
+    pub fn new_from_pmem(mut entry: Entry, txn_info : Arc<TxnInfo>, entry_ptr: *mut Entry) -> Row<Entry, Index> {
+        let key = entry.primary_key();
+        let offsets = entry.field_offset();
+        unsafe {entry_ptr.write(entry)};
+        
+       // let bentry = Box::new(entry.clone());
+       // let ptr = Box::into_raw(bentry);
+       // unsafe { ptr.write(entry)};
+
+        //pnvm_sys::memcpy_nodrain(
+        //    entry_ptr as *mut u8,
+        //    &mut entry as *mut Entry as *mut u8,
+        //    mem::size_of::<Entry>());
+
+        let data = AtomicPtr::new(entry_ptr);
+
+        Row {
+            data_ : data,
+            vers_ : Arc::new(TVersion::new_with_info(txn_info)),
+            id_ : OidFac::get_obj_next(),
+            index_ : key,
+
+            fields_offset_: offsets,
+
+            #[cfg(any(feature ="pmem", feature="disk"))]
+            pmem_addr_: AtomicPtr::default(),
+        }
     }
 
     pub fn new_from_txn(entry : Entry, txn_info: Arc<TxnInfo>) -> Row<Entry, Index> {
