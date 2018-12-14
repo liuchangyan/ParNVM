@@ -638,6 +638,7 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
                             start = Instant::now();
                             elapsed = start.elapsed();
                             prev_timestamp = 0;
+                            println!("Warm up done");
                         }
                     }
 

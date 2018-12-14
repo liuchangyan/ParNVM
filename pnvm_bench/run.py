@@ -31,7 +31,7 @@ def run():
         "PMEM_NO_FLUSH" : str(1),
     }
     env = {**sys_env, **config_env}
-    run_exp(env, "movnt-empy",command, out_fd)
+    run_exp(env, "movnt-empty",command, out_fd)
 
     # Test monvnt clwb
     config_env = {

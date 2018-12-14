@@ -1,6 +1,7 @@
 
-THREAD_NUM = 4
+THREAD_NUM = 1
 CHUNK_SIZE = 256
-OPS_NUM = 1000000
+OPS_NUM = 10000000
 REPEAT_NUM = 5
-MODE = "movnt-clflush"
+MODE = "simple"
+DEST_MODE = "MmapNVM"

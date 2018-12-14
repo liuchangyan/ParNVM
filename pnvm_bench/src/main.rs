@@ -33,11 +33,12 @@ fn main() {
     let config = parse_config();
 
 
-    //multi_clwb(&config);
-    rng_test(&config);
+    multi_clwb(&config);
+    //rng_test(&config);
 }
 
 const PMEM_TEST_PATH_ABS: &str = "../data";
+const DISK_TEST_PATH_ABS: &str = "../v-data";
 
 fn rng_test(config: &Config) {
     let bench = Arc::new(prep_bench(config));
@@ -57,7 +58,7 @@ fn rng_test(config: &Config) {
 
             for j in 1..10 {
                 let k :u32 = rng.gen::<u32>();
-                println!("[T-{}] [{}] - [{}]", i, j, k);
+                //println!("[T-{}] [{}] - [{}]", i, j, k);
             }
         }).unwrap();
 
@@ -71,12 +72,17 @@ fn rng_test(config: &Config) {
 
 }
 
+fn memcp_dst_test(config: &Config) {
+    let bench = Arc::new(prep_bench(config));
+
+}
+
 fn multi_clwb(config: &Config) {
     let bench = Arc::new(prep_bench(config));
     let barrier = Arc::new(Barrier::new(config.nthread));
 
     //Do Warm up 
-    memset_persist(bench.pmem_addr, 0, bench.size);
+    memset_persist(bench.dest_addr, 0, bench.size);
     
 
     let mut opsps_avg = 0.0;
@@ -140,14 +146,27 @@ fn do_memcpy(bench: Arc<Bench>,  chunk_size: usize, nops: usize, thd_idx: usize)
     for i in 0..nops {
         let offset = thd_idx * nops + bench.rand_offsets[i];
         let src = bench.src_addr.wrapping_add( offset * chunk_size);
-        let dest = bench.pmem_addr.wrapping_add(offset * chunk_size);
-        memcpy_nodrain(dest,src, chunk_size);
+        let dest = bench.dest_addr.wrapping_add(offset * chunk_size);
+
+        match bench.copy_mode {
+            BenchCopyMode::PMDKNoDrain(_) =>  memcpy_nodrain(dest,src, chunk_size),
+            BenchCopyMode::Simple => unsafe {
+                src.copy_to(dest, chunk_size)
+            },
+        }
     }
 }
 
-fn prep_bench(config: &Config) -> Bench{ 
+fn prep_bench(config: &Config) -> Bench { 
     let size = config.nthread * config.chunk_size * config.nops;
-    let pmem_addr =  mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
+    
+    let dest_addr =  match config.dest_mode.as_ref() {
+        "MmapNVM"  => mmap_file(String::from(PMEM_TEST_PATH_ABS), size),
+        "MmapDRAM"  => memmap::MmapMut::map_anon(size).unwrap().as_mut_ptr() as *mut u8,
+        "MmapDisk" => mmap_file(String::from(DISK_TEST_PATH_ABS), size),
+        "Heap" => Box::into_raw(vec!['y';size].into_boxed_slice()) as *mut u8,
+        _ => panic!("unknown mode"),
+    };
 
     let src_addr = Box::into_raw(vec!['x';size].into_boxed_slice()) as *mut u8;
 
@@ -160,12 +179,27 @@ fn prep_bench(config: &Config) -> Bench{
             rand::random::<usize>() % config.nops
         }).collect();
 
+    
+    let copy_mode = match config.mode.as_ref() {
+        "movnt-clflush" 
+            | "movnt-empty" 
+            | "movnt-clwb"
+            | "movnt-clflushopt"
+            | "mov-empty" 
+            | "mov-clwb"
+            | "mov-clflushopt"
+            | "mov-clflush"
+            => BenchCopyMode::PMDKNoDrain(config.mode.clone()),
+        "simple" =>BenchCopyMode::Simple,
+        _ => panic!("Unknown copy mode"),
+    };
 
    let bench =  Bench {
-       pmem_addr,
+       dest_addr,
        src_addr,
        rand_offsets,
        size,
+       copy_mode,
     };
 
     //println!("Bench: {:?}", bench);
@@ -182,16 +216,17 @@ fn check_continuous(addr : *mut char, c: char, len:usize) {
 
 #[derive(Debug)]
 struct Bench {
-    pmem_addr: *mut u8,
+    dest_addr: *mut u8,
     src_addr: *mut u8,
     rand_offsets: Vec<usize>,
     size: usize,
+    copy_mode: BenchCopyMode,
 }
 
 impl Drop for Bench {
     fn drop(&mut self) {
         /* Unmap the file */  
-        unsafe { unmap(self.pmem_addr, self.size)};
+        unsafe { unmap(self.dest_addr, self.size)};
 
         /* Box the src */
         let x = unsafe {Vec::from_raw_parts(self.src_addr, self.size, self.size)};
@@ -201,6 +236,14 @@ impl Drop for Bench {
 unsafe impl Sync for Bench{}
 unsafe impl Send for Bench{}
 
+/* Bench config options */
+
+#[derive(Clone, Debug)]
+enum BenchCopyMode {
+    Simple,
+    PMDKNoDrain(String)
+}
+
 
 #[derive(Clone, Debug)]
 struct Config {
@@ -209,8 +252,15 @@ struct Config {
     nops: usize,
     nrepeats : usize,
     mode : String,
+    dest_mode : String,
 }
 
+#[derive(Copy, Clone)]
+enum ConfigDestMode {
+    MMapNVM,
+    MMapDRAM,
+    Heap,
+}
 
 fn parse_config() -> Config {
     
@@ -228,6 +278,7 @@ fn parse_config() -> Config {
         nops: settings.get_int("OPS_NUM").unwrap() as usize,
         nrepeats: settings.get_int("REPEAT_NUM").unwrap() as usize,
         mode : settings.get_str("MODE").unwrap(),
+        dest_mode : settings.get_str("DEST_MODE").unwrap(),
     }
 }
 

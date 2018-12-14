@@ -261,7 +261,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     pub fn new_with_buckets(num: usize, bkt_size: usize, name: &str) -> Table<Entry, Index> {
         let mut buckets = Vec::with_capacity(num);
         for _ in 0..num {
-            buckets.push(Bucket::with_capacity(bkt_size));
+            buckets.push(Bucket::with_capacity(bkt_size, String::from(name)));
         }
 
         Table {
@@ -491,7 +491,7 @@ where Entry: 'static + Key<Index> + Clone +Debug,
         let mut buckets = Vec::with_capacity(16);
 
         for _ in 0..16{
-            buckets.push(Bucket::with_capacity(1024));
+            buckets.push(Bucket::with_capacity(1024, String::from("default")));
         }
         
         Table {
@@ -529,6 +529,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     rows: UnsafeCell<Vec<Arc<Row<Entry, Index>>>>,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
+    name_ : String,
     pub vers_ : Arc<TVersion>,
     #[cfg(any(feature ="pmem", feature="disk"))]
     pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
@@ -552,7 +553,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
    //     }
    // }
 
-    pub fn with_capacity(cap: usize) -> Bucket<Entry, Index> 
+    pub fn with_capacity(cap: usize, name: String) -> Bucket<Entry, Index> 
     {
         let  bucket = Bucket {
             rows: UnsafeCell::new(Vec::with_capacity(cap)),
@@ -560,6 +561,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
             id_ : OidFac::get_obj_next(),
             vers_ : Arc::new(TVersion::default()),
+            name_ : name,
 
             #[cfg(any(feature ="pmem", feature="disk"))]
             pmem_root_: RefCell::new(Vec::new()),
@@ -664,11 +666,17 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             //TODO: resize 
             let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
             let size = self.pmem_per_size_ * mem::size_of::<Entry>();
+
+            //Exponentially update the pmem_per_size
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 
             self.pmem_root_.borrow_mut().push(NonNull::new(pmem_root).unwrap());
             /* Exponential increase the cap here */
             self.pmem_cap_.fetch_add(self.pmem_per_size_, Ordering::SeqCst);
+
+            println!("Size: {:?}, Cap: {:?}, Table:{:?}", 
+                     idx, self.pmem_cap_.load(Ordering::SeqCst),
+                     self.name_);
         } 
         
         //Find pmem_page_id

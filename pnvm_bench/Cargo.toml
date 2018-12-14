@@ -10,6 +10,7 @@ log = {version = "0.4"}
 env_logger = "0.4"
 libc = "0.2"
 config = "0.9"
+memmap = "0.7.0"
 
 [features]
 unstable = ["pnvm_sys/unstable"]
