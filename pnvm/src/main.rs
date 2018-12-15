@@ -3,6 +3,7 @@
 #![feature(generic_associated_types)]
 #![feature(box_into_raw_non_null)]
 #![feature(ptr_wrapping_offset_from)]
+#![feature(no_more_cas)]
 
 #![allow(dead_code, unused_imports, unused_variables)]
 

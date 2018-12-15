@@ -662,30 +662,53 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
     #[cfg(any(feature ="pmem", feature="disk"))]
     fn get_pmem_addr(&self, idx : usize) -> *mut Entry {
-        if idx >= self.pmem_cap_.load(Ordering::SeqCst) {
+        let pmem_cap = self.pmem_cap_.load(Ordering::SeqCst);
+        if idx >= pmem_cap {
             //TODO: resize 
             let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
-            let size = self.pmem_per_size_ * mem::size_of::<Entry>();
+            
+            //Get the new page size
+            let size = pmem_cap * mem::size_of::<Entry>();
 
             //Exponentially update the pmem_per_size
             let pmem_root = pnvm_sys::mmap_file(path, size) as *mut Entry;
 
-            self.pmem_root_.borrow_mut().push(NonNull::new(pmem_root).unwrap());
             /* Exponential increase the cap here */
-            self.pmem_cap_.fetch_add(self.pmem_per_size_, Ordering::SeqCst);
+            //self.pmem_cap_.fetch_add(self.pmem_per_size_, Ordering::SeqCst);
+            self.pmem_cap_
+                .fetch_update(|x| Some(x * 2), 
+                              Ordering::SeqCst, 
+                              Ordering::SeqCst)
+                .expect("pmem cap update fails");
+
+
 
             println!("Size: {:?}, Cap: {:?}, Table:{:?}", 
-                     idx, self.pmem_cap_.load(Ordering::SeqCst),
+                     idx, pmem_cap,
                      self.name_);
+
+            self.pmem_root_.borrow_mut().push(NonNull::new(pmem_root).unwrap());
         } 
         
         //Find pmem_page_id
         
-        let pmem_page_id = idx / self.pmem_per_size_;
+        let mut pmem_page_id = idx / self.pmem_per_size_;
+
+        let mut pmem_page_chunk_id = 0;
+
+        //FIXME: binary search
+        while pmem_page_id > 0 {
+            pmem_page_chunk_id +=1;
+            pmem_page_id >>= 1;
+        }
+
+        //Calculate offset in the chunk
+        let offset = idx - ((1<<pmem_page_chunk_id) >> 1) * self.pmem_per_size_;
+        
         let roots = self.pmem_root_.borrow();
         unsafe {
-            roots[pmem_page_id].as_ptr()
-                .offset((idx % self.pmem_per_size_) as isize)
+            roots[pmem_page_chunk_id].as_ptr()
+                .offset(offset as isize)
         }
 
     }

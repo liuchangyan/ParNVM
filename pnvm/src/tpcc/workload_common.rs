@@ -77,7 +77,7 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
         orderline: OrderLineTable::new_with_buckets(total_wd, 4096*64, "orderline"),
         item: Table::new_with_buckets(512, 256, "item"),
         history: Table::new_with_buckets(total_wd, 51200, "history"),
-        stock: Table::new_with_buckets(total_wd, 1024 * conf.wh_num as usize ,"stock"),
+        stock: Table::new_with_buckets(total_wd, 65536 *2 ,"stock"),
     };
 
     fill_item(&mut tables, conf, rng);
