@@ -278,7 +278,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let bkt_idx = entry.bucket_key() % self.bucket_num;
 
         //Make into row and then make into a RowRef
+        #[cfg(not(all(feature = "pmem", feature = "dir")))]
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
+
+        #[cfg(all(feature = "pmem", feature = "dir"))] 
+        let row = self.get_pmem_back_row(bkt_idx, entry, tx.txn_info());
+
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
         
         let tid = tx.id().clone();
@@ -299,6 +304,22 @@ where Entry: 'static + Key<Index> + Clone+Debug,
    //         
    //     }
    // }
+   
+    #[cfg(any(feature ="pmem", feature="disk"))]
+    fn get_pmem_back_row(&self, bkt_idx: usize, entry: Entry,
+                         txn_info: &Arc<TxnInfo>)
+        -> Arc<Row<Entry, Index>> 
+        {
+            let bkt = self.get_bucket(bkt_idx);
+            let p = bkt.get_pmem_addr(bkt.next_pmem_offset());
+            Arc::new(
+                Row::new_from_pmem(
+                    entry, 
+                    txn_info.clone(), 
+                    p
+                )
+            )
+        }
 
     pub fn push_lock(&self, tx: &mut Transaction2PL, entry: Entry, tables: &Arc<Tables>)
         where Arc<Row<Entry, Index>>: BucketPushRef 
@@ -307,7 +328,14 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             let tid :u32= tx.id().into();
 
             //Make into row and then make into a RowRef
+            
+            #[cfg(not(all(feature = "pmem", feature = "dir")))]
             let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
+            
+            #[cfg(all(feature = "pmem", feature = "dir"))] 
+            let row = self.get_pmem_back_row(bkt_idx, entry, tx.txn_info());
+    
+            
             let bucket = &self.buckets[bkt_idx];
             let oid = *bucket.get_id();
             let tref = row.into_push_table_ref(bkt_idx, tables.clone());
@@ -330,18 +358,19 @@ where Entry: 'static + Key<Index> + Clone+Debug,
         let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
 
 
-        #[cfg(all(feature = "pmem", feature = "dir"))]
-        let row = {
-            let bkt = self.get_bucket(bkt_idx);
-            let p = bkt.get_pmem_addr(bkt.next_pmem_offset());
-            Arc::new(
-                Row::new_from_pmem(
-                    entry, 
-                    tx.txn_info().clone(), 
-                    p
-                )
-            )
-        };
+        #[cfg(all(feature = "pmem", feature = "dir"))] 
+        let row = self.get_pmem_back_row(bkt_idx, entry, tx.txn_info());
+        //let row = {
+        //    let bkt = self.get_bucket(bkt_idx);
+        //    let p = bkt.get_pmem_addr(bkt.next_pmem_offset());
+        //    Arc::new(
+        //        Row::new_from_pmem(
+        //            entry, 
+        //            tx.txn_info().clone(), 
+        //            p
+        //        )
+        //    )
+        //};
 
 
         let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
@@ -683,7 +712,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
 
 
-            println!("Size: {:?}, Cap: {:?}, Table:{:?}", 
+            println!("Idx: {:?}, Prev_cap: {:?}, Table:{:?}", 
                      idx, pmem_cap,
                      self.name_);
 

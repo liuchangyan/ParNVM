@@ -69,23 +69,19 @@ if __name__ == '__main__':
             #"zipf": np.linspace(0.000001, 1.0, num=10),
             "name": 'TPCC_OCC',
             "wh_num" : [1, 1, 2, 4],
-            "duration": 15,
+            "duration": 10,
             "no_warmup" : 'false',
             "warmup_time" : 8,
             }
 
-    # runs = {
-    #         "proto" : ['TPCC_OCC', 'TPCC_NVM', 'NO_2PL', 'NO_NVM'],
-    #         "proto_names": ['occ', 'ppnvm', 'no-2pl', 'no-ppnvm'],
-    #         "cont" : [[1, 1, 1, 1], [1, 4, 8, 16]],
-    #         "cont_names": ['high', 'low'],
-    # }
     runs = {
-            "proto" : ['TPCC_OCC'],
-            "proto_names": ['occ'],
+            "proto" : ['TPCC_OCC', 'TPCC_NVM', 'NO_2PL', 'NO_NVM'],
+            "proto_names": ['occ', 'ppnvm', 'no-2pl', 'no-ppnvm'],
             "cont" : [[1, 1, 1, 1], [1, 4, 8, 16]],
             "cont_names": ['high', 'low'],
     }
+
+    # Directly using PMEM
     compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog dir"'
     os.system(compile_pmem)
 
@@ -101,6 +97,8 @@ if __name__ == '__main__':
                 print_header(out_fd)
                 run(bench_config, out_fd)
 
+
+    # With MemCpy
     compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog"'
     os.system(compile_pmem)
 
@@ -116,6 +114,7 @@ if __name__ == '__main__':
                 print_header(out_fd)
                 run(bench_config, out_fd)
 
+    # Volatile Memory
     compile_vol = 'cargo clean && cargo +nightly build --release --features unstable'
     os.system(compile_vol)
 
