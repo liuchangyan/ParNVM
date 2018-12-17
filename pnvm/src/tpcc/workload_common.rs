@@ -68,15 +68,17 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     let num_dis = num_district_get();
     let total_wd : usize = (num_wh * num_dis) as usize;
 
+    let scale_ratio = conf.thread_num / num_wh as usize;
+
     let mut tables = Tables {
         warehouse: Table::new_with_buckets(total_wd as usize, conf.wh_num as usize, "warehouse"),
         district: Table::new_with_buckets(total_wd, num_dis as usize, "district"),
         customer: CustomerTable::new_with_buckets(total_wd, 4096, "customer"),
-        neworder: NewOrderTable::new_with_buckets(total_wd, 4096*16, "neworder"),
-        order: OrderTable::new_with_buckets(total_wd, 32768 * 2, "order"),
-        orderline: OrderLineTable::new_with_buckets(total_wd, 8096*64, "orderline"),
+        neworder: NewOrderTable::new_with_buckets(total_wd, 4096*16*scale_ratio, "neworder"),
+        order: OrderTable::new_with_buckets(total_wd, 32768 * 2 * scale_ratio, "order"),
+        orderline: OrderLineTable::new_with_buckets(total_wd, 8096*64 * scale_ratio, "orderline"),
         item: Table::new_with_buckets(512, 256, "item"),
-        history: Table::new_with_buckets(total_wd, 51200, "history"),
+        history: Table::new_with_buckets(total_wd, 51200 *scale_ratio, "history"),
         stock: Table::new_with_buckets(total_wd, 65536 *2 ,"stock"),
     };
 

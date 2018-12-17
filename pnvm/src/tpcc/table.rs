@@ -561,10 +561,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     name_ : String,
     pub vers_ : Arc<TVersion>,
     #[cfg(any(feature ="pmem", feature="disk"))]
-    pmem_root_ : RefCell<Vec<NonNull<Entry>>>,
+    pmem_root_ : Vec<AtomicPtr<Entry>>,
+    pmem_root_idx_ : AtomicUsize,
     pmem_cap_ : AtomicUsize,
     pmem_per_size_ : usize,
     pmem_offset_ : AtomicUsize,
+    pmem_lock_ : AtomicBool,
 }
 
 impl<Entry, Index> Bucket<Entry, Index> 
@@ -584,7 +586,7 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
     pub fn with_capacity(cap: usize, name: String) -> Bucket<Entry, Index> 
     {
-        let  bucket = Bucket {
+        let  mut bucket = Bucket {
             rows: UnsafeCell::new(Vec::with_capacity(cap)),
             index: UnsafeCell::new(HashMap::with_capacity(cap)),
 
@@ -593,10 +595,12 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             name_ : name,
 
             #[cfg(any(feature ="pmem", feature="disk"))]
-            pmem_root_: RefCell::new(Vec::new()),
+            pmem_root_: Vec::with_capacity(16),
+            pmem_root_idx_: AtomicUsize::new(0),
             pmem_cap_: AtomicUsize::new(cap),
             pmem_per_size_ : cap,
             pmem_offset_: AtomicUsize::new(0),
+            pmem_lock_ : AtomicBool::new(false),
         };
 
         /* Get the persistent memory */
@@ -611,8 +615,13 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             if pmem_root.is_null() {
                 panic!("Bucket::with_capacity(): failed, len: {}", size);
             }
-
-            bucket.pmem_root_.borrow_mut().push( NonNull::new(pmem_root).unwrap());
+            
+            //FIXME: magic number for maximal number of roots
+            for _i in 0..16 {
+                bucket.pmem_root_.push(AtomicPtr::default()); 
+            }
+            
+            bucket.pmem_root_[0].store(pmem_root, Ordering::SeqCst);
         }
         bucket
     }
@@ -704,25 +713,37 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
             /* Exponential increase the cap here */
             //self.pmem_cap_.fetch_add(self.pmem_per_size_, Ordering::SeqCst);
-            self.pmem_cap_
-                .fetch_update(|x| Some(x * 2), 
-                              Ordering::SeqCst, 
-                              Ordering::SeqCst)
-                .expect("pmem cap update fails");
+            
+            /* Introduce a critical section
+             * Lock before entering the CR
+             */
 
+            let new_cap = 2 * pmem_cap ; 
 
+            match self.pmem_cap_.compare_exchange(
+                pmem_cap,
+                new_cap,
+                Ordering::SeqCst,
+                Ordering::SeqCst) {
+                Ok(_) => {
+                    let idx = self.pmem_root_idx_.fetch_add(1, Ordering::SeqCst);
+                    self.pmem_root_[idx+1].store(pmem_root, Ordering::SeqCst);
+                },
+                Err(_) => {
+                    pnvm_sys::unmap(pmem_root as *mut u8, size);
+                }
+            }
 
-            println!("Idx: {:?}, Prev_cap: {:?}, Table:{:?}", 
-                     idx, pmem_cap,
+            println!("Idx: {:?}, Prev_cap: {:?}, Cur_cap: {:?},  Table:{:?}", 
+                     idx, pmem_cap, 
+                     self.pmem_cap_.load(Ordering::Relaxed),
                      self.name_);
 
-            self.pmem_root_.borrow_mut().push(NonNull::new(pmem_root).unwrap());
         } 
         
         //Find pmem_page_id
         
         let mut pmem_page_id = idx / self.pmem_per_size_;
-
         let mut pmem_page_chunk_id = 0;
 
         //FIXME: binary search
@@ -733,10 +754,8 @@ where Entry: 'static + Key<Index> + Clone+Debug,
 
         //Calculate offset in the chunk
         let offset = idx - ((1<<pmem_page_chunk_id) >> 1) * self.pmem_per_size_;
-        
-        let roots = self.pmem_root_.borrow();
         unsafe {
-            roots[pmem_page_chunk_id].as_ptr()
+            self.pmem_root_[pmem_page_chunk_id].load(Ordering::SeqCst)
                 .offset(offset as isize)
         }
 
