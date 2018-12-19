@@ -91,8 +91,6 @@ fn multi_clwb(config: &Config) {
         for i in 0..config.nthread {
             let builder = thread::Builder::new().name(format!("{}", i)); 
             let barrier = barrier.clone();
-            let chunk_size = config.chunk_size;
-            let nops = config.nops;
             let bench = bench.clone();
 
 
@@ -101,8 +99,15 @@ fn multi_clwb(config: &Config) {
 
                 let start = Instant::now();
 
+                let data : Vec<u8>= vec![i as u8;bench.chunk_size];
+
                 /* Perform the benchmark for each thread */
-                do_memcpy(bench, chunk_size, nops, i);
+                match bench.bench_type.as_ref() {
+                    "Memcopy" => do_memcpy(&bench, i),
+                    "FlushFreq" => do_flush_freq(&bench,i, data.as_slice()),
+                    _ => panic!("unknown bench type"),
+
+                }
 
                 let end = Instant::now();
                 (start, end)
@@ -138,15 +143,40 @@ fn multi_clwb(config: &Config) {
     }
 
     let bandwidth = opsps_avg/config.nrepeats as f64 *config.chunk_size as f64 / (1024 * 1024) as f64;
-    println!("{},{},{},{},{}", config.mode,config.nthread, config.nops, config.chunk_size, bandwidth) ;
+    
+    if config.print_header {
+        println!("copy_mode,thd_block_size,nthread,nops,chunk_size,bandwidth,flush_freq");
+    }
+
+    println!("{},{},{},{},{},{},{}", 
+             config.mode,
+             config.thd_block_size,
+             config.nthread, 
+             config.nops, 
+             config.chunk_size, 
+             bandwidth,
+             config.flush_freq,
+             ) ;
 
 }
 
-fn do_memcpy(bench: Arc<Bench>,  chunk_size: usize, nops: usize, thd_idx: usize) {
-    for i in 0..nops {
-        let offset = thd_idx * nops + bench.rand_offsets[i];
-        let src = bench.src_addr.wrapping_add( offset * chunk_size);
-        let dest = bench.dest_addr.wrapping_add(offset * chunk_size);
+
+#[inline]
+fn get_copy_addr(bench: &Arc<Bench>, i :usize, thd :usize) 
+    -> (*mut u8, *mut u8)
+{
+    let offset = thd * bench.thd_block_size + bench.rand_offsets[i] % bench.thd_block_size;
+    let src = bench.src_addr.wrapping_add( offset * bench.chunk_size);
+    let dest = bench.dest_addr.wrapping_add(offset * bench.chunk_size);
+
+    (src, dest)
+
+}
+
+fn do_memcpy(bench: &Arc<Bench>, thd_idx: usize) {
+    let chunk_size = bench.chunk_size;
+    for i in 0..bench.nops {
+        let (src, dest) = get_copy_addr(bench, i, thd_idx);
 
         match bench.copy_mode {
             BenchCopyMode::PMDKNoDrain(_) =>  memcpy_nodrain(dest,src, chunk_size),
@@ -157,8 +187,34 @@ fn do_memcpy(bench: Arc<Bench>,  chunk_size: usize, nops: usize, thd_idx: usize)
     }
 }
 
+fn do_flush_freq(bench: &Arc<Bench>,  thd_idx: usize, data: &[u8]) 
+{
+    let mut cnt = 0;
+    let chunk_size = bench.chunk_size;
+    let mut records = Vec::with_capacity(bench.nops);
+
+    for i in 0..bench.nops {
+        let (src, dest) = get_copy_addr(bench,i, thd_idx);
+        unsafe {ptr::copy(data.as_ptr(), src, chunk_size)};
+        records.push((src, dest));
+        cnt += 1;
+
+        if cnt == bench.flush_freq {
+            for j in i-cnt+1..=i {
+                let (src, dest) = records[i];
+                memcpy_nodrain(dest, src, chunk_size);
+            }
+            unsafe {pmem_drain()};
+            cnt = 0;
+        }
+    }
+
+
+}
+
 fn prep_bench(config: &Config) -> Bench { 
-    let size = config.nthread * config.chunk_size * config.nops;
+    //let size = config.nthread * config.chunk_size * config.nops;
+    let size= config.nthread * config.chunk_size * config.thd_block_size;
     
     let dest_addr =  match config.dest_mode.as_ref() {
         "MmapNVM"  => mmap_file(String::from(PMEM_TEST_PATH_ABS), size),
@@ -200,6 +256,12 @@ fn prep_bench(config: &Config) -> Bench {
        rand_offsets,
        size,
        copy_mode,
+       flush_freq: config.flush_freq,
+       chunk_size: config.chunk_size,
+       nops: config.nops,
+       bench_type : config.bench_type.clone(),
+       thd_block_size: config.thd_block_size,
+       file_size : config.file_size,
     };
 
     //println!("Bench: {:?}", bench);
@@ -219,8 +281,14 @@ struct Bench {
     dest_addr: *mut u8,
     src_addr: *mut u8,
     rand_offsets: Vec<usize>,
+    chunk_size: usize,
+    file_size :usize,
+    thd_block_size: usize,
+    nops: usize,
     size: usize,
     copy_mode: BenchCopyMode,
+    flush_freq: usize,
+    bench_type: String,
 }
 
 impl Drop for Bench {
@@ -249,10 +317,15 @@ enum BenchCopyMode {
 struct Config {
     nthread: usize,
     chunk_size : usize,
+    file_size : usize, // total file size UNUSED
+    thd_block_size: usize, // each block copy region
     nops: usize,
     nrepeats : usize,
     mode : String,
-    dest_mode : String,
+    dest_mode : String, // mmapnvm or heap
+    bench_type : String, // FlushFeq or Memcpy
+    print_header : bool,
+    flush_freq: usize, 
 }
 
 #[derive(Copy, Clone)]
@@ -275,10 +348,15 @@ fn parse_config() -> Config {
     Config {
         nthread : settings.get_int("THREAD_NUM").unwrap() as usize,
         chunk_size : settings.get_int("CHUNK_SIZE").unwrap() as usize,
+        file_size : settings.get_int("FILE_SIZE").unwrap() as usize,
+        thd_block_size: settings.get_int("THD_BLOCK_SIZE").unwrap() as usize,
         nops: settings.get_int("OPS_NUM").unwrap() as usize,
         nrepeats: settings.get_int("REPEAT_NUM").unwrap() as usize,
-        mode : settings.get_str("MODE").unwrap(),
+        mode : settings.get_str("PMDK_MODE").unwrap(),
         dest_mode : settings.get_str("DEST_MODE").unwrap(),
+        bench_type: settings.get_str("BENCH_TYPE").unwrap(),
+        flush_freq : settings.get_int("FLUSH_FREQ").unwrap() as usize,
+        print_header: settings.get_bool("PRINT_HEADER").unwrap(),
     }
 }
 
