@@ -65,6 +65,7 @@ pub struct TransactionParOCC
     //FIXME: store reference instead
     #[cfg(any(feature= "pmem", feature = "disk"))]
     records_ :     Vec<(Box<dyn TRef>, Option<FieldArray>)>,
+    do_piece_drain: bool,
 
     tags_ : HashMap<(ObjectId, Operation), TTag>,
     early_abort_ : bool,
@@ -111,12 +112,16 @@ impl TransactionParOCC
             #[cfg(any(feature= "pmem", feature = "disk"))]
             records_ :     Vec::new(),
 
+            do_piece_drain : false,
             tags_: HashMap::with_capacity(16),
             early_abort_ : false, // User initiated abort for the whole Txn
         }
     }
 
-
+    
+    pub fn set_piece_drain_mode(&mut self, do_piece_drain: bool) {
+        self.do_piece_drain = do_piece_drain;
+    }
 
     pub fn add_output(&mut self, data: Box<Any>, idx: usize){
         if idx >= self.outputs_.len() {
@@ -243,7 +248,9 @@ impl TransactionParOCC
         //FIXME: delay the commit until commiting transaction
         #[cfg(any(feature = "pmem", feature = "disk"))]
         {
-            self.persist_data();
+            if self.do_piece_drain {
+                self.persist_data();
+            }
         }
         
 
@@ -303,6 +310,7 @@ impl TransactionParOCC
             }
 
         }
+
 
         //for tag in self.tags_.values() {
         //    tag.persist_data(*self.id());
@@ -496,8 +504,12 @@ impl TransactionParOCC
         #[cfg(any(feature= "pmem", feature = "disk"))]
         {   
             //Persist data here
-            self.persist_data(); 
+            if !self.do_piece_drain {
+                self.persist_data(); 
+                pnvm_sys::drain();
+            }
             self.wait_deps_persist();
+            
 
             self.persist_txn();
             self.status_ = TxState::PERSIST;
