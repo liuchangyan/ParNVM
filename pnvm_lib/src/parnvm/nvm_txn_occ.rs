@@ -248,9 +248,8 @@ impl TransactionParOCC
         //FIXME: delay the commit until commiting transaction
         #[cfg(any(feature = "pmem", feature = "disk"))]
         {
-            if self.do_piece_drain {
-                self.persist_data();
-            }
+            #[cfg(feature = "pdrain")]
+            self.persist_data();
         }
         
 
@@ -504,7 +503,9 @@ impl TransactionParOCC
         #[cfg(any(feature= "pmem", feature = "disk"))]
         {   
             //Persist data here
-            if !self.do_piece_drain {
+            #[cfg(not(feature = "pdrain"))]
+            {
+
                 self.persist_data(); 
                 pnvm_sys::drain();
             }

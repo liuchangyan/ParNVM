@@ -82,7 +82,9 @@ fn multi_clwb(config: &Config) {
     let barrier = Arc::new(Barrier::new(config.nthread));
 
     //Do Warm up 
-    memset_persist(bench.dest_addr, 0, bench.size);
+    if !config.no_warmup{
+        memset_persist(bench.dest_addr, 0, bench.size);
+    }
     
 
     let mut opsps_avg = 0.0;
@@ -145,10 +147,10 @@ fn multi_clwb(config: &Config) {
     let bandwidth = opsps_avg/config.nrepeats as f64 *config.chunk_size as f64 / (1024 * 1024) as f64;
     
     if config.print_header {
-        println!("copy_mode,thd_block_size,nthread,nops,chunk_size,bandwidth,flush_freq");
+        println!("copy_mode,thd_block_size,nthread,nops,chunk_size,bandwidth,flush_freq, rd_after_w");
     }
 
-    println!("{},{},{},{},{},{},{}", 
+    println!("{},{},{},{},{},{},{},{}", 
              config.mode,
              config.thd_block_size,
              config.nthread, 
@@ -156,6 +158,7 @@ fn multi_clwb(config: &Config) {
              config.chunk_size, 
              bandwidth,
              config.flush_freq,
+             config.rd_after_w,
              ) ;
 
 }
@@ -195,20 +198,60 @@ fn do_flush_freq(bench: &Arc<Bench>,  thd_idx: usize, data: &[u8])
 
     for i in 0..bench.nops {
         let (src, dest) = get_copy_addr(bench,i, thd_idx);
-        unsafe {ptr::copy(data.as_ptr(), src, chunk_size)};
-        records.push((src, dest));
-        cnt += 1;
 
-        if cnt == bench.flush_freq {
-            for j in i-cnt+1..=i {
-                let (src, dest) = records[i];
-                memcpy_nodrain(dest, src, chunk_size);
+        match bench.copy_mode {
+            BenchCopyMode::PMDKNoDrain(_) => {
+                unsafe {ptr::copy(data.as_ptr(), src, chunk_size)};
+                records.push((src, dest));
+                cnt += 1;
+
+                if cnt == bench.flush_freq {
+                    for j in i-cnt+1..=i {
+                        let (src, dest) = records[i];
+                        memcpy_nodrain(dest, src, chunk_size);
+                        if bench.rd_after_w {
+                            for i in 0..chunk_size {
+                                unsafe {
+                                    let x = dest.offset(i as isize).read();
+                                    if (x < 0) {
+                                        panic!("never here");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //unsafe {pmem_drain()};
+                    cnt = 0;
+                }
+            },
+
+            BenchCopyMode::Simple => {
+                unsafe {ptr::copy(data.as_ptr(), dest, chunk_size)};
+                records.push((src, dest));
+                cnt += 1;
+
+                if cnt == bench.flush_freq {
+                    for j in i-cnt+1..=i {
+                        let (_src, dest) = records[i];
+                        pnvm_sys::flush(dest, chunk_size);
+                        if bench.rd_after_w {
+                            for i in 0..chunk_size {
+                                unsafe {
+                                    let x = dest.offset(i as isize).read();
+                                    if (x < 0) {
+                                        panic!("never here");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //unsafe {pmem_drain()};
+                    cnt = 0;
+                }
             }
-            unsafe {pmem_drain()};
-            cnt = 0;
         }
-    }
 
+    }
 
 }
 
@@ -262,6 +305,7 @@ fn prep_bench(config: &Config) -> Bench {
        bench_type : config.bench_type.clone(),
        thd_block_size: config.thd_block_size,
        file_size : config.file_size,
+       rd_after_w : config.rd_after_w,
     };
 
     //println!("Bench: {:?}", bench);
@@ -278,6 +322,7 @@ fn check_continuous(addr : *mut char, c: char, len:usize) {
 
 #[derive(Debug)]
 struct Bench {
+    rd_after_w : bool,
     dest_addr: *mut u8,
     src_addr: *mut u8,
     rand_offsets: Vec<usize>,
@@ -325,6 +370,8 @@ struct Config {
     dest_mode : String, // mmapnvm or heap
     bench_type : String, // FlushFeq or Memcpy
     print_header : bool,
+    rd_after_w: bool,
+    no_warmup: bool,
     flush_freq: usize, 
 }
 
@@ -357,6 +404,8 @@ fn parse_config() -> Config {
         bench_type: settings.get_str("BENCH_TYPE").unwrap(),
         flush_freq : settings.get_int("FLUSH_FREQ").unwrap() as usize,
         print_header: settings.get_bool("PRINT_HEADER").unwrap(),
+        rd_after_w: settings.get_bool("READ_AFTER_WRITE").unwrap(),
+        no_warmup: settings.get_bool("NO_WARMUP").unwrap(),
     }
 }
 

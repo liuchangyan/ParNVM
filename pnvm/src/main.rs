@@ -282,7 +282,6 @@ fn run_nvm_occ_micro(conf: Config) {
         let thread_txn_base = work[i].clone();
         let builder = thread::Builder::new().name(format!("TXN-{}", i + 1));
         let atomic_clone = atomic_cnt.clone();
-        let do_piece_drain = conf.do_piece_drain;
 
         let handle = builder
             .spawn(move || {
@@ -300,7 +299,6 @@ fn run_nvm_occ_micro(conf: Config) {
                     }
 
                     let mut tx = TransactionParOCC::new_from_base(&thread_txn_base, tid, Box::new(1));
-                    tx.set_piece_drain_mode(do_piece_drain);
 
                     tx.execute_txn();
 
@@ -464,8 +462,6 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
         let mut no_warmup = conf.no_warmup;
         let warm_up_time = conf.warmup_time;
 
-        let do_piece_drain = conf.do_piece_drain;
-
         /* Spawn worker thread */
         let handle = builder
             .spawn(move || {
@@ -546,7 +542,6 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                                 },
                                 _ => panic!("invalid tx mix")
                             };
-                            tx.set_piece_drain_mode(do_piece_drain);
                             tx.execute_txn();
                         },
                         WorkloadType::NewOrder => {
