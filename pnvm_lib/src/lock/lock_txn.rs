@@ -17,10 +17,10 @@ use tcore::{
     BenchmarkCounter,
 };
 
-#[cfg(any(feature = "pmem", feature = "disk"))]
+//#[cfg(any(feature = "pmem", feature = "disk"))]
 use pnvm_sys;
 
-#[cfg(any(feature = "pmem", feature = "disk"))]
+//#[cfg(any(feature = "pmem", feature = "disk"))]
 use plog::{
     PLog,
     self
@@ -33,7 +33,7 @@ pub struct Transaction2PL {
     state_ : TxState,
     locks_ : HashMap<(ObjectId, LockType), Arc<TVersion>>,
     txn_info_ : Arc<TxnInfo>,
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     refs_ : Vec<(Box<dyn TRef>, Option<FieldArray>)>,
     //fields_ : HashMap<ObjectId, FieldArray>,
 }
@@ -47,7 +47,7 @@ impl Transaction2PL {
             state_ : TxState::EMBRYO,
             locks_ : HashMap::new(),
             txn_info_: Arc::new(TxnInfo::default()),
-            #[cfg(any(feature = "pmem", feature = "disk"))]
+            //#[cfg(any(feature = "pmem", feature = "disk"))]
             refs_ : Vec::new(),
         }
     }
@@ -127,7 +127,7 @@ impl Transaction2PL {
    pub fn write<T:'static + Clone>(&mut self, tref: &Box<dyn TRef>, val: T) 
        {
            tref.write_through(Box::new(val), self.id().clone());
-           #[cfg(any(feature = "pmem", feature = "disk"))]
+           //#[cfg(any(feature = "pmem", feature = "disk"))]
            self.refs_.push((tref.box_clone(), None));
    }
     
@@ -135,7 +135,7 @@ impl Transaction2PL {
         //Make records for persist later
         tref.write_through(Box::new(val), self.id().clone());
         //Replace current fields
-        #[cfg(any(feature = "pmem", feature = "disk"))]
+        //#[cfg(any(feature = "pmem", feature = "disk"))]
         self.refs_.push((tref.box_clone(), Some(fields)));
     }
 
@@ -152,13 +152,13 @@ impl Transaction2PL {
     pub fn abort(&mut self) {
         BenchmarkCounter::abort();
         
-        #[cfg(any(feature = "pmem", feature = "disk"))]
+        //#[cfg(any(feature = "pmem", feature = "disk"))]
         self.refs_.clear();
 
         self.unlock();
     }
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn add_ref(&mut self, tref: Box<dyn TRef>) {
         self.refs_.push((tref,None));
     }
@@ -166,7 +166,7 @@ impl Transaction2PL {
 
     pub fn commit(&mut self) {
         //Unlocks
-        #[cfg(any(feature = "pmem", feature = "disk"))]
+        //#[cfg(any(feature = "pmem", feature = "disk"))]
         {
             self.persist_log();
             self.persist_data();
@@ -178,7 +178,7 @@ impl Transaction2PL {
     }
 
     
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     fn persist_data(&self) {
         #[cfg(feature = "pmem")]
         for (tref, fields) in self.refs_.iter() {
@@ -217,7 +217,7 @@ impl Transaction2PL {
         panic!("not impelmented for disk");
     }
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     fn persist_commit(&self) {
         #[cfg(feature = "pmem")]
         pnvm_sys::drain();
@@ -225,7 +225,7 @@ impl Transaction2PL {
         plog::persist_txn(self.id().into());
     }
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     fn persist_log(&self) {
         let mut logs = vec![];
         for (tref, _field) in self.refs_.iter() {

@@ -11,7 +11,7 @@
 #![cfg_attr(feature = "profile", feature(plugin, custom_attribute))]
 #![cfg_attr(feature = "profile", plugin(flamer))]
 
-#[cfg(any(feature = "pmem", feature ="disk"))]
+//#[cfg(any(feature = "pmem", feature ="disk"))]
 extern crate pnvm_sys;
 extern crate alloc;
 
@@ -36,7 +36,7 @@ extern crate strum;
 extern crate strum_macros;
 
 
-#[cfg(any(feature = "pmem", feature ="disk"))]
+//#[cfg(any(feature = "pmem", feature ="disk"))]
 pub mod plog;
 
 pub mod tbox;

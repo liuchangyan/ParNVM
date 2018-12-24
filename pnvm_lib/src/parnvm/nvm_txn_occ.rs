@@ -20,10 +20,10 @@ use std::{
 };
 
 
-#[cfg(any(feature= "pmem", feature = "disk"))]
+//#[cfg(any(feature= "pmem", feature = "disk"))]
 use {core::alloc::Layout, plog::{self, PLog}};
 
-#[cfg(any(feature= "pmem", feature = "disk"))]
+//#[cfg(any(feature= "pmem", feature = "disk"))]
 extern crate pnvm_sys;
 
 use log;
@@ -63,7 +63,7 @@ pub struct TransactionParOCC
     outputs_ :  Vec<Box<Any>>,
     
     //FIXME: store reference instead
-    #[cfg(any(feature= "pmem", feature = "disk"))]
+    //#[cfg(any(feature= "pmem", feature = "disk"))]
     records_ :     Vec<(Box<dyn TRef>, Option<FieldArray>)>,
     do_piece_drain: bool,
 
@@ -109,7 +109,7 @@ impl TransactionParOCC
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
         
-            #[cfg(any(feature= "pmem", feature = "disk"))]
+            //#[cfg(any(feature= "pmem", feature = "disk"))]
             records_ :     Vec::new(),
 
             do_piece_drain : false,
@@ -238,7 +238,7 @@ impl TransactionParOCC
     fn commit_piece(&mut self) -> bool {
         tcore::BenchmarkCounter::success_piece();
        
-        #[cfg(all(any(feature = "pmem", feature = "disk"), feature = "plog"))]
+        //#[cfg(all(any(feature = "pmem", feature = "disk"), feature = "plog"))]
         self.persist_logs();
 
         //Install write sets into the underlying data
@@ -410,7 +410,7 @@ impl TransactionParOCC
     }
 
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn persist_logs(&mut self) {
         let id = *(self.id());
         let mut logs = vec![];
@@ -474,17 +474,19 @@ impl TransactionParOCC
   //      self.wait_ = Some(p)
   //  }
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_log(&self, records: &Vec<DataRecord>) {
         let id = self.id();
         plog::persist_log(records.iter().map(|ref r| r.as_log(*id)).collect());
     }
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_txn(&self) {
+        #[cfg(any(feature = "pmem", feature = "disk"))]
         pnvm_sys::drain();
+
         plog::persist_txn(self.id().into());
         self.txn_info_.persist();
     }
@@ -507,7 +509,6 @@ impl TransactionParOCC
             {
 
                 self.persist_data(); 
-                pnvm_sys::drain();
             }
             self.wait_deps_persist();
             

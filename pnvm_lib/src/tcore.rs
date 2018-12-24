@@ -27,10 +27,10 @@ use std::{
 
 //use std::alloc::{self, GlobalAlloc};
 
-#[cfg(not(any(feature = "pmem", feature = "disk")))]
-use core::alloc::Layout;
+//#[cfg(not(any(feature = "pmem", feature = "disk")))]
+//use core::alloc::Layout;
 
-#[cfg(any(feature = "pmem", feature = "disk"))]
+//#[cfg(any(feature = "pmem", feature = "disk"))]
 use pnvm_sys::{
     self, Alloc, AllocErr, Layout, PMEM_DEFAULT_SIZE, PMEM_FILE_DIR_BYTES,
 };
@@ -38,7 +38,7 @@ use pnvm_sys::{
 #[cfg(feature = "profile")]
 use flame;
 
-#[cfg(any(feature = "pmem", feature = "disk"))]
+//#[cfg(any(feature = "pmem", feature = "disk"))]
 use plog::PLog;
 
 //#[cfg(benchmark)]
@@ -773,7 +773,7 @@ impl TTag
    // }
     
     //FIXME: pmem flush
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn persist_data(&self, _: Tid) {
         if !self.has_write() {
             return;
@@ -837,7 +837,7 @@ impl TTag
 
     }
 
-    #[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn make_log(&self, id: Tid) -> PLog {
         PLog::new(
             self.tobj_ref_.get_ptr() as *mut u8,

@@ -137,7 +137,7 @@ pub fn persist_log(logs: Vec<PLog>) {
 }
 
 pub fn persist_txn(id: u32) {
-    let mut iovecs = Vec::with_capacity(2);
+    let mut iovecs :Vec<libc::iovec> = Vec::with_capacity(2);
 
     let log = PLog {
         header: PLogHeader {
