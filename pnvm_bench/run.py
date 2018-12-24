@@ -35,7 +35,7 @@ def run_exp(g_env, mode, command, out_fd):
 def run():
 
 
-    out_fd = open("output-large", "w+")
+    out_fd = open("benchmark/intel-output.csv", "w+")
     print_header(out_fd)
     command = ["../target/release/pnvm_bench"]
     sys_env = dict(os.environ)
@@ -69,22 +69,22 @@ def run():
     # run_exp(env, "movnt-empty",command, out_fd)
 
     # Test monvnt clwb
-    # config_env = {
-    #     "PMEM_NO_MOVNT" : str(0),
-    # }
-    # env = {**sys_env, **config_env}
-    # print("Movnt clwb")
-    # run_exp(env, "movnt-clwb",command, out_fd)
+    config_env = {
+        "PMEM_NO_MOVNT" : str(0),
+    }
+    env = {**sys_env, **config_env}
+    print("Movnt clwb")
+    run_exp(env, "movnt-clwb",command, out_fd)
 
 
     # Test movnt clflushopt
-    # config_env = {
-    #     "PMEM_NO_CLWB" : str(1),
-    #     "PMEM_NO_MOVNT" : str(0),
-    # }
-    # env = {**sys_env, **config_env}
-    # print("Movnt clflushopt")
-    # run_exp(env, "movnt-clflushopt",command, out_fd)
+    config_env = {
+        "PMEM_NO_CLWB" : str(1),
+        "PMEM_NO_MOVNT" : str(0),
+    }
+    env = {**sys_env, **config_env}
+    print("Movnt clflushopt")
+    run_exp(env, "movnt-clflushopt",command, out_fd)
 
 
     # # Test mov empty
@@ -97,31 +97,31 @@ def run():
     # run_exp(env, "mov-empty", command, out_fd)
 
     # Test mov clwb
-    # config_env = {
-    #     "PMEM_NO_MOVNT" : str(1),
-    # }
-    # env = {**sys_env, **config_env}
-    # print("MOV clwb")
-    # run_exp(env, "mov-clwb", command, out_fd)
+    config_env = {
+        "PMEM_NO_MOVNT" : str(1),
+    }
+    env = {**sys_env, **config_env}
+    print("MOV clwb")
+    run_exp(env, "mov-clwb", command, out_fd)
 
     # Test mov clflushop
-    # config_env = {
-    #     "PMEM_NO_MOVNT" : str(1),
-    #     "PMEM_NO_CLWB" : str(1),
-    # }
-    # env = {**sys_env, **config_env}
-    # print("MOV clflushopt")
-    # run_exp(env, "mov-clflushopt", command, out_fd)
+    config_env = {
+        "PMEM_NO_MOVNT" : str(1),
+        "PMEM_NO_CLWB" : str(1),
+    }
+    env = {**sys_env, **config_env}
+    print("MOV clflushopt")
+    run_exp(env, "mov-clflushopt", command, out_fd)
 
     # # Test move clflush
-    # config_env = {
-    #     "PMEM_NO_MOVNT" : str(1),
-    #     "PMEM_NO_CLWB": str(1),
-    #     "PMEM_NO_CLFLUSHOPT" : str(1),
-    # }
-    # env = {**sys_env, **config_env}
-    # print("MOV clflush")
-    # run_exp(env, "mov-clflush", command, out_fd)
+    config_env = {
+        "PMEM_NO_MOVNT" : str(1),
+        "PMEM_NO_CLWB": str(1),
+        "PMEM_NO_CLFLUSHOPT" : str(1),
+    }
+    env = {**sys_env, **config_env}
+    print("MOV clflush")
+    run_exp(env, "mov-clflush", command, out_fd)
 
 
 run()
