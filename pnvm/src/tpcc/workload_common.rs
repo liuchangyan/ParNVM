@@ -69,29 +69,33 @@ pub fn prepare_workload(conf: &Config, rng: &mut SmallRng) -> TablesRef {
     let total_wd : usize = (num_wh * num_dis) as usize;
 
     let scale_ratio = conf.thread_num / num_wh as usize;
-    let mut tables = Tables {
-        warehouse: Table::new_with_buckets(1, conf.wh_num as usize, "warehouse"),
-        district: Table::new_with_buckets(1, num_dis as usize, "district"),
-        customer: CustomerTable::new_with_buckets(1, 4096, "customer"),
-        neworder: NewOrderTable::new_with_buckets(1, 4096*16*scale_ratio, "neworder"),
-        order: OrderTable::new_with_buckets(1, 32768 * 2 * scale_ratio, "order"),
-        orderline: OrderLineTable::new_with_buckets(1, 8096*64 * scale_ratio, "orderline"),
-        item: Table::new_with_buckets(512, 256, "item"),
-        history: Table::new_with_buckets(1, 51200 *scale_ratio, "history"),
-        stock: Table::new_with_buckets(1, 65536 *2 ,"stock"),
+    let mut tables = if conf.partition != 0 {
+        let par = conf.partition;
+        Tables {
+            warehouse: Table::new_with_buckets(par, conf.wh_num as usize, "warehouse"),
+            district: Table::new_with_buckets(par, num_dis as usize, "district"),
+            customer: CustomerTable::new_with_buckets(par, 4096, "customer"),
+            neworder: NewOrderTable::new_with_buckets(par, 4096*16*scale_ratio, "neworder"),
+            order: OrderTable::new_with_buckets(par, 32768 * 2 * scale_ratio, "order"),
+            orderline: OrderLineTable::new_with_buckets(par, 8096*64 * scale_ratio, "orderline"),
+            item: Table::new_with_buckets(512, 256, "item"),
+            history: Table::new_with_buckets(par, 51200 *scale_ratio, "history"),
+            stock: Table::new_with_buckets(par, 65536 *2 ,"stock"),
+        }
+    } else {
+        Tables {
+            warehouse: Table::new_with_buckets(total_wd as usize, conf.wh_num as usize, "warehouse"),
+            district: Table::new_with_buckets(total_wd, num_dis as usize, "district"),
+            customer: CustomerTable::new_with_buckets(total_wd, 4096, "customer"),
+            neworder: NewOrderTable::new_with_buckets(total_wd, 4096*16*scale_ratio, "neworder"),
+            order: OrderTable::new_with_buckets(total_wd, 32768 * 2 * scale_ratio, "order"),
+            orderline: OrderLineTable::new_with_buckets(total_wd, 8096*64 * scale_ratio, "orderline"),
+            item: Table::new_with_buckets(512, 256, "item"),
+            history: Table::new_with_buckets(total_wd, 51200 *scale_ratio, "history"),
+            stock: Table::new_with_buckets(total_wd, 65536 *2 ,"stock"),
+        }
     };
-
-    //let mut tables = Tables {
-    //    warehouse: Table::new_with_buckets(total_wd as usize, conf.wh_num as usize, "warehouse"),
-    //    district: Table::new_with_buckets(total_wd, num_dis as usize, "district"),
-    //    customer: CustomerTable::new_with_buckets(total_wd, 4096, "customer"),
-    //    neworder: NewOrderTable::new_with_buckets(total_wd, 4096*16*scale_ratio, "neworder"),
-    //    order: OrderTable::new_with_buckets(total_wd, 32768 * 2 * scale_ratio, "order"),
-    //    orderline: OrderLineTable::new_with_buckets(total_wd, 8096*64 * scale_ratio, "orderline"),
-    //    item: Table::new_with_buckets(512, 256, "item"),
-    //    history: Table::new_with_buckets(total_wd, 51200 *scale_ratio, "history"),
-    //    stock: Table::new_with_buckets(total_wd, 65536 *2 ,"stock"),
-    //};
+    
 
     fill_item(&mut tables, conf, rng);
     fill_warehouse(&mut tables, conf, rng);
