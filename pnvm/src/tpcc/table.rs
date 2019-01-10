@@ -555,6 +555,7 @@ pub struct Bucket<Entry, Index>
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone,
 {
+    //FIXME: rows need be backed by PMEM
     rows: UnsafeCell<Vec<Arc<Row<Entry, Index>>>>,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
@@ -1014,6 +1015,8 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         let key = entry.primary_key();
         let offsets = entry.field_offset();
         unsafe {entry_ptr.write(entry)};
+
+        //FIXME: DO FLUSH HERE
         
        // let bentry = Box::new(entry.clone());
        // let ptr = Box::into_raw(bentry);

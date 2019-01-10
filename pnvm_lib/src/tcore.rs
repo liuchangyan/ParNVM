@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use std::{
     sync::{Arc, Mutex, RwLock,
-        atomic::{AtomicU32, Ordering, AtomicBool}
+        atomic::{AtomicU32, Ordering, AtomicBool, AtomicPtr}
     },
     ops::Deref,
     any::Any,
@@ -12,7 +12,7 @@ use crossbeam::sync::ArcCell;
 //use std::rc::Rc;
 //use std::cell::RefCell;
 //use tbox::TBox;
-use txn::{Tid, TxnInfo};
+use txn::{Tid, TxnInfo, PmemFac};
 
 #[allow(unused_imports)]
 use std::{
@@ -225,7 +225,14 @@ pub trait TRef : fmt::Debug{
     fn get_tvers(&self) -> &Arc<TVersion>;
     fn get_version(&self) -> u32;
     fn read(&self) -> &Any;
+
+    //TODO: PDRAIN
+    #[cfg(not(all(feature = "pdrain", feature = "pmem")))]
     fn write(&mut self, Box<Any>);
+
+    #[cfg(all(feature = "pdrain", feature = "pmem"))]
+    fn write(&mut self, *mut u8);
+
     fn lock(&self, Tid) -> bool;
     fn unlock(&self);
     fn check(&self, u32, u32) -> bool;
@@ -760,10 +767,20 @@ impl TTag
     }
 
     #[inline(always)]
+    #[cfg(not(all(feature = "pdrain", feature = "pmem")))]
     pub fn write<T: 'static>(&mut self, val: T) {
         let val = Box::new(val); 
         self.tobj_ref_.write(val);
         self.has_write_ = true; 
+    }
+
+    #[cfg(all(feature = "pdrain", feature = "pmem"))]
+    pub fn write<T: 'static>(&mut self, val:T) {
+        let mut pmem_ptr = PmemFac::alloc(mem::size_of::<T>()) as *mut T;
+        unsafe {pmem_ptr.write(val)};
+
+        self.tobj_ref_.write(pmem_ptr as *mut u8);
+        self.has_write_ = true;
     }
 
 

@@ -2,7 +2,11 @@ use txn::{Tid, TxnInfo};
 //use std::cell::RefCell;
 use std::{
     //rc::Rc,
-    sync::{Arc, atomic::AtomicU32},
+    sync::{Arc, atomic::{
+        AtomicU32,
+        AtomicPtr
+    }
+    },
     any::Any,
 };
 
@@ -231,7 +235,13 @@ impl TRef for TInt {
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
+    
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, val: *mut u8) {
+        panic!("not implemtned write-pdrain for TBox");
+    }
 
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<u32>() {
             Ok(val) => self.data_ = Some(val),
