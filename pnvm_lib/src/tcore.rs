@@ -586,7 +586,7 @@ where
     T: Clone,
 {
     //ptr_: Unique<T>,
-    data_ : UnsafeCell<T>,
+    data_ : AtomicPtr<T>,
 }
 
 impl<T> TValue<T>
@@ -595,21 +595,36 @@ where
 {
     pub fn new(val: T) -> TValue<T> {
         TValue {
-            data_ : UnsafeCell::new(val),
+            data_ : AtomicPtr::new(Box::into_raw(Box::new(val))),
         }
     }
+
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    pub fn store(&self, ptr: *mut T) {
+        let old = self.data_.swap(ptr, Ordering::SeqCst);
+        //unsafe {drop_in_place(old)};
+    }
+
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     pub fn store(&self, data: T) {
-        unsafe {*self.data_.get() = data};
+        let ptr = Box::into_raw(Box::new(data));
+        let old = self.data_.swap(ptr, Ordering::SeqCst);
+
+        //FIXME: drop in place
+        //unsafe {drop_in_place(old)};
+        
+        //unsafe {*self.data_.get() = data};
         //unsafe { self.ptr_.as_ptr().write(data) };
     }
 
     pub fn load(&self) -> &T {
         //unsafe { self.ptr_.as_ref() }
-        unsafe { &*self.data_.get()}
+        unsafe {&*(self.data_.load(Ordering::SeqCst))}
+        //unsafe { &*self.data_.get()}
     }
 
     pub fn get_ptr(&self) -> *mut T {
-        self.data_.get()
+        self.data_.load(Ordering::SeqCst)
     }
 
     //pub fn get_addr(&self) -> Unique<T> {

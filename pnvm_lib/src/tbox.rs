@@ -1,4 +1,4 @@
-use txn::{Tid, TxnInfo};
+use txn::{Tid, TxnInfo, PmemFac};
 //use std::cell::RefCell;
 use std::{
     //rc::Rc,
@@ -8,6 +8,8 @@ use std::{
     }
     },
     any::Any,
+    ptr,
+    mem,
 };
 
 //nightly
@@ -47,8 +49,16 @@ where
     }
 
     #[inline]
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     pub fn install(&self, val: &T, tid: Tid) {
         self.tvalue_.store(T::clone(val));
+        self.vers_.set_version(tid.into());
+    }
+
+    #[inline]
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    pub fn install(&self, ptr: *mut T, tid: Tid) {
+        self.tvalue_.store(ptr); 
         self.vers_.set_version(tid.into());
     }
 
@@ -105,7 +115,15 @@ where
     }
 
     pub fn raw_write(&mut self, val: T) {
+        #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
         self.tvalue_.store(val);
+
+        #[cfg(all(feature = "pmem", feature = "pdrain"))]
+        {
+            let mut ptr = PmemFac::alloc(mem::size_of::<T>()) as *mut T;
+            unsafe {ptr.write(val)};
+            self.tvalue_.store(ptr);
+        }
     }
 
 //    pub fn read<'a>(&self, txn : &mut TransactionOCC) -> &'a T {
@@ -154,28 +172,43 @@ impl BoxRef<u32> for Arc<TBox<u32>> {
         Box::new(TInt{
             inner_ : self,
             data_ : None,
+            #[cfg(all(feature = "pmem", feature = "pdrain"))]
+            pd_ptr: ptr::null_mut(),
         })
     }
 }
 
 
-impl BoxRef<u32> for (u32, Arc<TBox<u32>>) {
-    fn into_box_ref(self) -> Box<dyn TRef> {
-        let (val, tbox) = self;
-        Box::new(TInt {
-            inner_ : tbox,
-            data_ : Some(Box::new(val))
-        })
-    }
-}
+//impl BoxRef<u32> for (u32, Arc<TBox<u32>>) {
+//    fn into_box_ref(self) -> Box<dyn TRef> {
+//        let (val, tbox) = self;
+//        Box::new(TInt {
+//            inner_ : tbox,
+//            data_ : Some(Box::new(val)),
+//            pd_ptr: ptr::null_mut(),
+//        })
+//    }
+//}
 
 
 #[derive(Debug)]
 pub struct TInt {
     inner_: Arc<TBox<u32>>,
     data_ : Option<Box<u32>>,
+
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    pd_ptr: *mut u32,
 }
 impl TRef for TInt {
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn install(&self, id: Tid) {
+        match self.pd_ptr.is_null() {
+            true => panic!("pdrain_pointer of writes should not be null"),
+            false => self.inner_.install(self.pd_ptr, id),
+        }
+    }
+
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn install(&self,id: Tid) {
         match self.data_ {
             Some(ref as_u32) => {
@@ -204,6 +237,8 @@ impl TRef for TInt {
         Box::new(TInt {
             inner_: self.inner_.clone(),
             data_ : self.data_.clone(),
+            #[cfg(all(feature = "pmem", feature = "pdrain"))]
+            pd_ptr: self.pd_ptr.clone(),
         })
     }
 
@@ -241,6 +276,11 @@ impl TRef for TInt {
         panic!("not implemtned write-pdrain for TBox");
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write_through(&self, val: Box<Any>, tid: Tid) {
+        panic!("write_through not implemented");
+    }
+
     #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<u32>() {
@@ -249,6 +289,7 @@ impl TRef for TInt {
         }
     }
 
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<u32>() {
             Ok(val) => self.inner_.install(&val, tid),
@@ -303,7 +344,10 @@ impl TInt {
     pub fn new(inner : Arc<TBox<u32>>) -> Self {
         TInt{
             inner_ : inner,
-            data_ : None
+            data_ : None,
+
+            #[cfg(all(feature = "pmem", feature = "pdrain"))]
+            pd_ptr : ptr::null_mut(),
         }
     }
 }
