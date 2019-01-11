@@ -97,7 +97,6 @@ pub struct PmemFac {
     pmem_cap_: usize,
     pmem_len_ : usize,
     pmem_root_idx_: usize,
-    pmem_page_size_ : usize,
 }
 
 #[cfg(all(feature = "pmem"))]
@@ -111,8 +110,7 @@ impl PmemFac {
             pmem_offset_ : 0,
             pmem_len_ : 0,
             pmem_root_idx_ : 0,
-            pmem_cap_: 1 << 32,
-            pmem_page_size_ : 1 << 32,
+            pmem_cap_: 1 << 31,
         }
     }
     
@@ -121,7 +119,7 @@ impl PmemFac {
     }
 
     fn init_inner(&mut self) {
-        let size =  self.pmem_page_size_;
+        let size =  self.pmem_cap_;
         let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplierd at compile time"));
     
         let ret = pnvm_sys::mmap_file(path, size) as *mut u8;
@@ -136,9 +134,21 @@ impl PmemFac {
     fn alloc_inner(&mut self, size: usize) -> *mut u8 {
         if self.pmem_len_ + size >= self.pmem_cap_  {
             //TODO:
-            //re-alloc 
-            panic!("pmem_fac resize not implemented");
+            
+            let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
+
+            let size = self.pmem_cap_;
+
+            let pmem_root = pnvm_sys::mmap_file(path, size);
+
+            self.pmem_cap_ = 2 * self.pmem_cap_;
+            self.pmem_root_idx_+=1;
+            self.pmem_root_[self.pmem_root_idx_] = pmem_root;
+
+            self.pmem_len_ = 0;
+            println!("New Cap: {}, Root idx: {}", self.pmem_cap_, self.pmem_root_idx_);
         }
+
         
         let idx = self.pmem_root_idx_;
         let offset = self.pmem_len_;
