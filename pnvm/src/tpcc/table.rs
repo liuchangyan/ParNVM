@@ -1016,6 +1016,9 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         let offsets = entry.field_offset();
         unsafe {entry_ptr.write(entry)};
 
+        #[cfg(all(feature = "pmem", feature = "pdrain"))]
+        pnvm_sys::flush(entry_ptr as *mut u8, mem::size_of::<Entry>());
+
         //FIXME: DO FLUSH HERE
         
        // let bentry = Box::new(entry.clone());
@@ -1141,7 +1144,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
     //FIXME: how to not Clone
     #[inline]
-    pub fn install(&self, val: &Entry, tid: Tid) {
+    pub fn install_val(&self, val: &Entry, tid: Tid) {
         unsafe {
             //debug!("\n[TRANSACTION:{:?}]--[INSTALL]\n\t\t[OLD]--{:?}\n\t\t[NEW]--{:?}",
             //      tid, self.data_.get().as_ref().unwrap(), val);
@@ -1150,6 +1153,14 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             let data = self.data_.load(Ordering::SeqCst);
             *data = val.clone();
         }
+        self.vers_.set_version(tid.into());
+    }
+
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    #[inline]
+    pub fn install_ptr(&self, ptr: *mut Entry, tid: Tid) {
+        let old = self.data_.swap(ptr, Ordering::SeqCst);
+        //ptr::drop_in_place(old);
         self.vers_.set_version(tid.into());
     }
 

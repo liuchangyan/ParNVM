@@ -64,9 +64,6 @@ where
     pub fn install(&self, ptr: *mut T, tid: Tid) {
         self.tvalue_.store(ptr); 
         self.vers_.set_version(tid.into());
-
-        //Flush
-        pnvm_sys::flush(ptr as *mut u8, mem::size_of::<T>()); 
     }
 
     #[inline(always)]

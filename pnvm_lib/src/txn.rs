@@ -111,8 +111,8 @@ impl PmemFac {
             pmem_offset_ : 0,
             pmem_len_ : 0,
             pmem_root_idx_ : 0,
-            pmem_cap_: 1 << 28,
-            pmem_page_size_ : 1 << 28,
+            pmem_cap_: 1 << 32,
+            pmem_page_size_ : 1 << 32,
         }
     }
     

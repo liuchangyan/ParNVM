@@ -419,6 +419,8 @@ impl TransactionParOCC
         for tag in self.tags_.values() {
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
+
+                #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
                 self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
             }
         }
@@ -511,6 +513,7 @@ impl TransactionParOCC
 
                 self.persist_data(); 
             }
+
             self.wait_deps_persist();
             
 

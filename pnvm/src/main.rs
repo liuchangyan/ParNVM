@@ -502,6 +502,9 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
+                #[cfg(all(feature = "pmem", feature = "pdrain"))]
+                PmemFac::init();
+
                 tpcc::workload_common::num_warehouse_set(wh_num);
                 tpcc::workload_common::num_district_set(d_num);
 
@@ -641,8 +644,10 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
 
         let handle = builder
             .spawn(move || {
+                /* Thread local initialization */
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
+
                 tpcc::workload_common::num_warehouse_set(wh_num);
                 tpcc::workload_common::num_district_set(d_num);
                 let duration = Duration::new(duration_in_secs, 0);

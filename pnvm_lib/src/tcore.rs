@@ -819,10 +819,15 @@ impl TTag
     }
 
     #[cfg(all(feature = "pdrain", feature = "pmem"))]
-    pub fn write<T: 'static>(&mut self, val:T) {
-        let mut pmem_ptr = PmemFac::alloc(mem::size_of::<T>()) as *mut T;
-        unsafe {pmem_ptr.write(val)};
+    pub fn write<T: 'static>(&mut self, mut val:T) {
+        let size = mem::size_of::<T>();
+        let mut pmem_ptr = PmemFac::alloc(size) as *mut T;
+        //assert_eq!(pmem_ptr.is_null(), false);
+        pnvm_sys::memcpy_nodrain(pmem_ptr as *mut u8,
+                                 &mut val as *mut _ as *mut u8, size);
+        //unsafe {pmem_ptr.write(val)};
 
+        //pnvm_sys::flush(pmem_ptr as *mut u8, size);
         self.tobj_ref_.write(pmem_ptr as *mut u8);
         self.has_write_ = true;
     }
