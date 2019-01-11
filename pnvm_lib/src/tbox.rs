@@ -1,4 +1,8 @@
-use txn::{Tid, TxnInfo, PmemFac};
+use txn::{Tid, TxnInfo};
+
+#[cfg(all(feature = "pmem", feature = "pdrain"))]
+use txn::PmemFac;
+
 //use std::cell::RefCell;
 use std::{
     //rc::Rc,
@@ -60,6 +64,9 @@ where
     pub fn install(&self, ptr: *mut T, tid: Tid) {
         self.tvalue_.store(ptr); 
         self.vers_.set_version(tid.into());
+
+        //Flush
+        pnvm_sys::flush(ptr as *mut u8, mem::size_of::<T>()); 
     }
 
     #[inline(always)]
@@ -222,7 +229,7 @@ impl TRef for TInt {
     
     #[cfg(any(feature = "pmem", feature = "disk"))]
     fn get_pmem_addr(&self) -> *mut u8 {
-        panic!("TInt::get_pmem_addr(): not implemented");
+        self.inner_.get_ptr()
     }
 
     fn get_ptr(&self) -> *mut u8 {
@@ -273,7 +280,7 @@ impl TRef for TInt {
     
     #[cfg(all(feature = "pmem", feature = "pdrain"))]
     fn write(&mut self, val: *mut u8) {
-        panic!("not implemtned write-pdrain for TBox");
+        self.pd_ptr = val as *mut u32;
     }
 
     #[cfg(all(feature = "pmem", feature = "pdrain"))]

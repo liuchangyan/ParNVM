@@ -5,6 +5,7 @@ use std::{
     cell::RefCell,
     sync::{Arc, RwLock},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    ptr,
 };
 use tcore::{ObjectId, TTag, TRef, FieldArray, Operation};
 
@@ -17,7 +18,7 @@ use tcore::{ObjectId, TTag, TRef, FieldArray, Operation};
 thread_local! {
     pub static TID_FAC: Rc<RefCell<TidFac>> = Rc::new(RefCell::new(TidFac::new()));
 
-#[cfg(all(feature = "pmem", feature = "pdrain"))]
+#[cfg(all(feature = "pmem"))]
     pub static PMEM_FAC: Rc<RefCell<PmemFac>> = Rc::new(RefCell::new(PmemFac::new()));
 }
 
@@ -89,7 +90,7 @@ impl Default for Tid {
 }
 
 
-#[cfg(all(feature = "pmem", feature = "pdrain"))]
+#[cfg(all(feature = "pmem"))]
 pub struct PmemFac {
     pmem_root_: Vec<*mut u8>,
     pmem_offset_: usize,
@@ -99,14 +100,14 @@ pub struct PmemFac {
     pmem_page_size_ : usize,
 }
 
-#[cfg(all(feature = "pmem", feature = "pdrain"))]
+#[cfg(all(feature = "pmem"))]
 const PMEM_DIR_ROOT : Option<&str> = option_env!("PMEM_FILE_DIR");
 
-#[cfg(all(feature = "pmem", feature = "pdrain"))]
+#[cfg(all(feature = "pmem"))]
 impl PmemFac {
     pub fn new() -> PmemFac {
         PmemFac {
-            pmem_root_: Vec::with_capacity(16),
+            pmem_root_: vec![ptr::null_mut();16],
             pmem_offset_ : 0,
             pmem_len_ : 0,
             pmem_root_idx_ : 0,

@@ -132,7 +132,6 @@ impl WorkloadNVMOCC
         //Prepare TXNs
         //   For now, thread_num == txn_num
         //
-        let next_item_id = conf.cfl_txn_num;
         for thread_i in 0..conf.thread_num {
             let txn_i = thread_i;
             let tx_name = WorkloadNVM::make_txn_name(thread_i);
@@ -234,7 +233,6 @@ impl WorkloadNVM {
         //Prepare TXNs
         //   For now, thread_num == txn_num
         //
-        let next_item_id = conf.cfl_txn_num;
         for thread_i in 0..conf.thread_num {
             let txn_i = thread_i;
             let tx_name = WorkloadNVM::make_txn_name(thread_i);

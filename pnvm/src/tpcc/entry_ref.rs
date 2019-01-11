@@ -207,7 +207,12 @@ impl  TRef for WarehouseRef {
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
-
+    
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Warehouse>() {
             Ok(val) => self.data_ = Some(val),
@@ -375,6 +380,11 @@ impl  TRef for DistrictRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<District>() {
             Ok(val) => self.data_ = Some(val),
@@ -536,6 +546,11 @@ impl  TRef for CustomerRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Customer>() {
             Ok(val) => self.data_ = Some(val),
@@ -759,6 +774,11 @@ impl  TRef for NewOrderRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<NewOrder>() {
             Ok(val) => self.data_ = Some(val),
@@ -916,6 +936,11 @@ impl  TRef for OrderRef  {
         self.inner_.get_version()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Order>() {
             Ok(val) => self.data_ = Some(val),
@@ -1081,6 +1106,11 @@ impl  TRef for OrderLineRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<OrderLine>() {
             Ok(val) => self.data_ = Some(val),
@@ -1212,6 +1242,11 @@ impl  TRef for ItemRef  {
         self.inner_.get_version()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         panic!("Item is read only")
     }
@@ -1339,6 +1374,11 @@ impl  TRef for HistoryRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
+    }
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<History>() {
             Ok(val) => self.data_ = Some(val),
@@ -1495,11 +1535,16 @@ impl  TRef for StockRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Stock>() {
             Ok(val) => self.data_ = Some(val),
             Err(_) => panic!("Stock::write value should be Box<Warehouse>")
         }
+    }
+    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        panic!("not implemented");
     }
 
 

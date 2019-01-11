@@ -246,11 +246,12 @@ impl TransactionParOCC
 
         //Persist the data
         //FIXME: delay the commit until commiting transaction
-        #[cfg(any(feature = "pmem", feature = "disk"))]
-        {
-            #[cfg(feature = "pdrain")]
-            self.persist_data();
-        }
+        //#[cfg(any(feature = "pmem", feature = "disk"))]
+        //{
+        //    #[cfg(feature = "pdrain")]
+        //    //TODO: needs to be fixed
+        //    //self.persist_data();
+        //}
         
 
         //Clean up local data structures.

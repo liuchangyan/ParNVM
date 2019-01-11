@@ -12,7 +12,10 @@ use crossbeam::sync::ArcCell;
 //use std::rc::Rc;
 //use std::cell::RefCell;
 //use tbox::TBox;
-use txn::{Tid, TxnInfo, PmemFac};
+use txn::{Tid, TxnInfo};
+
+#[cfg(feature = "pmem")]
+use txn::PmemFac;
 
 #[allow(unused_imports)]
 use std::{
@@ -593,9 +596,35 @@ impl<T> TValue<T>
 where
     T: Clone,
 {
+
     pub fn new(val: T) -> TValue<T> {
-        TValue {
-            data_ : AtomicPtr::new(Box::into_raw(Box::new(val))),
+        #[cfg(feature = "pmem")]
+        {
+            #[cfg(any(feature = "pdrain", feature = "dir"))]
+            {
+                let mut ptr = PmemFac::alloc(mem::size_of::<T>()) as *mut T;
+                unsafe {ptr.write(val)};
+
+                TValue {
+                    data_ : AtomicPtr::new(ptr),
+                }
+            }
+
+            #[cfg(not(any(feature = "pdrain", feature = "dir")))]
+            {
+
+                TValue {
+                    data_ : AtomicPtr::new(Box::into_raw(Box::new(val))),
+                }
+            }
+        }
+
+        #[cfg(not(feature = "pmem"))]
+        {
+            TValue {
+                data_ : AtomicPtr::new(Box::into_raw(Box::new(val))),
+            }
+
         }
     }
 
