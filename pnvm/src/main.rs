@@ -262,7 +262,7 @@ fn run_micro_2pl(conf: Config) {
 //
 
 fn run_nvm_occ_micro(conf: Config) {
-    #[cfg(all(feature = "pmem",any(feature = "pdrain", feature = "dir")))]
+    #[cfg(all(feature = "pmem",any(feature = "wdrain", feature = "dir")))]
     PmemFac::init();
     let workload = util::TestHelper::prepare_workload_nvm_occ(&conf);
     let work = workload.work_;
@@ -295,7 +295,7 @@ fn run_nvm_occ_micro(conf: Config) {
                 //Thread-local setup
                 TidFac::set_thd_mask(i as u32);
                 
-                #[cfg(all(feature = "pmem",any(feature = "pdrain", feature = "dir")))]
+                #[cfg(all(feature = "pmem",any(feature = "wdrain", feature = "dir")))]
                 PmemFac::init();
 
                 barrier.wait();
@@ -502,7 +502,7 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
-                #[cfg(all(feature = "pmem", feature = "pdrain"))]
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
                 PmemFac::init();
 
                 tpcc::workload_common::num_warehouse_set(wh_num);

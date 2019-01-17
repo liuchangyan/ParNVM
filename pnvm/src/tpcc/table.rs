@@ -1016,7 +1016,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         let offsets = entry.field_offset();
         unsafe {entry_ptr.write(entry)};
 
-        #[cfg(all(feature = "pmem", feature = "pdrain"))]
+        #[cfg(all(feature = "pmem", feature = "wdrain"))]
         pnvm_sys::flush(entry_ptr as *mut u8, mem::size_of::<Entry>());
 
         //FIXME: DO FLUSH HERE
@@ -1156,7 +1156,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         self.vers_.set_version(tid.into());
     }
 
-    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
     #[inline]
     pub fn install_ptr(&self, ptr: *mut Entry, tid: Tid) {
         let old = self.data_.swap(ptr, Ordering::SeqCst);

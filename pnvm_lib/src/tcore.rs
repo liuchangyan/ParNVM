@@ -229,11 +229,11 @@ pub trait TRef : fmt::Debug{
     fn get_version(&self) -> u32;
     fn read(&self) -> &Any;
 
-    //TODO: PDRAIN
-    #[cfg(not(all(feature = "pdrain", feature = "pmem")))]
+    //TODO: wdrain
+    #[cfg(not(all(feature = "wdrain", feature = "pmem")))]
     fn write(&mut self, Box<Any>);
 
-    #[cfg(all(feature = "pdrain", feature = "pmem"))]
+    #[cfg(all(feature = "wdrain", feature = "pmem"))]
     fn write(&mut self, *mut u8);
 
     fn lock(&self, Tid) -> bool;
@@ -600,7 +600,7 @@ where
     pub fn new(val: T) -> TValue<T> {
         #[cfg(feature = "pmem")]
         {
-            #[cfg(any(feature = "pdrain", feature = "dir"))]
+            #[cfg(any(feature = "wdrain", feature = "dir"))]
             {
                 let mut ptr = PmemFac::alloc(mem::size_of::<T>()) as *mut T;
                 unsafe {ptr.write(val)};
@@ -610,7 +610,7 @@ where
                 }
             }
 
-            #[cfg(not(any(feature = "pdrain", feature = "dir")))]
+            #[cfg(not(any(feature = "wdrain", feature = "dir")))]
             {
 
                 TValue {
@@ -628,13 +628,13 @@ where
         }
     }
 
-    #[cfg(all(feature = "pmem", feature = "pdrain"))]
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
     pub fn store(&self, ptr: *mut T) {
         let old = self.data_.swap(ptr, Ordering::SeqCst);
         //unsafe {drop_in_place(old)};
     }
 
-    #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     pub fn store(&self, data: T) {
         let ptr = Box::into_raw(Box::new(data));
         let old = self.data_.swap(ptr, Ordering::SeqCst);
@@ -811,14 +811,14 @@ impl TTag
     }
 
     #[inline(always)]
-    #[cfg(not(all(feature = "pdrain", feature = "pmem")))]
+    #[cfg(not(all(feature = "wdrain", feature = "pmem")))]
     pub fn write<T: 'static>(&mut self, val: T) {
         let val = Box::new(val); 
         self.tobj_ref_.write(val);
         self.has_write_ = true; 
     }
 
-    #[cfg(all(feature = "pdrain", feature = "pmem"))]
+    #[cfg(all(feature = "wdrain", feature = "pmem"))]
     pub fn write<T: 'static>(&mut self, mut val:T) {
         let size = mem::size_of::<T>();
         let mut pmem_ptr = PmemFac::alloc(size) as *mut T;

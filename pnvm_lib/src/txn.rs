@@ -110,7 +110,7 @@ impl PmemFac {
             pmem_offset_ : 0,
             pmem_len_ : 0,
             pmem_root_idx_ : 0,
-            pmem_cap_: 1 << 31,
+            pmem_cap_: 1 << 30,
         }
     }
     
@@ -162,7 +162,7 @@ impl PmemFac {
 
 
 //FIXME: self implemented Drop?
-//#[cfg(all(feature = "pmem", feature = "pdrain"))]
+//#[cfg(all(feature = "pmem", feature = "wdrain"))]
 //impl Drop for PmemFac {
 //    fn drop(*mut self) {
 //        for idx in 0..=self.pmem_root_idx_ {

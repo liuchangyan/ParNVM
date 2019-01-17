@@ -248,7 +248,7 @@ impl TransactionParOCC
         //FIXME: delay the commit until commiting transaction
         //#[cfg(any(feature = "pmem", feature = "disk"))]
         //{
-        //    #[cfg(feature = "pdrain")]
+        //    #[cfg(feature = "wdrain")]
         //    //TODO: needs to be fixed
         //    //self.persist_data();
         //}
@@ -420,7 +420,7 @@ impl TransactionParOCC
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
 
-                #[cfg(not(all(feature = "pmem", feature = "pdrain")))]
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
                 self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
             }
         }
@@ -508,7 +508,7 @@ impl TransactionParOCC
         #[cfg(any(feature= "pmem", feature = "disk"))]
         {   
             //Persist data here
-            #[cfg(not(feature = "pdrain"))]
+            #[cfg(not(feature = "wdrain"))]
             {
 
                 self.persist_data(); 
