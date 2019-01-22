@@ -110,7 +110,7 @@ impl TransactionParOCC
             txn_info_:  Arc::new(TxnInfo::new(tid)),
         
             //#[cfg(any(feature= "pmem", feature = "disk"))]
-            records_ :     Vec::new(),
+            records_ :     Vec::with_capacity(32),
 
             do_piece_drain : false,
             tags_: HashMap::with_capacity(16),
@@ -198,6 +198,7 @@ impl TransactionParOCC
         self.tags_.entry((*id, op)).or_insert(TTag::new(*id, tobj_ref))
     }
 
+
     //FIXME: R->W dependency
     fn add_dep(&mut self) {
         let me : u32 = self.id().into();
@@ -246,13 +247,14 @@ impl TransactionParOCC
 
         //Persist the data
         //FIXME: delay the commit until commiting transaction
-        //#[cfg(any(feature = "pmem", feature = "disk"))]
-        //{
-        //    #[cfg(feature = "wdrain")]
-        //    //TODO: needs to be fixed
-        //    //self.persist_data();
-        //}
-        
+        #[cfg(any(feature = "pmem", feature = "disk"))]
+        {
+            #[cfg(feature = "pdrain")]
+            //TODO: needs to be fixed
+            self.persist_data();
+        }
+       
+
 
         //Clean up local data structures.
         self.clean_up();
@@ -269,7 +271,6 @@ impl TransactionParOCC
                     Some(ref fields) => {
                         for field in fields.iter(){
                             let paddr = record.get_pmem_field_addr(*field);
-                            let vaddr = record.get_field_ptr(*field);
                             let size = record.get_field_size(*field);
                             BenchmarkCounter::flush(size);
 
@@ -277,13 +278,15 @@ impl TransactionParOCC
                             pnvm_sys::flush(paddr, size);
 
                             #[cfg(not(feature = "dir"))]
-                            pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                            {
+                                let vaddr = record.get_field_ptr(*field);
+                                pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                            }
                         }
 
                     },
                     None=> {
                         let paddr = record.get_pmem_addr();
-                        let vaddr = record.get_ptr();
                         let layout  = record.get_layout();
 
                         BenchmarkCounter::flush(layout.size());
@@ -292,7 +295,10 @@ impl TransactionParOCC
 
 
                         #[cfg(not(feature = "dir"))]
-                        pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+                        {
+                            let vaddr = record.get_ptr();
+                            pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+                        }
 
                     }
                 }
@@ -508,7 +514,7 @@ impl TransactionParOCC
         #[cfg(any(feature= "pmem", feature = "disk"))]
         {   
             //Persist data here
-            #[cfg(not(feature = "wdrain"))]
+            #[cfg(not(any(feature = "wdrain", feature = "pdrain")))]
             {
 
                 self.persist_data(); 
