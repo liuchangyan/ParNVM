@@ -24,6 +24,7 @@ disk = ["pnvm_lib/disk", "pnvm_sys"]
 noconflict = []
 plog = ["pnvm_lib/plog"]
 dir = ["pnvm_lib/dir"]
+wdrain = ["pnvm_lib/wdrain"]
 pdrain = ["pnvm_lib/pdrain"]
 conflict = []
 

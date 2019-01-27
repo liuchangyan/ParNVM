@@ -5,6 +5,7 @@ use std::{
     cell::RefCell,
     sync::{Arc, RwLock},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    ptr,
 };
 use tcore::{ObjectId, TTag, TRef, FieldArray, Operation};
 
@@ -16,7 +17,11 @@ use tcore::{ObjectId, TTag, TRef, FieldArray, Operation};
 
 thread_local! {
     pub static TID_FAC: Rc<RefCell<TidFac>> = Rc::new(RefCell::new(TidFac::new()));
+
+#[cfg(all(feature = "pmem"))]
+    pub static PMEM_FAC: Rc<RefCell<PmemFac>> = Rc::new(RefCell::new(PmemFac::new()));
 }
+
 //pub fn mark_commit(tid: Tid) {
 //    TXN_RUNNING
 //        .write()
@@ -83,6 +88,88 @@ impl Default for Tid {
         Tid(0)
     }
 }
+
+
+#[cfg(all(feature = "pmem"))]
+pub struct PmemFac {
+    pmem_root_: Vec<*mut u8>,
+    pmem_offset_: usize,
+    pmem_cap_: usize,
+    pmem_len_ : usize,
+    pmem_root_idx_: usize,
+}
+
+#[cfg(all(feature = "pmem"))]
+const PMEM_DIR_ROOT : Option<&str> = option_env!("PMEM_FILE_DIR");
+
+#[cfg(all(feature = "pmem"))]
+impl PmemFac {
+    pub fn new() -> PmemFac {
+        PmemFac {
+            pmem_root_: vec![ptr::null_mut();16],
+            pmem_offset_ : 0,
+            pmem_len_ : 0,
+            pmem_root_idx_ : 0,
+            pmem_cap_: 1 << 30,
+        }
+    }
+    
+    pub fn init() {
+        PMEM_FAC.with(|fac| fac.borrow_mut().init_inner())
+    }
+
+    fn init_inner(&mut self) {
+        let size =  self.pmem_cap_;
+        let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplierd at compile time"));
+    
+        let ret = pnvm_sys::mmap_file(path, size) as *mut u8;
+        self.pmem_root_[0] = ret;
+    }
+
+    //size is number of bytes requested for alloc
+    pub fn alloc(size : usize) -> *mut u8 {
+        PMEM_FAC.with(|fac| fac.borrow_mut().alloc_inner(size))
+    }
+
+    fn alloc_inner(&mut self, size: usize) -> *mut u8 {
+        if self.pmem_len_ + size >= self.pmem_cap_  {
+            //TODO:
+            
+            let path = String::from(PMEM_DIR_ROOT.expect("PMEM_FILE_DIR must be supplied at compile time"));
+
+            let size = self.pmem_cap_;
+
+            let pmem_root = pnvm_sys::mmap_file(path, size);
+
+            self.pmem_cap_ = 2 * self.pmem_cap_;
+            self.pmem_root_idx_+=1;
+            self.pmem_root_[self.pmem_root_idx_] = pmem_root;
+
+            self.pmem_len_ = 0;
+            println!("New Cap: {}, Root idx: {}", self.pmem_cap_, self.pmem_root_idx_);
+        }
+
+        
+        let idx = self.pmem_root_idx_;
+        let offset = self.pmem_len_;
+        let ret = unsafe {self.pmem_root_[idx].offset(offset as isize)};
+
+        self.pmem_len_ += size;
+
+        return ret;
+    }
+}
+
+
+//FIXME: self implemented Drop?
+//#[cfg(all(feature = "pmem", feature = "wdrain"))]
+//impl Drop for PmemFac {
+//    fn drop(*mut self) {
+//        for idx in 0..=self.pmem_root_idx_ {
+//            pnvm_sys::unmap(self.pmem_root_[ 
+//        }
+//    }
+//}
 
 pub struct TidFac {
     mask_: u32,

@@ -262,6 +262,8 @@ fn run_micro_2pl(conf: Config) {
 //
 
 fn run_nvm_occ_micro(conf: Config) {
+    #[cfg(all(feature = "pmem",any(feature = "wdrain", feature = "dir")))]
+    PmemFac::init();
     let workload = util::TestHelper::prepare_workload_nvm_occ(&conf);
     let work = workload.work_;
     let mut handles = Vec::new();
@@ -269,6 +271,9 @@ fn run_nvm_occ_micro(conf: Config) {
 
     let atomic_cnt = Arc::new(AtomicUsize::new(1));
     let prep_time = time::Duration::new(0, 0);
+
+    let warm_up_time = conf.warmup_time;
+    let mut no_warmup = conf.no_warmup;
 
 
 
@@ -283,13 +288,43 @@ fn run_nvm_occ_micro(conf: Config) {
         let builder = thread::Builder::new().name(format!("TXN-{}", i + 1));
         let atomic_clone = atomic_cnt.clone();
 
+        let duration_in_secs = conf.duration;
+
         let handle = builder
             .spawn(move || {
+                //Thread-local setup
                 TidFac::set_thd_mask(i as u32);
+                
+                #[cfg(all(feature = "pmem",any(feature = "wdrain", feature = "dir")))]
+                PmemFac::init();
+
                 barrier.wait();
+                let duration = Duration::new(duration_in_secs, 0);
+                let mut start = Instant::now();
+                let mut elapsed = Duration::default();
+                let mut prev_ts = 0;
                 BenchmarkCounter::start();
 
-                for _ in 0..conf.round_num {
+
+                while elapsed < duration {
+                    elapsed = start.elapsed();
+
+                    if !no_warmup {
+                        if elapsed.as_secs() == warm_up_time {
+                            no_warmup = true;
+                            BenchmarkCounter::reset_cnt();
+                            start = Instant::now();
+                            elapsed = start.elapsed();
+                            prev_ts = 0;
+                        }
+                    }
+
+                    if elapsed.as_secs() == prev_ts + 2 {
+                        BenchmarkCounter::timestamp();
+                        prev_ts = elapsed.as_secs();
+                    }
+
+
                     /* Get tid */
                     let tid = TidFac::get_thd_next();
 
@@ -467,6 +502,10 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
             .spawn(move || {
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                PmemFac::init();
+
+
                 tpcc::workload_common::num_warehouse_set(wh_num);
                 tpcc::workload_common::num_district_set(d_num);
 
@@ -550,6 +589,12 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                                 TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
                             };
 
+                            #[cfg(all(feature = "pmem", feature = "pdrain"))]
+                            {
+
+                                tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+                            }
+
                             tx.execute_txn();
                         },
                 
@@ -606,8 +651,10 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
 
         let handle = builder
             .spawn(move || {
+                /* Thread local initialization */
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
+
                 tpcc::workload_common::num_warehouse_set(wh_num);
                 tpcc::workload_common::num_district_set(d_num);
                 let duration = Duration::new(duration_in_secs, 0);

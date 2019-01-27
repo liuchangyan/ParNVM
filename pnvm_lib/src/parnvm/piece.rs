@@ -32,7 +32,7 @@ pub struct Piece {
     callback_: FnPtr,
     pid_:      Pid,
     tname_:    String, /* FIXME: use str */
-    title_:    &'static str,
+    title_:    String,
     rank_:       usize,
     //R/W sets?
 }
@@ -43,7 +43,7 @@ pub struct PieceOCC
     callback_: FnPtrOCC,
     pid_:      Pid,
     tname_:    String,
-    title_:    &'static str,
+    title_:    String,
     rank_:       usize,
     //R/W sets?
 }
@@ -74,20 +74,20 @@ impl Piece {
         pid: Pid,
         tname: String,
         cb: FnPtr,
-        title: &'static str,
+        title: &str,
         rank: usize
     ) -> Piece {
         Piece {
             callback_: cb,
             pid_:      pid,
             tname_:    tname,
-            title_:    title,
+            title_:    String::from(title),
             rank_ :     rank,
         }
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&mut self, tx : &mut TransactionPar) -> i32 {
+    pub fn run(&self, tx : &mut TransactionPar) -> i32 {
         (self.callback_)(tx)
     }
 
@@ -106,20 +106,20 @@ impl PieceOCC
         pid: Pid,
         tname: String,
         cb: FnPtrOCC,
-        title: &'static str,
+        title: &str,
         rank: usize
     ) -> PieceOCC {
         PieceOCC {
             callback_: cb,
             pid_:      pid,
             tname_:    tname,
-            title_:    title,
+            title_:    String::from(title),
             rank_ :     rank,
         }
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&mut self, tx : &mut TransactionParOCC){
+    pub fn run(&self, tx : &mut TransactionParOCC){
         (self.callback_)(tx)
     }
 

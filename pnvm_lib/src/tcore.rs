@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use std::{
     sync::{Arc, Mutex, RwLock,
-        atomic::{AtomicU32, Ordering, AtomicBool}
+        atomic::{AtomicU32, Ordering, AtomicBool, AtomicPtr}
     },
     ops::Deref,
     any::Any,
@@ -13,6 +13,9 @@ use crossbeam::sync::ArcCell;
 //use std::cell::RefCell;
 //use tbox::TBox;
 use txn::{Tid, TxnInfo};
+
+#[cfg(feature = "pmem")]
+use txn::PmemFac;
 
 #[allow(unused_imports)]
 use std::{
@@ -225,7 +228,14 @@ pub trait TRef : fmt::Debug{
     fn get_tvers(&self) -> &Arc<TVersion>;
     fn get_version(&self) -> u32;
     fn read(&self) -> &Any;
+
+    //TODO: wdrain
+    #[cfg(not(all(feature = "wdrain", feature = "pmem")))]
     fn write(&mut self, Box<Any>);
+
+    #[cfg(all(feature = "wdrain", feature = "pmem"))]
+    fn write(&mut self, *mut u8);
+
     fn lock(&self, Tid) -> bool;
     fn unlock(&self);
     fn check(&self, u32, u32) -> bool;
@@ -579,30 +589,71 @@ where
     T: Clone,
 {
     //ptr_: Unique<T>,
-    data_ : UnsafeCell<T>,
+    data_ : AtomicPtr<T>,
 }
 
 impl<T> TValue<T>
 where
     T: Clone,
 {
+
     pub fn new(val: T) -> TValue<T> {
-        TValue {
-            data_ : UnsafeCell::new(val),
+        #[cfg(feature = "pmem")]
+        {
+            #[cfg(any(feature = "wdrain", feature = "dir"))]
+            {
+                let mut ptr = PmemFac::alloc(mem::size_of::<T>()) as *mut T;
+                unsafe {ptr.write(val)};
+
+                TValue {
+                    data_ : AtomicPtr::new(ptr),
+                }
+            }
+
+            #[cfg(not(any(feature = "wdrain", feature = "dir")))]
+            {
+
+                TValue {
+                    data_ : AtomicPtr::new(Box::into_raw(Box::new(val))),
+                }
+            }
+        }
+
+        #[cfg(not(feature = "pmem"))]
+        {
+            TValue {
+                data_ : AtomicPtr::new(Box::into_raw(Box::new(val))),
+            }
+
         }
     }
+
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pub fn store(&self, ptr: *mut T) {
+        let old = self.data_.swap(ptr, Ordering::SeqCst);
+        //unsafe {drop_in_place(old)};
+    }
+
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     pub fn store(&self, data: T) {
-        unsafe {*self.data_.get() = data};
+        let ptr = Box::into_raw(Box::new(data));
+        let old = self.data_.swap(ptr, Ordering::SeqCst);
+
+        //FIXME: drop in place
+        //unsafe {drop_in_place(old)};
+        
+        //unsafe {*self.data_.get() = data};
         //unsafe { self.ptr_.as_ptr().write(data) };
     }
 
     pub fn load(&self) -> &T {
         //unsafe { self.ptr_.as_ref() }
-        unsafe { &*self.data_.get()}
+        unsafe {&*(self.data_.load(Ordering::SeqCst))}
+        //unsafe { &*self.data_.get()}
     }
 
     pub fn get_ptr(&self) -> *mut T {
-        self.data_.get()
+        self.data_.load(Ordering::SeqCst)
     }
 
     //pub fn get_addr(&self) -> Unique<T> {
@@ -760,10 +811,25 @@ impl TTag
     }
 
     #[inline(always)]
+    #[cfg(not(all(feature = "wdrain", feature = "pmem")))]
     pub fn write<T: 'static>(&mut self, val: T) {
         let val = Box::new(val); 
         self.tobj_ref_.write(val);
         self.has_write_ = true; 
+    }
+
+    #[cfg(all(feature = "wdrain", feature = "pmem"))]
+    pub fn write<T: 'static>(&mut self, mut val:T) {
+        let size = mem::size_of::<T>();
+        let mut pmem_ptr = PmemFac::alloc(size) as *mut T;
+        //assert_eq!(pmem_ptr.is_null(), false);
+        pnvm_sys::memcpy_nodrain(pmem_ptr as *mut u8,
+                                 &mut val as *mut _ as *mut u8, size);
+        //unsafe {pmem_ptr.write(val)};
+
+        //pnvm_sys::flush(pmem_ptr as *mut u8, size);
+        self.tobj_ref_.write(pmem_ptr as *mut u8);
+        self.has_write_ = true;
     }
 
 

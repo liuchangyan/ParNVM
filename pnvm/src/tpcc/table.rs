@@ -555,6 +555,7 @@ pub struct Bucket<Entry, Index>
 where Entry: 'static + Key<Index> + Clone+Debug,
       Index: Eq+Hash + Clone,
 {
+    //FIXME: rows need be backed by PMEM
     rows: UnsafeCell<Vec<Arc<Row<Entry, Index>>>>,
     index: UnsafeCell<HashMap<Index, usize>>,
     id_ : ObjectId,
@@ -1014,6 +1015,11 @@ where Entry: 'static + Key<Index> + Clone + Debug,
         let key = entry.primary_key();
         let offsets = entry.field_offset();
         unsafe {entry_ptr.write(entry)};
+
+        #[cfg(all(feature = "pmem", feature = "wdrain"))]
+        pnvm_sys::flush(entry_ptr as *mut u8, mem::size_of::<Entry>());
+
+        //FIXME: DO FLUSH HERE
         
        // let bentry = Box::new(entry.clone());
        // let ptr = Box::into_raw(bentry);
@@ -1138,7 +1144,7 @@ where Entry: 'static + Key<Index> + Clone + Debug,
 
     //FIXME: how to not Clone
     #[inline]
-    pub fn install(&self, val: &Entry, tid: Tid) {
+    pub fn install_val(&self, val: &Entry, tid: Tid) {
         unsafe {
             //debug!("\n[TRANSACTION:{:?}]--[INSTALL]\n\t\t[OLD]--{:?}\n\t\t[NEW]--{:?}",
             //      tid, self.data_.get().as_ref().unwrap(), val);
@@ -1147,6 +1153,14 @@ where Entry: 'static + Key<Index> + Clone + Debug,
             let data = self.data_.load(Ordering::SeqCst);
             *data = val.clone();
         }
+        self.vers_.set_version(tid.into());
+    }
+
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    #[inline]
+    pub fn install_ptr(&self, ptr: *mut Entry, tid: Tid) {
+        let old = self.data_.swap(ptr, Ordering::SeqCst);
+        //ptr::drop_in_place(old);
         self.vers_.set_version(tid.into());
     }
 

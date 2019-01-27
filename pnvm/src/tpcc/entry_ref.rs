@@ -29,6 +29,7 @@ use pnvm_lib:: {
 use std::{
     any::Any,
     sync::Arc,
+    ptr,
 };
 
 #[cfg(not(any(feature = "pmem", feature = "disk")))]
@@ -49,6 +50,9 @@ pub struct WarehouseRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Warehouse>>,
     ops_ : Operation,
+
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut Warehouse,
 }
 
 
@@ -60,6 +64,9 @@ pub struct DistrictRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<District>>,
     ops_ : Operation,
+
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut District,
 }
 
 #[derive(Clone , Debug)]
@@ -70,6 +77,8 @@ pub struct CustomerRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Customer>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut Customer,
 }
 
 #[derive(Clone , Debug)]
@@ -80,6 +89,8 @@ pub struct NewOrderRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<NewOrder>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut NewOrder,
 }
 
 #[derive(Clone , Debug)]
@@ -90,6 +101,8 @@ pub struct OrderRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Order>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut Order,
 }
 
 #[derive(Clone , Debug)]
@@ -100,6 +113,8 @@ pub struct OrderLineRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<OrderLine>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut OrderLine,
 }
 
 
@@ -111,6 +126,8 @@ pub struct ItemRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Item>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut Item,
 }
 
 #[derive(Clone , Debug)]
@@ -121,6 +138,8 @@ pub struct StockRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<Stock>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut Stock,
 }
 
 #[derive(Clone , Debug)]
@@ -131,6 +150,8 @@ pub struct HistoryRef  {
     //txn_info_ : Option<Arc<TxnInfo>>,
     data_ : Option<Box<History>>,
     ops_ : Operation,
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    pd_ptr: *mut History,
 }
 
 impl  TRef for WarehouseRef {
@@ -154,7 +175,18 @@ impl  TRef for WarehouseRef {
                 table.warehouse.get_bucket(bucket_idx).push(row);
             },
             Operation::RWrite => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             },
             _ =>  panic!("Unknown Operations")
         }
@@ -207,7 +239,13 @@ impl  TRef for WarehouseRef {
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
+    
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut Warehouse;
+    }
 
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Warehouse>() {
             Ok(val) => self.data_ = Some(val),
@@ -261,7 +299,7 @@ impl  TRef for WarehouseRef {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<Warehouse>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be warehouse")
         }
     }
@@ -325,7 +363,17 @@ impl  TRef for DistrictRef  {
                 table.district.get_bucket(bucket_idx).push(row);
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             }
         }
     }
@@ -375,6 +423,11 @@ impl  TRef for DistrictRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut District;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<District>() {
             Ok(val) => self.data_ = Some(val),
@@ -423,7 +476,7 @@ impl  TRef for DistrictRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<District>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be Distric")
         }
     }
@@ -487,7 +540,17 @@ impl  TRef for CustomerRef  {
                 table.customer.update_sec_index(&row);
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             }
         }
     }
@@ -536,6 +599,11 @@ impl  TRef for CustomerRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut Customer;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Customer>() {
             Ok(val) => self.data_ = Some(val),
@@ -585,7 +653,7 @@ impl  TRef for CustomerRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<Customer>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be Distric")
         }
     }
@@ -662,7 +730,17 @@ impl  TRef for NewOrderRef  {
                 }
             },
             None => {
-                self.inner_.install(self.data_.as_ref().expect("no data"), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().expect("no data"), id);
             }
         }
     }
@@ -759,6 +837,11 @@ impl  TRef for NewOrderRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut NewOrder;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<NewOrder>() {
             Ok(val) => self.data_ = Some(val),
@@ -783,7 +866,7 @@ impl  TRef for NewOrderRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<NewOrder>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be NewOrder")
         }
     }
@@ -845,7 +928,17 @@ impl  TRef for OrderRef  {
                 table.order.update_cus_index(&row);
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             }
         }
     }
@@ -916,6 +1009,11 @@ impl  TRef for OrderRef  {
         self.inner_.get_version()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut Order;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Order>() {
             Ok(val) => self.data_ = Some(val),
@@ -943,7 +1041,7 @@ impl  TRef for OrderRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<Order>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be NewOrder")
         }
     }
@@ -1006,7 +1104,17 @@ impl  TRef for OrderLineRef  {
                 table.orderline.update_order_index(&row);
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             }
         }
     }
@@ -1081,6 +1189,11 @@ impl  TRef for OrderLineRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut OrderLine;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<OrderLine>() {
             Ok(val) => self.data_ = Some(val),
@@ -1102,7 +1215,7 @@ impl  TRef for OrderLineRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<OrderLine>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be NewOrder")
         }
     }
@@ -1212,6 +1325,11 @@ impl  TRef for ItemRef  {
         self.inner_.get_version()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut Item;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         panic!("Item is read only")
     }
@@ -1264,7 +1382,17 @@ impl  TRef for HistoryRef  {
                 table.history.get_bucket(bucket_idx).push(row);
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             }
         }
     }
@@ -1339,6 +1467,11 @@ impl  TRef for HistoryRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut History;
+    }
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<History>() {
             Ok(val) => self.data_ = Some(val),
@@ -1360,7 +1493,7 @@ impl  TRef for HistoryRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<History>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be NewOrder")
         }
     }
@@ -1420,7 +1553,17 @@ impl  TRef for StockRef  {
                 table.stock.get_bucket(bucket_idx).push(row);
             },
             None => {
-                self.inner_.install(self.data_.as_ref().unwrap(), id);
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                {
+                    if !self.pd_ptr.is_null() {
+                        self.inner_.install_ptr(self.pd_ptr, id);
+                    } else {
+                        panic!("pd_ptr should not be null at write");
+                    }
+                }
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.inner_.install_val(self.data_.as_ref().unwrap(), id);
             }
         }
     }
@@ -1495,11 +1638,16 @@ impl  TRef for StockRef  {
         self.inner_.get_data()
     }
 
+    #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<Stock>() {
             Ok(val) => self.data_ = Some(val),
             Err(_) => panic!("Stock::write value should be Box<Warehouse>")
         }
+    }
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    fn write(&mut self, ptr: *mut u8) {
+        self.pd_ptr = ptr as *mut Stock;
     }
 
 
@@ -1517,7 +1665,7 @@ impl  TRef for StockRef  {
     /* For 2 Phase Locking */
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<Stock>() {
-            Ok(val) => self.inner_.install(&val, tid),
+            Ok(val) => self.inner_.install_val(&val, tid),
             Err(_) => panic!("runtime value should be NewOrder")
         }
     }
@@ -1587,6 +1735,9 @@ impl TableRef for Arc<Row<Warehouse, i32>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1608,6 +1759,8 @@ impl TableRef for Arc<Row<Customer, (i32, i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1631,6 +1784,8 @@ impl TableRef for Arc<Row<District, (i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1653,6 +1808,8 @@ impl TableRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None, 
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1675,6 +1832,8 @@ impl TableRef for Arc<Row<Order, (i32, i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1696,6 +1855,8 @@ impl TableRef for Arc<Row<OrderLine, (i32, i32, i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1718,6 +1879,8 @@ impl TableRef for Arc<Row<Item, i32>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1739,6 +1902,8 @@ impl TableRef for Arc<Row<Stock, (i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None ,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1760,6 +1925,8 @@ impl TableRef for Arc<Row<History,(i32, i32)>> {
                     //txn_info_ : txn_info,
                     data_ : None,
                     ops_ : Operation::RWrite,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1779,6 +1946,8 @@ impl BucketDeleteRef for Arc<Row<NewOrder, (i32, i32, i32)>> {
                     table_ref_: Some(table_ref),
                     data_ : None,
                     ops_ : Operation::Delete,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 
@@ -1799,6 +1968,8 @@ impl BucketPushRef for Arc<Row<Order, (i32, i32, i32)>> {
                     table_ref_: Some(table_ref),
                     data_ : None,
                     ops_: Operation::Push,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1820,6 +1991,8 @@ impl BucketPushRef for Arc<Row<NewOrder, (i32, i32, i32)>>
                     table_ref_: Some(table_ref),
                     data_ : None,
                     ops_ : Operation::Push,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1841,6 +2014,8 @@ impl BucketPushRef for Arc<Row<OrderLine, (i32, i32, i32, i32)>>
                     table_ref_: Some(table_ref),
                     data_ : None,
                     ops_ : Operation::Push,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }
@@ -1861,6 +2036,8 @@ impl BucketPushRef for Arc<Row<History, (i32, i32)>>
                     table_ref_: Some(table_ref),
                     data_ : None,
                     ops_ : Operation::Push,
+                    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                    pd_ptr: ptr::null_mut(),
                 })
         }
 }

@@ -54,6 +54,8 @@ impl TransactionParBaseOCC
 pub struct TransactionParOCC
 {
     all_ps_:    Vec<PieceOCC>,
+    next_pc_idx_: usize,
+    total_pc_cnt_: usize,
     deps_:      HashMap<u32, Arc<TxnInfo>>,
     id_:        Tid,
     name_:      String,
@@ -96,21 +98,25 @@ impl TransactionParOCC
 
     pub fn new_from_base(txn_base: &TransactionParBaseOCC, tid: Tid, inputs: Box<Any>) -> TransactionParOCC
     {
-        let txn_base = txn_base.clone();
+        let mut txn_base = txn_base.clone();
+        let pc_cnt = txn_base.all_ps_.len();
+        let name = txn_base.name_;
+        let mut pc =Vec::with_capacity(32);
+        pc.append(&mut txn_base.all_ps_);
         TransactionParOCC {
             inputs_ : inputs,
-            outputs_: Vec::with_capacity(txn_base.all_ps_.len()),
-
-
-            all_ps_:    txn_base.all_ps_,
-            name_:      txn_base.name_,
+            outputs_: Vec::with_capacity(32),
+            all_ps_:    pc,
+            total_pc_cnt_: pc_cnt as usize,
+            next_pc_idx_: 0,
+            name_:      name,
             id_:        tid,
             status_:    TxState::EMBRYO,
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             txn_info_:  Arc::new(TxnInfo::new(tid)),
         
             //#[cfg(any(feature= "pmem", feature = "disk"))]
-            records_ :     Vec::new(),
+            records_ :     Vec::with_capacity(32),
 
             do_piece_drain : false,
             tags_: HashMap::with_capacity(16),
@@ -133,7 +139,7 @@ impl TransactionParOCC
     }
 
     pub fn get_output<T: 'static>(&self, idx: usize) -> &T {
-        assert_eq!(idx < self.outputs_.len(), true);
+        //assert_eq!(idx < self.outputs_.len(), true);
         match self.outputs_[idx].downcast_ref::<T>() {
             Some(v) => v,
             None => panic!("type not matched"),
@@ -156,11 +162,11 @@ impl TransactionParOCC
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn execute_piece(&mut self, mut piece: PieceOCC) {
+    pub fn execute_piece(&mut self, piece:&PieceOCC) {
         warn!(
             "execute_piece::[{:?}] Running piece - {:?}",
             self.id(),
-            &piece
+            piece
         );
     
         //Mark the current rank here
@@ -197,6 +203,7 @@ impl TransactionParOCC
     pub fn retrieve_tag(&mut self, id: &ObjectId, tobj_ref : Box<dyn TRef>, op: Operation) -> &mut TTag {
         self.tags_.entry((*id, op)).or_insert(TTag::new(*id, tobj_ref))
     }
+
 
     //FIXME: R->W dependency
     fn add_dep(&mut self) {
@@ -251,7 +258,8 @@ impl TransactionParOCC
             #[cfg(feature = "pdrain")]
             self.persist_data();
         }
-        
+       
+
 
         //Clean up local data structures.
         self.clean_up();
@@ -268,7 +276,6 @@ impl TransactionParOCC
                     Some(ref fields) => {
                         for field in fields.iter(){
                             let paddr = record.get_pmem_field_addr(*field);
-                            let vaddr = record.get_field_ptr(*field);
                             let size = record.get_field_size(*field);
                             BenchmarkCounter::flush(size);
 
@@ -276,13 +283,15 @@ impl TransactionParOCC
                             pnvm_sys::flush(paddr, size);
 
                             #[cfg(not(feature = "dir"))]
-                            pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                            {
+                                let vaddr = record.get_field_ptr(*field);
+                                pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                            }
                         }
 
                     },
                     None=> {
                         let paddr = record.get_pmem_addr();
-                        let vaddr = record.get_ptr();
                         let layout  = record.get_layout();
 
                         BenchmarkCounter::flush(layout.size());
@@ -291,7 +300,10 @@ impl TransactionParOCC
 
 
                         #[cfg(not(feature = "dir"))]
-                        pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+                        {
+                            let vaddr = record.get_ptr();
+                            pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+                        }
 
                     }
                 }
@@ -392,7 +404,7 @@ impl TransactionParOCC
 
         while let Some(piece) = self.get_next_piece()  {
             self.wait_deps_start(piece.rank());
-            self.execute_piece(piece);
+            self.execute_piece(&piece);
 
             if self.early_abort_ {
                 self.abort();
@@ -418,6 +430,8 @@ impl TransactionParOCC
         for tag in self.tags_.values() {
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
+
+                #[cfg(not(all(feature = "pmem", any(feature = "wdrain", feature = "pdrain"))))]
                 self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
             }
         }
@@ -493,7 +507,12 @@ impl TransactionParOCC
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn add_piece(&mut self, piece: PieceOCC) {
-        self.all_ps_.push(piece)
+        self.all_ps_.push(piece);
+        //self.all_ps_.insert(0, piece)
+    }
+
+    pub fn reverse_piece(&mut self) {
+        self.all_ps_.reverse();
     }
 
     #[cfg_attr(feature = "profile", flame)]
@@ -505,11 +524,12 @@ impl TransactionParOCC
         #[cfg(any(feature= "pmem", feature = "disk"))]
         {   
             //Persist data here
-            #[cfg(not(feature = "pdrain"))]
+            #[cfg(not(any(feature = "wdrain", feature = "pdrain")))]
             {
 
                 self.persist_data(); 
             }
+
             self.wait_deps_persist();
             
 
