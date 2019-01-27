@@ -131,23 +131,17 @@ pub fn pc_new_order_stock_pc(tables: Arc<Tables>, tx: &mut TransactionParOCC)
         (w_id, d_id, ol_cnt, now, c_id, src_whs, item_ids, qty)
     };
     
-    let c_discount = tx.get_output::<Numeric>(4).clone();
-    let i_price_arr = tx.get_output::<Vec<Numeric>>(3).clone();
-    let w_tax =  tx.get_output::<Numeric>(2).clone();
-    let d_tax = tx.get_output::<Numeric>(1).clone();
-    let o_id =tx.get_output::<i32>(0).clone();
     let tid = tx.id().clone();
 
     
     let mut pid = 5;
     let output_offset = 5;
+    //let mut pieces = Vec::with_capacity(ol_cnt);
     for i in 0..ol_cnt as usize {
         let src_whs = src_whs.clone();
         let item_ids = item_ids.clone();
         let qty = qty.clone();
-        let i_price_arr = i_price_arr.clone();
-        let w_tax = w_tax.clone();
-        let d_tax = d_tax.clone();
+
         let tables = tables.clone();
         let cb = move |tx: &mut TransactionParOCC| {
             let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
@@ -205,12 +199,15 @@ pub fn pc_new_order_stock_pc(tables: Arc<Tables>, tx: &mut TransactionParOCC)
         let src_whs = src_whs.clone();
         let item_ids = item_ids.clone();
         let qty = qty.clone();
-        let i_price_arr = i_price_arr.clone();
-        let w_tax = w_tax.clone();
-        let d_tax = d_tax.clone();
 
         let tables = tables.clone();
         let cb = move | tx:&mut TransactionParOCC| {
+            let c_discount = tx.get_output::<Numeric>(4).clone();
+            let i_price_arr = tx.get_output::<Vec<Numeric>>(3).clone();
+            let w_tax =  tx.get_output::<Numeric>(2).clone();
+            let d_tax = tx.get_output::<Numeric>(1).clone();
+            let o_id =tx.get_output::<i32>(0).clone();
+
             let s_dist = tx.get_output::<[u8;24]>(output_offset+i).clone();
             let qty = Numeric::new(qty[i] as i64, 4, 0);
             let ol_amount = qty * i_price_arr[i] * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
@@ -239,6 +236,8 @@ pub fn pc_new_order_stock_pc(tables: Arc<Tables>, tx: &mut TransactionParOCC)
         pid+=1;
         tx.add_piece(p);
     }
+
+    tx.reverse_piece();
 }
 
 #[cfg(all(feature = "pmem", feature = "pdrain"))]
@@ -350,7 +349,6 @@ pub fn pc_new_order_base(_tables: &Arc<Tables>) -> TransactionParBaseOCC
         let tid = tx.id().clone();
         let w_tax =  tx.get_output::<Numeric>(2).clone();
         let d_tax = tx.get_output::<Numeric>(1).clone();
-        let i_price_arr = tx.get_output::<Vec<Numeric>>(3).clone();
         let o_id =tx.get_output::<i32>(0).clone();
 
         let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id))
@@ -421,7 +419,8 @@ pub fn pc_new_order_base(_tables: &Arc<Tables>) -> TransactionParBaseOCC
         5);
 
 
-    let pieces = vec![p5, p4, p3, p2, p1];
+    //let pieces = vec![p5, p4, p3, p2, p1];
+    let pieces = vec![p1, p2, p3, p4, p5];
 
     TransactionParBaseOCC::new(pieces, String::from("neworder"))
     // /* Add Stock loop */

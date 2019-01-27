@@ -87,7 +87,7 @@ impl Piece {
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&mut self, tx : &mut TransactionPar) -> i32 {
+    pub fn run(&self, tx : &mut TransactionPar) -> i32 {
         (self.callback_)(tx)
     }
 
@@ -119,7 +119,7 @@ impl PieceOCC
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&mut self, tx : &mut TransactionParOCC){
+    pub fn run(&self, tx : &mut TransactionParOCC){
         (self.callback_)(tx)
     }
 

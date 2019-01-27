@@ -505,6 +505,7 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                 #[cfg(all(feature = "pmem", feature = "wdrain"))]
                 PmemFac::init();
 
+
                 tpcc::workload_common::num_warehouse_set(wh_num);
                 tpcc::workload_common::num_district_set(d_num);
 
@@ -587,6 +588,12 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                                 let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
                                 TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
                             };
+
+                            #[cfg(all(feature = "pmem", feature = "pdrain"))]
+                            {
+
+                                tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+                            }
 
                             tx.execute_txn();
                         },
