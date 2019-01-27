@@ -585,15 +585,16 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                                 _ => panic!("invalid tx mix")
                             };
 
-                            #[cfg(all(feature = "pmem", feature = "pdrain"))]
-                            match j {
-                                12...55 => {
+                            //#[cfg(all(feature = "pmem", feature = "pdrain"))]
+                            //match j {
+                            //    12...55 => {
 
-                                    tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+                            //        tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
 
-                                },
-                                _ => {},
-                            }
+                            //    },
+                            //    _ => {},
+                            //}
+                            
                             tx.execute_txn();
                         },
                         WorkloadType::NewOrder => {
@@ -602,11 +603,11 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                                 TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
                             };
 
-                            #[cfg(all(feature = "pmem", feature = "pdrain"))]
-                            {
+                            //#[cfg(all(feature = "pmem", feature = "pdrain"))]
+                            //{
 
-                                tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
-                            }
+                            //    tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+                            //}
 
                             tx.execute_txn();
                         },

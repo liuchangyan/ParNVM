@@ -115,7 +115,7 @@ pub fn pc_new_order_add_pc<F:'static>(
     tx.add_piece(p);
 }
 
-#[cfg(all(feature = "pmem", feature = "pdrain"))]
+#[cfg(all(feature = "pmem", feature = "pdrain", feature ="enabled"))]
 pub fn pc_new_order_stock_pc(tables: Arc<Tables>, tx: &mut TransactionParOCC)
 {
     let (w_id, d_id, ol_cnt, now, c_id, src_whs, item_ids, qty) = {
@@ -240,7 +240,7 @@ pub fn pc_new_order_stock_pc(tables: Arc<Tables>, tx: &mut TransactionParOCC)
     tx.reverse_piece();
 }
 
-#[cfg(all(feature = "pmem", feature = "pdrain"))]
+#[cfg(all(feature = "pmem", feature = "pdrain", feature = "enabled"))]
 pub fn pc_new_order_base(_tables: &Arc<Tables>) -> TransactionParBaseOCC 
 {
     let dis_num = num_district_get();
@@ -502,7 +502,7 @@ pub fn pc_new_order_base(_tables: &Arc<Tables>) -> TransactionParBaseOCC
 
 }
 
-#[cfg(not(all(feature = "pmem", feature = "pdrain")))]
+//#[cfg(not(all(feature = "pmem", feature = "pdrain")))]
 pub fn pc_new_order_base(_tables: &Arc<Tables>) -> TransactionParBaseOCC
 { 
     let dis_num = num_district_get();

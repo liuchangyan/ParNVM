@@ -382,12 +382,21 @@ impl TransactionParOCC
     pub fn wait_deps_start(&self, to_run_rank: usize) {
         for (_, dep) in self.deps_.iter() {
             loop { /* Busy wait here */
+                //#[cfg(feature = "pdrain")]
+                //if !dep.has_commit() && !dep.finished(to_run_rank) {
+                //    warn!("{:?} waiting  for {:?} start", self.id(), dep.id());
+                //    //Why not do log and memcpy here?
+                //} else {
+                //    break;
+                //}
+                //#[cfg(not(feature = "pdrain"))]
                 if !dep.has_commit() && !dep.has_started(to_run_rank) {
                     warn!("{:?} waiting  for {:?} start", self.id(), dep.id());
                     //Why not do log and memcpy here?
                 } else {
                     break;
                 }
+
             }
         }
     }

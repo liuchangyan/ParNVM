@@ -290,6 +290,10 @@ impl TxnInfo {
         self.rank_.load(Ordering::Acquire) > rank
     }
 
+    pub fn has_finished(&self, rank:usize) -> bool {
+        self.rank_.load(Ordering::Acquire) > rank+1
+    }
+
     pub fn has_lock(&self) -> bool {
         self.locked_.load(Ordering::Acquire)
     }
