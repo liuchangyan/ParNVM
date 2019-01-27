@@ -237,6 +237,7 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&self) {
         for tag in self.deps_.values() {
+            #[cfg(not(feature = "wdrain"))]
             tag.persist_data(self.id());
         }
     }

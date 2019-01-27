@@ -387,6 +387,9 @@ fn run_occ_micro(conf: Config) {
         let handle = builder
             .spawn(move || {
 
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                PmemFac::init();
+
                 TidFac::set_thd_mask(i as u32);
                 barrier.wait();
                 BenchmarkCounter::start();
@@ -581,6 +584,16 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                                 },
                                 _ => panic!("invalid tx mix")
                             };
+
+                            #[cfg(all(feature = "pmem", feature = "pdrain"))]
+                            match j {
+                                12...55 => {
+
+                                    tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+
+                                },
+                                _ => {},
+                            }
                             tx.execute_txn();
                         },
                         WorkloadType::NewOrder => {
@@ -633,6 +646,9 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
     #[cfg(feature = "profile")]
     flame::start("benchmark_start");
 
+    #[cfg(all(feature = "pmem", feature = "wdrain"))]
+    PmemFac::init();
+
     for i in 1..=conf.thread_num {
         let conf = conf.clone();
         let atomic_clone = atomic_cnt.clone();
@@ -652,6 +668,9 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
         let handle = builder
             .spawn(move || {
                 /* Thread local initialization */
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                PmemFac::init();
+
                 TidFac::set_thd_mask(i as u32);
                 OidFac::set_obj_mask(i as u64);
 
