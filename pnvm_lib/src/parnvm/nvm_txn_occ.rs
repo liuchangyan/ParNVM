@@ -440,7 +440,7 @@ impl TransactionParOCC
             if tag.has_write() {
                 logs.push(tag.make_log(id)); 
 
-                #[cfg(not(all(feature = "pmem", any(feature = "wdrain", feature = "pdrain"))))]
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
                 self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
             }
         }

@@ -83,6 +83,12 @@ fn main() {
 
    // #[cfg(feature = "pmem")]
    // println!("PMEM on");
+    
+    
+    #[cfg(feature = "pmem")]
+    error!("has_auto_flush {}, \n has_hw_flush {} ", 
+             pnvm_sys::has_auto_flush(),
+             pnvm_sys::has_hw_drain());
 
     match conf.test_name.as_ref() {
         "OCC" => run_occ_micro(conf),

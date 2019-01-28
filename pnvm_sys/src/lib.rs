@@ -147,6 +147,8 @@ pub fn mmap_file(path: String, len: usize) -> *mut u8
 
 }
 
+
+
 pub fn memcpy_persist(pmemaddr: *mut u8, src: *mut u8, len: usize) 
 {
     unsafe {pmem_memcpy_persist(pmemaddr as *mut c_void, src as *mut c_void, len)};
@@ -165,6 +167,16 @@ pub fn memset_persist(pmemaddr: *mut u8, c : i32, len: usize)
 pub fn unmap(pmemaddr: *mut u8, len: usize) {
     unsafe {pmem_unmap(pmemaddr as *mut c_void, len)};
 }
+
+pub fn has_hw_drain() -> c_int {
+    unsafe {pmem_has_hw_drain()}
+}
+
+pub fn has_auto_flush() -> c_int {
+    unsafe {pmem_has_auto_flush()}
+}
+
+
 /* *****************
  *   Mappings
  * ****************/
@@ -180,6 +192,7 @@ extern "C" {
     pub fn pmem_errormsg() -> *const c_char;
     pub fn pmem_flush(addr: *const c_void, len: usize);
     pub fn pmem_has_hw_drain() -> c_int;
+    pub fn pmem_has_auto_flush() -> c_int;
     pub fn pmem_is_pmem(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_map_file(
         path: *const c_char,
