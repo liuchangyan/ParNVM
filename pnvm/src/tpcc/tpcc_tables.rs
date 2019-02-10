@@ -25,6 +25,7 @@ use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
 use pnvm_lib::lock::lock_txn::Transaction2PL;
 use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
+use pnvm_lib::parnvm::nvm_txn_raw::TransactionParOCCRaw;
 
 #[derive(Debug)]
 pub struct Tables {
@@ -172,6 +173,11 @@ impl NewOrderTable {
     {
         self.table_.push_pc(tx, entry, tables);
     }
+    pub fn push_pc_raw(&self, tx: &mut TransactionParOCCRaw, entry: NewOrder, tables: &Arc<Tables>)
+    where Arc<Row<NewOrder, (i32, i32, i32)>>: TableRef 
+    {
+        self.table_.push_pc_raw(tx, entry, tables);
+    }
 
 
 
@@ -267,6 +273,12 @@ impl NewOrderTable {
     //    let bucket_idx = index.0 * dis_num  + index.1;
     //    self.table_.delete_lock(tx, index, tables, bucket_idx as usize)
     //}
+    pub fn delete_pc_raw(&self, tx: &mut TransactionParOCCRaw, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
+    {
+        let dis_num = num_district_get();
+        let bucket_idx = index.0 * dis_num  + index.1;
+        self.table_.delete_pc_raw(tx, index, tables, bucket_idx as usize)
+    }
 
     pub fn delete_pc(&self, tx: &mut TransactionParOCC, index: &(i32, i32, i32), tables: &Arc<Tables>) -> bool
     {
@@ -340,6 +352,11 @@ impl OrderLineTable {
         }
     }
 
+    pub fn push_pc_raw(&self, tx: &mut TransactionParOCCRaw, entry: OrderLine, tables: &Arc<Tables>)
+        where Arc<Row<OrderLine, (i32, i32, i32, i32)>> : TableRef
+        {
+            self.table_.push_pc_raw(tx, entry, tables);
+        }
 
     pub fn push_pc(&self, tx: &mut TransactionParOCC, entry: OrderLine, tables: &Arc<Tables>)
         where Arc<Row<OrderLine, (i32, i32, i32, i32)>> : TableRef
@@ -483,6 +500,11 @@ impl OrderTable {
                     (w_id * num_dis + d_id) as usize % total_wd
                 })),
         }
+    }
+    pub fn push_pc_raw(&self, tx: &mut TransactionParOCCRaw, entry: Order, tables: &Arc<Tables>) 
+        where Arc<Row<Order, (i32, i32, i32)>> : TableRef
+    {
+        self.table_.push_pc_raw(tx, entry, tables) 
     }
     
     pub fn push_pc(&self, tx: &mut TransactionParOCC, entry: Order, tables: &Arc<Tables>) 

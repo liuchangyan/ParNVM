@@ -39,7 +39,6 @@ pub struct TransactionParOCCRaw
 {
     deps_:      HashMap<u32, Arc<TxnInfo>>,
     id_:        Tid,
-    name_:      String,
     status_:    TxState,
     txn_info_:  Arc<TxnInfo>,
     
@@ -47,17 +46,16 @@ pub struct TransactionParOCCRaw
     //#[cfg(any(feature= "pmem", feature = "disk"))]
     records_ :     Vec<(Box<dyn TRef>, Option<FieldArray>)>,
     tags_ : HashMap<(ObjectId, Operation), TTag>,
-    early_abort_ : bool,
+    pub early_abort_ : bool,
 }
 
 
 impl TransactionParOCCRaw
 {
-    pub fn new(id : Tid, name: String) -> TransactionParOCCRaw {
+    pub fn new(id : Tid) -> TransactionParOCCRaw {
         TransactionParOCCRaw {
             deps_:      HashMap::with_capacity(DEP_DEFAULT_SIZE),
             id_:        id,
-            name_:      name,
             status_:    TxState::EMBRYO,
             txn_info_:  Arc::new(TxnInfo::new(id)),
 
@@ -377,10 +375,6 @@ impl TransactionParOCCRaw
 
     pub fn id(&self) -> &Tid {
         &self.id_
-    }
-
-    pub fn name(&self) -> &String {
-        &self.name_
     }
 
     pub fn status(&self) -> &TxState {
