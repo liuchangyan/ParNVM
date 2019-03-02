@@ -27,6 +27,7 @@ dir = ["pnvm_lib/dir"]
 wdrain = ["pnvm_lib/wdrain"]
 pdrain = ["pnvm_lib/pdrain"]
 conflict = []
+smallpc = []
 
 [profile.release]
 debug = true

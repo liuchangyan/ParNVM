@@ -42,6 +42,7 @@ use pnvm_lib::txn::{Tid,TxnInfo, Transaction};
 use pnvm_lib::occ::occ_txn::TransactionOCC;
 use pnvm_lib::lock::lock_txn::*;
 use pnvm_lib::parnvm::nvm_txn_occ::TransactionParOCC;
+use pnvm_lib::parnvm::nvm_txn_raw::TransactionParOCCRaw;
 use super::entry::*;
 
 //FIXME: const
@@ -271,6 +272,26 @@ where Entry: 'static + Key<Index> + Clone+Debug,
             name : String::from(name)
         }
     }
+
+    pub fn push_pc_raw(&self, tx: &mut TransactionParOCCRaw, entry: Entry, tables: &Arc<Tables>)
+    where Arc<Row<Entry, Index>> :BucketPushRef 
+    {
+        let bkt_idx = entry.bucket_key() % self.bucket_num;
+
+        //Make into row and then make into a RowRef
+        #[cfg(not(all(feature = "pmem", feature = "dir")))]
+        let row = Arc::new(Row::new_from_txn(entry, tx.txn_info().clone()));
+
+        #[cfg(all(feature = "pmem", feature = "dir"))] 
+        let row = self.get_pmem_back_row(bkt_idx, entry, tx.txn_info());
+
+        let table_ref = row.into_push_table_ref(bkt_idx, tables.clone());
+        
+        let tid = tx.id().clone();
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Push);
+        tag.set_write();
+        debug!("[PUSH TABLE]--[TID:{:?}]--[OID:{:?}]", tid, table_ref.get_id());
+    }
     
     pub fn push_pc(&self, tx: &mut TransactionParOCC, entry: Entry, tables: &Arc<Tables>)
     where Arc<Row<Entry, Index>> :BucketPushRef 
@@ -443,6 +464,26 @@ where Entry: 'static + Key<Index> + Clone+Debug,
     //    tref.install(tx.id());
     //    true
     //}
+
+    pub fn delete_pc_raw(&self, tx: &mut TransactionParOCCRaw, index: &Index, tables: &Arc<Tables>, bucket_idx: usize) -> bool
+        where Arc<Row<Entry, Index>> : BucketDeleteRef
+    {
+        let bucket_idx = bucket_idx % self.bucket_num;
+        let row = match self.buckets[bucket_idx].retrieve(index){
+            None => { 
+                warn!("tx_delete: no element {:?}", index);
+                return false;
+            },
+            Some(row) => row
+        };
+        let table_ref = row.into_delete_table_ref(
+            bucket_idx,
+            tables.clone(),
+            );
+        let tag = tx.retrieve_tag(table_ref.get_id(), table_ref.box_clone(), Operation::Delete);
+        tag.set_write(); //FIXME: better way?
+        true
+    }
 
     pub fn delete_pc(&self, tx: &mut TransactionParOCC, index: &Index, tables: &Arc<Tables>, bucket_idx: usize) -> bool
         where Arc<Row<Entry, Index>> : BucketDeleteRef

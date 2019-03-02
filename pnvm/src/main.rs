@@ -60,6 +60,7 @@ use pnvm_lib::{
     occ::*,
     parnvm::nvm_txn_2pl::{TransactionPar},
     parnvm::nvm_txn_occ::{TransactionParOCC},
+    parnvm::nvm_txn_raw::TransactionParOCCRaw,
     tbox::*,
     tcore::*,
     txn::*,
@@ -95,9 +96,11 @@ fn main() {
         "SINGLE" => run_single(conf),
         "PNVM_OCC" => run_nvm_occ_micro(conf),
         "TPCC_OCC" => run_tpcc(conf, TxnType::OCC),
-        "TPCC_NVM" => run_pc_tpcc(conf, WorkloadType::Full),
+        "TPCC_NVM" => run_pc_tpcc(conf, WorkloadType::Full, PieceType::Callback),
+        "NO_NVM" => run_pc_tpcc(conf, WorkloadType::NewOrder, PieceType::Callback),
+        "TPCC_PC_RAW" => run_pc_tpcc(conf, WorkloadType::Full, PieceType::Raw),
+        "NO_PC_RAW" => run_pc_tpcc(conf, WorkloadType::NewOrder, PieceType::Raw),
         "NO_2PL" => run_tpcc(conf, TxnType::Lock),
-        "NO_NVM" => run_pc_tpcc(conf, WorkloadType::NewOrder),
         "MICRO_2PL" => run_micro_2pl(conf),
         _ => panic!("unknown test name"),
     }
@@ -481,7 +484,7 @@ fn run_occ_micro(conf: Config) {
 
 
 //Running of TPCC with PPNVM piece contention management
-fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
+fn run_pc_tpcc(conf: Config, kind: WorkloadType, piece_kind: PieceType) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
     //FIXME: rename the function, parepare workload
     let tables = tpcc::workload_common::prepare_workload(&conf, &mut rng);
@@ -523,15 +526,24 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                 
                 let w_home = (i as i32 )% wh_num +1;
                 let d_home = (i as i32) % d_num + 1;
-                let new_order_base = tpcc::workload_ppnvm::pc_new_order_base(&tables);
-                let payment_base = tpcc::workload_ppnvm::pc_payment_base(&tables);
-                let orderstatus_base = tpcc::workload_ppnvm::pc_orderstatus_base(&tables);
-
                 let o_carrier_id :i32 = rng.gen::<i32>() % 10 + 1;
-                let delivery_base = tpcc::workload_ppnvm::pc_delivery_base(&tables, w_home, o_carrier_id);
 
                 let thd = tpcc::numeric::Numeric::new(rng.gen_range(10, 21), 2, 0);
-                let stocklevel_base = tpcc::workload_ppnvm::pc_stocklevel_base(&tables, w_home, d_home, thd);
+
+                let (delivery_base, new_order_base, payment_base, orderstatus_base, stocklevel_base) = match piece_kind {
+                    PieceType::Callback => {
+                        let delivery_base = Some(tpcc::workload_ppnvm::pc_delivery_base(&tables, w_home, o_carrier_id));
+                        let new_order_base = Some(tpcc::workload_ppnvm::pc_new_order_base(&tables));
+                        let payment_base = Some(tpcc::workload_ppnvm::pc_payment_base(&tables));
+                        let orderstatus_base = Some(tpcc::workload_ppnvm::pc_orderstatus_base(&tables));
+                        let stocklevel_base = Some(tpcc::workload_ppnvm::pc_stocklevel_base(&tables, w_home, d_home, thd));
+
+                        (delivery_base, new_order_base, payment_base, orderstatus_base, stocklevel_base)
+                    },
+                    PieceType::Raw => {
+                        (None, None, None, None, None)
+                    }
+                };
                 
                 let get_time = util_get_avg_get_time();
                 barrier.wait();
@@ -568,54 +580,102 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType) {
                     //FIXME: pass by ref rather than box it
                     match kind {
                         WorkloadType::Full => {
-                            let mut tx = match j {
-                                12...55 => {
-                                    let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
-                                    TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
-                                },
-                                0...4 => {
-                                    let inputs = tpcc::workload_ppnvm::pc_orderstatus_input(w_home, &mut rng);
-                                    TransactionParOCC::new_from_base(&orderstatus_base, tid, Box::new(inputs))
-                                },
-                                4...8 => {
-                                    let inputs = tpcc::workload_ppnvm::pc_delivery_input(w_home, &mut rng);
-                                    TransactionParOCC::new_from_base(&delivery_base, tid, Box::new(inputs))
-                                },
-                                8...12 => {
-                                    TransactionParOCC::new_from_base(&stocklevel_base, tid, Box::new(-1))
-                                },
-                                55...100 => {
-                                    let inputs = tpcc::workload_ppnvm::pc_payment_input(w_home, &mut rng);
-                                    TransactionParOCC::new_from_base(&payment_base, tid, Box::new(inputs))
-                                },
-                                _ => panic!("invalid tx mix")
-                            };
 
-                            //#[cfg(all(feature = "pmem", feature = "pdrain"))]
-                            //match j {
-                            //    12...55 => {
+                            match piece_kind {
+                                PieceType::Callback => {
+                                    let mut tx = match j {
+                                        12...55 => {
+                                            let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
+                                            TransactionParOCC::new_from_base(new_order_base.as_ref().unwrap(), tid, Box::new(inputs))
+                                        },
+                                        0...4 => {
+                                            let inputs = tpcc::workload_ppnvm::pc_orderstatus_input(w_home, &mut rng);
+                                            TransactionParOCC::new_from_base(orderstatus_base.as_ref().unwrap(), tid, Box::new(inputs))
+                                        },
+                                        4...8 => {
+                                            let inputs = tpcc::workload_ppnvm::pc_delivery_input(w_home, &mut rng);
+                                            TransactionParOCC::new_from_base(delivery_base.as_ref().unwrap(), tid, Box::new(inputs))
+                                        },
+                                        8...12 => {
+                                            TransactionParOCC::new_from_base(stocklevel_base.as_ref().unwrap(), tid, Box::new(-1))
+                                        },
+                                        55...100 => {
+                                            let inputs = tpcc::workload_ppnvm::pc_payment_input(w_home, &mut rng);
+                                            TransactionParOCC::new_from_base(payment_base.as_ref().unwrap(), tid, Box::new(inputs))
+                                        },
+                                        _ => panic!("invalid tx mix")
+                                    };
+                                    tx.execute_txn();
+                                },
 
-                            //        tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+                                PieceType::Raw => {
 
-                            //    },
-                            //    _ => {},
-                            //}
-                            
-                            tx.execute_txn();
+                                    let mut tx = TransactionParOCCRaw::new(tid);
+                                    let res = match j {
+                                        12...55 => {
+                                            let inputs = tpcc::workload_pc_raw::pc_new_order_input(w_home, &mut rng);
+                                            tpcc::workload_pc_raw::do_pc_new_order(&tables,&mut tx, inputs)
+                                        },
+                                        0...4 => {
+                                            let inputs = tpcc::workload_pc_raw::pc_orderstatus_input(w_home, &mut rng);
+                                            tpcc::workload_pc_raw::do_pc_orderstatus(&tables, &mut tx, inputs)
+                                        },
+                                        4...8 => {
+                                            let inputs = tpcc::workload_pc_raw::pc_delivery_input(w_home, &mut rng);
+                                            tpcc::workload_pc_raw::do_pc_delivery(&tables, w_home, o_carrier_id, &mut tx)
+                                        },
+                                        8...12 => {
+                                            tpcc::workload_pc_raw::do_pc_stocklevel(&tables, w_home, d_home, &thd, &mut tx)
+                                        },
+                                        55...100 => {
+                                            let inputs = tpcc::workload_pc_raw::pc_payment_input(w_home, &mut rng);
+                                            tpcc::workload_pc_raw::do_pc_payment(&tables, inputs, &mut tx)
+                                        },
+                                        _ => panic!("invalid tx mix")
+                                    };
+
+                                    if res {
+                                        tx.wait_deps_commit();
+                                        tx.commit();
+                                    } else {
+                                        tx.abort();
+                                    }
+                                },
+                            }
                         },
                         WorkloadType::NewOrder => {
-                            let mut tx ={
-                                let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
-                                TransactionParOCC::new_from_base(&new_order_base, tid, Box::new(inputs))
-                            };
 
-                            //#[cfg(all(feature = "pmem", feature = "pdrain"))]
-                            //{
+                            match piece_kind {
+                                PieceType::Callback => {
+                                    let mut tx ={
+                                        let inputs = tpcc::workload_ppnvm::pc_new_order_input(w_home, &mut rng);
+                                        TransactionParOCC::new_from_base(new_order_base.as_ref().unwrap(), tid, Box::new(inputs))
+                                    };
 
-                            //    tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
-                            //}
+                                    #[cfg(all(feature = "pmem", feature = "pdrain", feature = "smallpc"))]
+                                    {
 
-                            tx.execute_txn();
+                                        tpcc::workload_ppnvm::pc_new_order_stock_pc(tables.clone(), &mut tx);
+                                    }
+
+                                    tx.execute_txn();
+                                },
+
+                                PieceType::Raw => {
+                                    let mut tx = TransactionParOCCRaw::new(tid);
+                                    let inputs = tpcc::workload_pc_raw::pc_new_order_input(w_home, &mut rng);
+                                    let res = tpcc::workload_pc_raw::do_pc_new_order(&tables,&mut tx, inputs);
+
+                                    if res {
+                                        tx.wait_deps_commit();
+                                        tx.commit();
+                                    } else {
+                                        tx.abort();
+                                    }
+                                },
+                            }
+
+
                         },
                 
                     }
@@ -964,6 +1024,11 @@ fn report_stat(
 enum TxnType{
     OCC,
     Lock,
+}
+#[derive(Copy, Clone)]
+enum PieceType {
+    Callback,
+    Raw,
 }
 
 #[derive(Copy, Clone)]
