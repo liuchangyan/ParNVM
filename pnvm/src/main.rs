@@ -709,8 +709,8 @@ fn run_tpcc(conf: Config, txn_type: TxnType) {
     #[cfg(feature = "profile")]
     flame::start("benchmark_start");
 
-    #[cfg(all(feature = "pmem", feature = "wdrain"))]
-    PmemFac::init();
+    //#[cfg(all(feature = "pmem", feature = "wdrain"))]
+    //PmemFac::init();
 
     for i in 1..=conf.thread_num {
         let conf = conf.clone();
