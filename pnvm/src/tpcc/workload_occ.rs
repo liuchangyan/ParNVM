@@ -449,6 +449,7 @@ pub fn delivery(tx: &mut TransactionOCC,
             info!("[{:?}][DELIVERY] DELETING NEWORDER [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);
             if !tables.neworder.delete(tx, &(w_id, d_id, no_o_id), tables) {
                 tx.should_abort();
+                return;
             }
 
             info!("[{:?}][DELIVERY] RETRIEVING ORDER  [W_ID: {}, D_ID: {}, O_ID: {}]", tid, w_id, d_id, no_o_id);

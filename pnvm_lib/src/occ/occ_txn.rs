@@ -9,7 +9,7 @@ use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
 
 //#[cfg(any(feature = "pmem", feature="disk"))]
 use {plog, pnvm_sys};
-use tcore::{self, ObjectId, TTag, TRef, BoxRef, Operation, FieldArray};
+use tcore::{self, ObjectId, TTag, TRef, BoxRef, Operation, FieldArray, BenchmarkCounter};
 
 #[cfg(feature = "profile")]
 use flame;
@@ -22,6 +22,7 @@ pub struct TransactionOCC
     tid_:   Tid,
     state_: TxState,
     deps_:  HashMap<(ObjectId, Operation), TTag>,
+    records_ :     Vec<(Box<dyn TRef>, Option<FieldArray>)>,
     locks_ : Vec<*const TTag>,
     txn_info_ : Arc<TxnInfo>,
     should_abort_: bool,
@@ -126,6 +127,7 @@ impl TransactionOCC
             locks_: Vec::with_capacity(32),
             txn_info_: Arc::new(TxnInfo::new(tid_)),
             should_abort_ : false,
+            records_: Vec::with_capacity(32),
         }
     }
 
@@ -221,12 +223,15 @@ impl TransactionOCC
 
     //#[cfg(any(feature = "pmem", feature="disk"))]
     #[cfg_attr(feature = "profile", flame)]
-    fn do_log(&self) {
+    fn do_log(&mut self) {
         let mut logs = vec![];
         let id = self.id();
         for tag in self.deps_.values() {
             if tag.has_write() {
                 logs.push(tag.make_log(id));
+
+                #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
+                self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
             }
         }
 
@@ -235,11 +240,64 @@ impl TransactionOCC
 
     #[cfg(any(feature = "pmem", feature="disk"))]
     #[cfg_attr(feature = "profile", flame)]
-    fn persist_data(&self) {
-        for tag in self.deps_.values() {
-            #[cfg(not(feature = "wdrain"))]
-            tag.persist_data(self.id());
+    fn persist_data(&mut self) {
+        for (record, fields) in self.records_.drain(..) {
+            #[cfg(feature = "pmem")]
+            {
+                match fields {
+                    Some(ref fields) => {
+                        for field in fields.iter(){
+                            let paddr = record.get_pmem_field_addr(*field);
+                            let size = record.get_field_size(*field);
+                            BenchmarkCounter::flush(size);
+
+                            #[cfg(feature = "dir")]
+                            pnvm_sys::flush(paddr, size);
+
+                            #[cfg(not(feature = "dir"))]
+                            {
+                                let vaddr = record.get_field_ptr(*field);
+                                pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
+                            }
+                        }
+
+                    },
+                    None=> {
+                        let paddr = record.get_pmem_addr();
+                        let layout  = record.get_layout();
+
+                        BenchmarkCounter::flush(layout.size());
+                        #[cfg(feature = "dir")]
+                        pnvm_sys::flush(paddr, layout.size());
+
+
+                        #[cfg(not(feature = "dir"))]
+                        {
+                            let vaddr = record.get_ptr();
+                            pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
+                        }
+
+                    }
+                }
+            }
+
+
+
+            #[cfg(feature = "disk")]
+            {
+                let paddr = record.get_pmem_addr();
+                let vaddr = record.get_ptr();
+                let layout  = record.get_layout();
+                pnvm_sys::disk_memcpy(paddr, vaddr, layout.size());
+                pnvm_sys::disk_msync(paddr, layout.size());
+            }
+
         }
+
+        //for tag in self.deps_.values() {
+        //    #[cfg(not(feature = "wdrain"))]
+        //    tag.persist_data(self.id());
+        //}
     }
 
     #[cfg_attr(feature = "profile", flame)]
