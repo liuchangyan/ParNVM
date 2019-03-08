@@ -33,6 +33,7 @@ extern crate core;
 
 mod util;
 mod tpcc;
+mod ycsb;
 
 use tpcc::*;
 
