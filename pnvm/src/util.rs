@@ -22,6 +22,8 @@ use parking_lot::RwLock;
 use rand::distributions::Distribution;
 use zipf::ZipfDistribution;
 
+use ycsb::generator::{YCSBSampler, YCSBConfig};
+
 use pnvm_lib::{
     occ::{map::*, occ_txn::*},
     parnvm::{map::*, nvm_txn_occ::*, nvm_txn_2pl::*, piece::*},
@@ -540,6 +542,10 @@ pub struct Config {
     pub warmup_time :u64,
     pub partition : usize,
     //pub no_conflict: bool,
+    pub ycsb_num_keys: usize,
+    pub ycsb_max_keys: usize,
+    pub ycsb_sampler: String,
+    pub ycsb_num_rows: usize,
 }
 
 pub fn read_env() -> Config {
@@ -570,6 +576,27 @@ pub fn read_env() -> Config {
         //no_conflict: settings.get_bool("NO_CONFLICT").unwrap(),
         warmup_time : settings.get_int("WARMUP_TIME").unwrap_or(10) as u64,
 
+        //YCSB Config
+        ycsb_num_keys: settings.get_int("YCSB_NUM_KEYS").unwrap_or(0) as usize,
+        ycsb_num_rows: settings.get_int("YCSB_NUM_ROWS").unwrap_or(0) as usize,
+        ycsb_sampler: settings.get_str("YCSB_SAMPLER"). unwrap_or(String::from("None")),
+        ycsb_max_keys: settings.get_int("YCSB_MAX_KEYS").unwrap_or(0) as usize,
+
+    }
+}
+
+
+pub fn parse_ycsb_config(config: &Config) -> YCSBConfig {
+    let sampler = match config.ycsb_sampler.as_ref() {
+        "Uniform" => YCSBSampler::Uniform(config.ycsb_max_keys),
+        "Zipf" => YCSBSampler::Zipf(config.ycsb_max_keys, config.zipf_coeff),
+        _ => panic!("Unknown YCSB sampler method")
+    };
+
+    YCSBConfig {
+        sampler_name_ : sampler, 
+        max_keys_ : config.ycsb_max_keys,
+        num_keys_ : config.ycsb_num_keys,
     }
 }
 

@@ -36,8 +36,7 @@ mod tpcc;
 mod ycsb;
 
 use tpcc::*;
-
-
+use ycsb::*;
 
 use util::*;
 
@@ -99,6 +98,7 @@ fn main() {
         "NO_PC_RAW" => run_pc_tpcc(conf, WorkloadType::NewOrder, PieceType::Raw),
         "NO_2PL" => run_tpcc(conf, TxnType::Lock),
         "MICRO_2PL" => run_micro_2pl(conf),
+        "YCSB_OCC" => run_ycsb(conf),
         _ => panic!("unknown test name"),
     }
 }
@@ -696,6 +696,17 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType, piece_kind: PieceType) {
         let mut f = File::create(format!("profile/occ.profile.{}", thd_num).as_str()).unwrap();
         flame::dump_text_to_writer(f);
     }
+}
+
+
+fn run_ycsb(conf: Config) {
+    let ycsb_config = parse_ycsb_config(&conf);
+    let generator = generator::Generator::new(&ycsb_config);
+   
+    #[cfg(feature = "pmem")]
+    PmemFac::init();
+
+    let table = workload::prepare_workload(&conf);
 }
 
 //Run the OCC contention management TPCC workload

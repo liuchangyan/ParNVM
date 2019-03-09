@@ -4,6 +4,7 @@ use std::{
     fmt::{Debug,Formatter, Result},
     ptr,
     any::Any,
+    mem,
 };
 
 use pnvm_lib::tcore::{
@@ -16,7 +17,13 @@ use pnvm_lib::tcore::{
 use pnvm_lib::{
     occ::occ_txn::TransactionOCC,
     txn::{Tid,TxnInfo},
+
 };
+
+#[cfg(feature = "pmem")]
+use txn::PmemFac;
+
+use util::Config;
 
 #[cfg(not(any(feature = "pmem", feature = "disk")))]
 use core::alloc::Layout;
@@ -30,10 +37,12 @@ use pnvm_sys::Layout;
 use tpcc::table::{Key, Row};
 
 
+const YCSB_FIELD_LEN: usize = 100;
+
 #[derive(Clone)]
 pub struct YCSBEntry {
     idx_ : isize,
-    fields_ : Vec<Field>,
+    fields_ : Field,
 }
 
 impl Key<isize> for YCSBEntry {
@@ -52,10 +61,7 @@ impl Key<isize> for YCSBEntry {
 
 impl Debug for YCSBEntry {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        for x in self.fields_.iter() {
-            write!(f, "[{:?}]", x);
-        }
-        write!(f, "\n")
+        write!(f, "[{:?}]", self.fields_)
     }
 }
 
@@ -70,7 +76,7 @@ pub struct YCSBTable {
 
 #[derive(Clone)]
 pub struct Field {
-    data_: [u8;100],
+    data_: [u8;YCSB_FIELD_LEN],
 }
 
 impl Debug for Field {
@@ -281,5 +287,47 @@ impl YCSBTable {
         self.rows_.len()
     }
 }
+
+
+
+pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
+    let mut table = YCSBTable::new();
+
+    for _i in 0..conf.ycsb_num_rows {
+        let data : Vec<u8> = (0..YCSB_FIELD_LEN).map(|_x| rand::random::<u8>()).collect();
+        let mut field_data : [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
+        field_data.copy_from_slice(&data.as_slice()[..YCSB_FIELD_LEN]);
+        let field = Field{data_ : field_data};
+        let idx = table.len() as isize;
+        let ycsb_entry = YCSBEntry { 
+           idx_ : idx,
+           fields_ : field
+        };
+        
+        #[cfg(not(all(feature = "pmem", feature = "dir")))]
+        {
+            let arc = Arc::new(Row::new(ycsb_entry));
+            table.insert_raw(arc);
+
+            #[cfg(feature = "pmem")]
+            {
+                let p = PmemFac::alloc(mem::size_of::<YCSBEntry>()) as *mut YCSBEntry;
+                arc.set_pmem_addr(p);
+            }
+        }
+
+
+        #[cfg(all(feature = "pmem", feature = "dir"))]
+        {
+            let p = PmemFac::alloc(mem::size_of::<YCSBEntry>()) as *mut YCSBEntry;
+            p.write(ycsb_entry);
+            let arc = Arc::new(Row::new_from_ptr(p));
+            table.insert_raw(arc);
+        }
+    }
+
+    return Arc::new(table);
+}
+
 
 
