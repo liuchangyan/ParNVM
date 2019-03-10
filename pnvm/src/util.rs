@@ -22,7 +22,7 @@ use parking_lot::RwLock;
 use rand::distributions::Distribution;
 use zipf::ZipfDistribution;
 
-use ycsb::generator::{YCSBSampler, YCSBConfig};
+use ycsb::generator::{YCSBSampler, YCSBConfig, YCSBMode};
 
 use pnvm_lib::{
     occ::{map::*, occ_txn::*},
@@ -542,10 +542,12 @@ pub struct Config {
     pub warmup_time :u64,
     pub partition : usize,
     //pub no_conflict: bool,
-    pub ycsb_num_keys: usize,
-    pub ycsb_max_keys: usize,
     pub ycsb_sampler: String,
     pub ycsb_num_rows: usize,
+    pub ycsb_rw_ratio: f64,
+    pub ycsb_mode: String,
+    pub ycsb_ops_per_iter: usize,
+    pub ycsb_txn_num_ops: usize,
 }
 
 pub fn read_env() -> Config {
@@ -573,30 +575,39 @@ pub fn read_env() -> Config {
         d_num : settings.get_int("D_NUM").unwrap() as i32,
         no_warmup: settings.get_bool("NO_WARMUP").unwrap(),
         partition: settings.get_int("PARTITION").unwrap_or(0) as usize,
-        //no_conflict: settings.get_bool("NO_CONFLICT").unwrap(),
         warmup_time : settings.get_int("WARMUP_TIME").unwrap_or(10) as u64,
 
         //YCSB Config
-        ycsb_num_keys: settings.get_int("YCSB_NUM_KEYS").unwrap_or(0) as usize,
         ycsb_num_rows: settings.get_int("YCSB_NUM_ROWS").unwrap_or(0) as usize,
         ycsb_sampler: settings.get_str("YCSB_SAMPLER"). unwrap_or(String::from("None")),
-        ycsb_max_keys: settings.get_int("YCSB_MAX_KEYS").unwrap_or(0) as usize,
-
+        ycsb_rw_ratio: settings.get_float("YCSB_RW_RATIO").unwrap_or(0.5) as f64,
+        ycsb_mode: settings.get_str("YCSB_RW_MODE").unwrap(),
+        ycsb_ops_per_iter: settings.get_int("YCSB_OPS_CNT").unwrap_or(1000000) as usize,
+        ycsb_txn_num_ops: settings.get_int("YCSB_TXN_NUM_OPS").unwrap_or(10) as usize,
     }
 }
 
 
 pub fn parse_ycsb_config(config: &Config) -> YCSBConfig {
     let sampler = match config.ycsb_sampler.as_ref() {
-        "Uniform" => YCSBSampler::Uniform(config.ycsb_max_keys),
-        "Zipf" => YCSBSampler::Zipf(config.ycsb_max_keys, config.zipf_coeff),
+        "Uniform" => YCSBSampler::Uniform(config.ycsb_num_rows),
+        "Zipf" => YCSBSampler::Zipf(config.ycsb_num_rows-1, config.zipf_coeff),
         _ => panic!("Unknown YCSB sampler method")
+    };
+
+    let mode = match config.ycsb_mode.as_ref() {
+        "Random" => YCSBMode::Random,
+        "ReadFirst" => YCSBMode::ReadFirst,
+        "WriteFirst" => YCSBMode::WriteFirst,
+        "Interleave" => YCSBMode::Interleave,
+        _ => panic!("Unknown ReadWrite mode"),
     };
 
     YCSBConfig {
         sampler_name_ : sampler, 
-        max_keys_ : config.ycsb_max_keys,
-        num_keys_ : config.ycsb_num_keys,
+        rw_ratio_ : config.ycsb_rw_ratio,
+        num_ops_: config.ycsb_ops_per_iter,
+        rw_mode_ : mode,
     }
 }
 

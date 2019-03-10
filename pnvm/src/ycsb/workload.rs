@@ -16,12 +16,14 @@ use pnvm_lib::tcore::{
 
 use pnvm_lib::{
     occ::occ_txn::TransactionOCC,
-    txn::{Tid,TxnInfo},
+    txn::{Tid,TxnInfo, Transaction},
 
 };
 
+use generator::YCSBOps;
+
 #[cfg(feature = "pmem")]
-use txn::PmemFac;
+use pnvm_lib::txn::PmemFac;
 
 use util::Config;
 
@@ -39,15 +41,15 @@ use tpcc::table::{Key, Row};
 
 const YCSB_FIELD_LEN: usize = 100;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct YCSBEntry {
-    idx_ : isize,
+    //idx_ : isize,
     fields_ : Field,
 }
 
 impl Key<isize> for YCSBEntry {
     fn primary_key(&self) -> isize {
-        self.idx_
+        -1
     }
 
     fn bucket_key(&self) -> usize {
@@ -55,7 +57,7 @@ impl Key<isize> for YCSBEntry {
     }
 
     fn field_offset(&self) -> [isize;32] {
-        panic!("field_offset not implemented for YCSBEntry");
+        [-1;32]
     }
 }
 
@@ -85,6 +87,18 @@ impl Debug for Field {
     }
 }
 
+impl Default for Field {
+    fn default() -> Field {
+        let data : Vec<u8> = (0..YCSB_FIELD_LEN).map(|_x| rand::random::<u8>()).collect();
+        let mut field_data : [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
+        field_data.copy_from_slice(&data.as_slice()[..YCSB_FIELD_LEN]);
+        
+        Field {
+            data_: field_data
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct YCSBRef{
     inner_ : Arc<YCSBRow>,
@@ -107,7 +121,7 @@ impl TRef for YCSBRef {
                 #[cfg(all(feature = "pmem", feature = "wdrain"))]
                 {
                     if !self.pd_ptr.is_null() {
-                        self.inner.install_ptr(self.pd_ptr, id);
+                        self.inner_.install_ptr(self.pd_ptr, id);
                     } else {
                         panic!("pd_ptr should not be null at write");
                     }
@@ -171,7 +185,7 @@ impl TRef for YCSBRef {
     
     #[cfg(all(feature = "pmem", feature = "wdrain"))]
     fn write(&mut self, ptr: *mut u8) {
-        self.pd_ptr = ptr as *mut Warehouse;
+        self.pd_ptr = ptr as *mut YCSBEntry;
     }
 
     #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
@@ -265,7 +279,7 @@ impl YCSBTable {
         self.rows_.push(row)
     }
 
-    pub fn retrieve_tref(&self, idx: usize) -> Option<Box<dyn TRef>> {
+    pub fn retrieve_tref(&self, idx: usize) -> Box<dyn TRef> {
         if idx < self.len() {
             let row = &self.rows_[idx];
             let tref = Box::new(
@@ -277,9 +291,9 @@ impl YCSBTable {
                         pd_ptr: ptr::null_mut(),
                     }
                 );
-            Some(tref)
+            tref
         } else {
-            None
+            panic!("Missing Index {}", idx);
         }
     }
 
@@ -298,9 +312,7 @@ pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
         let mut field_data : [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
         field_data.copy_from_slice(&data.as_slice()[..YCSB_FIELD_LEN]);
         let field = Field{data_ : field_data};
-        let idx = table.len() as isize;
         let ycsb_entry = YCSBEntry { 
-           idx_ : idx,
            fields_ : field
         };
         
@@ -320,7 +332,7 @@ pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
         #[cfg(all(feature = "pmem", feature = "dir"))]
         {
             let p = PmemFac::alloc(mem::size_of::<YCSBEntry>()) as *mut YCSBEntry;
-            p.write(ycsb_entry);
+            unsafe{p.write(ycsb_entry)};
             let arc = Arc::new(Row::new_from_ptr(p));
             table.insert_raw(arc);
         }
@@ -328,6 +340,36 @@ pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
 
     return Arc::new(table);
 }
+
+pub fn do_transaction_occ(tx: &mut TransactionOCC, 
+                          table: &Arc<YCSBTable>,
+                          ops: &Arc<Vec<YCSBOps>>,
+                          op_idx: &mut usize,
+                          num_ops: usize)
+{
+        
+    for _ in 0..num_ops {
+        let op = ops[*op_idx].clone();
+        *op_idx = (*op_idx +1) % ops.len();
+
+        match op {
+            YCSBOps::Read(idx) => {
+                let tref = table.retrieve_tref(idx);
+                let entry = tx.read::<YCSBEntry>(tref);
+                //println!("Read: Next Op Idx: {}, Key: {}", op_idx, idx);
+            },
+            YCSBOps::Update(idx,val) => {
+                let tref = table.retrieve_tref(idx);
+                tx.write(tref, val);
+                //println!("Write: Next Op Idx: {}, Key: {}", op_idx, idx);
+            },
+        }
+    }
+
+}
+
+
+
 
 
 
