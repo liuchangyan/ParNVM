@@ -31,6 +31,8 @@ extern crate num;
 
 extern crate core;
 
+extern crate itertools;
+
 mod util;
 mod tpcc;
 mod ycsb;
@@ -1096,19 +1098,43 @@ fn report_stat(
     }
 
 
-    println!(
-        "{}, {}, {},{},{}, {},{},{:?},{},{}",
-        conf.thread_num,
-        conf.wh_num,
-        total_success,
-        total_abort,
-        total_pc_success,
-        total_pc_abort,
-        total_mmap_cnt,
-        total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
-        total_log / 1024 / 1024  / total_time.as_secs() as u32,
-        total_flush / 1024 / 1024  / total_time.as_secs() as u32
-        );
+    match conf.test_name.as_ref() {
+        "TPCC_OCC" | "TPCC_NVM" | "NO_NVM" | "TPCC_PC_RAW" | "NO_PC_RAW" | "NO_2PL"  => {
+            println!(
+                "{}, {}, {},{},{}, {},{},{:?},{},{}",
+                conf.thread_num,
+                conf.wh_num,
+                total_success,
+                total_abort,
+                total_pc_success,
+                total_pc_abort,
+                total_mmap_cnt,
+                total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+                total_log / 1024 / 1024  / total_time.as_secs() as u32,
+                total_flush / 1024 / 1024  / total_time.as_secs() as u32
+            );
+        },
+        "YCSB_OCC" => {
+            println!(
+                "{},{},{},{},{},{},{},{},{},{},{},{:?},{},{}",
+                conf.thread_num,
+                conf.zipf_coeff,
+                conf.ycsb_rw_ratio,
+                conf.ycsb_txn_num_ops,
+                conf.ycsb_ops_per_iter,
+                conf.ycsb_mode,
+                total_success,
+                total_abort,
+                total_pc_success,
+                total_pc_abort,
+                total_mmap_cnt,
+                total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+                total_log / 1024 / 1024  / total_time.as_secs() as u32,
+                total_flush / 1024 / 1024  / total_time.as_secs() as u32
+            );
+        },
+        _ => panic!("Not supported anymore")
+    }
     
     for i in (1..total_timestamps.len()).rev() {
         if total_timestamps[i] > total_timestamps[i-1] {

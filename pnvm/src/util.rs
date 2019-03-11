@@ -607,6 +607,7 @@ pub fn parse_ycsb_config(config: &Config) -> YCSBConfig {
         sampler_name_ : sampler, 
         rw_ratio_ : config.ycsb_rw_ratio,
         num_ops_: config.ycsb_ops_per_iter,
+        txn_num_ops_: config.ycsb_txn_num_ops,
         rw_mode_ : mode,
     }
 }

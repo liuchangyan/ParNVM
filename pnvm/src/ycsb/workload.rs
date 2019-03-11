@@ -315,6 +315,7 @@ pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
         let ycsb_entry = YCSBEntry { 
            fields_ : field
         };
+
         
         #[cfg(not(all(feature = "pmem", feature = "dir")))]
         {
@@ -346,8 +347,8 @@ pub fn do_transaction_occ(tx: &mut TransactionOCC,
                           ops: &Arc<Vec<YCSBOps>>,
                           op_idx: &mut usize,
                           num_ops: usize)
+    
 {
-        
     for _ in 0..num_ops {
         let op = ops[*op_idx].clone();
         *op_idx = (*op_idx +1) % ops.len();
@@ -365,6 +366,8 @@ pub fn do_transaction_occ(tx: &mut TransactionOCC,
             },
         }
     }
+
+    //println!("-------DONE------");
 
 }
 
