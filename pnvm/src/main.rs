@@ -31,12 +31,14 @@ extern crate num;
 
 extern crate core;
 
+extern crate itertools;
+
 mod util;
 mod tpcc;
+mod ycsb;
 
 use tpcc::*;
-
-
+use ycsb::*;
 
 use util::*;
 
@@ -98,6 +100,7 @@ fn main() {
         "NO_PC_RAW" => run_pc_tpcc(conf, WorkloadType::NewOrder, PieceType::Raw),
         "NO_2PL" => run_tpcc(conf, TxnType::Lock),
         "MICRO_2PL" => run_micro_2pl(conf),
+        "YCSB_OCC" => run_ycsb(conf, TxnType::OCC),
         _ => panic!("unknown test name"),
     }
 }
@@ -697,6 +700,121 @@ fn run_pc_tpcc(conf: Config, kind: WorkloadType, piece_kind: PieceType) {
     }
 }
 
+
+fn run_ycsb(conf: Config, txn_type: TxnType) {
+    let ycsb_config = parse_ycsb_config(&conf);
+    let generator = generator::Generator::new(&ycsb_config);
+
+    #[cfg(feature = "pmem")]
+    PmemFac::init();
+
+    let table  = workload::prepare_workload(&conf);
+    let ops = Arc::new(generator.make_ops(&ycsb_config));
+    
+    let mut handles = vec![];
+    let atomic_cnt = Arc::new(AtomicUsize::new(1));
+    let barrier = Arc::new(Barrier::new(conf.thread_num));
+
+    for i in 1..=conf.thread_num {
+
+        let conf = conf.clone();
+        let atomic_clone = atomic_cnt.clone();
+        let barrier = barrier.clone();
+        let builder = thread::Builder::new().name(format!("TID-{}", i + 1));
+        let table = table.clone();
+        let ops = Arc::new(generator.make_ops(&ycsb_config));
+
+        let duration_in_secs = conf.duration;
+        let mut no_warmup = conf.no_warmup;
+        let warm_up_time = conf.warmup_time;
+        let txn_num_ops = conf.ycsb_txn_num_ops;
+        let mut op_idx = 0;
+
+        let handle = builder
+            .spawn(move || {
+                /* Thread local initialization */
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                PmemFac::init();
+
+                TidFac::set_thd_mask(i as u32);
+                OidFac::set_obj_mask(i as u64);
+
+                let duration = Duration::new(duration_in_secs, 0);
+
+
+                let get_time = util_get_avg_get_time();
+                barrier.wait();
+
+                let mut start = Instant::now();
+                BenchmarkCounter::set_get_time(get_time);
+                BenchmarkCounter::start();
+                let mut elapsed  = Duration::default();
+                let mut prev_timestamp = 0;
+                //for j in 0..conf.round_num {
+
+
+                //Warm up for each thread
+
+                while elapsed < duration {
+                    elapsed = start.elapsed();
+
+                    //Warm up for x seconds
+                    if !no_warmup {
+                        if elapsed.as_secs() == warm_up_time {
+                            no_warmup = true;
+                            BenchmarkCounter::reset_cnt();
+                            start = Instant::now();
+                            elapsed = start.elapsed();
+                            prev_timestamp = 0;
+                            //println!("Warm up done");
+                        }
+                    }
+
+                    if elapsed.as_secs() == prev_timestamp + 2 {
+                        BenchmarkCounter::timestamp();
+                        prev_timestamp = elapsed.as_secs();
+                    }
+
+                    BenchmarkCounter::get_time();
+                    let tid = TidFac::get_thd_next();
+                    let mut abort_cnt = 0;
+
+
+                    //Do TRANSACTION
+                    
+                    match txn_type {
+                        TxnType::OCC => {
+                            let txn = &mut occ_txn::TransactionOCC::new(tid);
+                            while{ 
+                                workload::do_transaction_occ(txn, 
+                                                             &table, 
+                                                             &ops,
+                                                             &mut op_idx,
+                                                             txn_num_ops
+                                                             );
+                                let res = txn.try_commit();
+                                !res
+                            }{}
+                        },
+
+                        TxnType::Lock => {
+                            panic!("not implemented for lock");
+                        },
+                    }
+
+                    info!("[THREAD {:} - TXN {:?}] COMMITS", i + 1, tid);
+                }
+
+                BenchmarkCounter::copy()
+            }).unwrap();
+
+        handles.push(handle);
+    }
+
+    let thd_num :usize = conf.thread_num;
+    report_stat(handles, conf);
+}
+
 //Run the OCC contention management TPCC workload
 fn run_tpcc(conf: Config, txn_type: TxnType) {
     let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
@@ -980,19 +1098,43 @@ fn report_stat(
     }
 
 
-    println!(
-        "{}, {}, {},{},{}, {},{},{:?},{},{}",
-        conf.thread_num,
-        conf.wh_num,
-        total_success,
-        total_abort,
-        total_pc_success,
-        total_pc_abort,
-        total_mmap_cnt,
-        total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
-        total_log / 1024 / 1024  / total_time.as_secs() as u32,
-        total_flush / 1024 / 1024  / total_time.as_secs() as u32
-        );
+    match conf.test_name.as_ref() {
+        "TPCC_OCC" | "TPCC_NVM" | "NO_NVM" | "TPCC_PC_RAW" | "NO_PC_RAW" | "NO_2PL"  => {
+            println!(
+                "{}, {}, {},{},{}, {},{},{:?},{},{}",
+                conf.thread_num,
+                conf.wh_num,
+                total_success,
+                total_abort,
+                total_pc_success,
+                total_pc_abort,
+                total_mmap_cnt,
+                total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+                total_log / 1024 / 1024  / total_time.as_secs() as u32,
+                total_flush / 1024 / 1024  / total_time.as_secs() as u32
+            );
+        },
+        "YCSB_OCC" => {
+            println!(
+                "{},{},{},{},{},{},{},{},{},{},{},{:?},{},{}",
+                conf.thread_num,
+                conf.zipf_coeff,
+                conf.ycsb_rw_ratio,
+                conf.ycsb_txn_num_ops,
+                conf.ycsb_ops_per_iter,
+                conf.ycsb_mode,
+                total_success,
+                total_abort,
+                total_pc_success,
+                total_pc_abort,
+                total_mmap_cnt,
+                total_time.as_secs() as u32 * 1000 + total_time.subsec_millis(),
+                total_log / 1024 / 1024  / total_time.as_secs() as u32,
+                total_flush / 1024 / 1024  / total_time.as_secs() as u32
+            );
+        },
+        _ => panic!("Not supported anymore")
+    }
     
     for i in (1..total_timestamps.len()).rev() {
         if total_timestamps[i] > total_timestamps[i-1] {
