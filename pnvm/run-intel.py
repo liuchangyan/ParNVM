@@ -48,33 +48,35 @@ def run_ycsb(bench_config, out_fd):
         print("thread {}".format(thread_num))
         for(ratio_i , rw_ratio) in enumerate(bench_config["ycsb_rw_ratio"]):
             print("rw_ratio {}".format(rw_ratio))
-            for(zipf_i, zipf) in enumerate(bench_config["zipf"]):
-                print("zipf {}".format(zipf))
-                exp_env= {
-                        'PNVM_THREAD_NUM' : str(thread_num),
-                        'PNVM_TEST_NAME' : bench_config['name'],
-                        'PNVM_NO_WARMUP' : str(bench_config['no_warmup']),
-                        'PNVM_WARMUP_TIME' : str(bench_config['warmup_time']),
-                        'PNVM_DURATION' : str(bench_config['duration']),
-                        'PNVM_YCSB_NUM_ROWS' : str(bench_config['ycsb_row']),
-                        'PNVM_YCSB_SAMPLER': str(bench_config['ycsb_sampler']),
-                        'PNVM_ZIPF_COEFF': str(zipf),
-                        'PNVM_YCSB_RW_MODE': str(bench_config['ycsb_rw_mode']),
-                        'PNVM_YCSB_RW_RATIO': str(rw_ratio),
-                        'PNVM_YCSB_TXN_NUM_OPS': str(bench_config['ycsb_txn_num_ops']),
-                        'PNVM_YCSB_OPS_CNT': str(bench_config['ycsb_ops_cnt']),
-                        }
-                sys_env = dict(os.environ)
-                env = {**sys_env, **exp_env}
-                run_exp(env, command, out_fd)
+            for(mode_i, mode) in enumerate(bench_config["ycsb_rw_mode"]):
+                print("mode {}".format(mode))
+                for(zipf_i, zipf) in enumerate(bench_config["zipf"]):
+                    print("zipf {}".format(zipf))
+                    exp_env= {
+                            'PNVM_THREAD_NUM' : str(thread_num),
+                            'PNVM_TEST_NAME' : bench_config['name'],
+                            'PNVM_NO_WARMUP' : str(bench_config['no_warmup']),
+                            'PNVM_WARMUP_TIME' : str(bench_config['warmup_time']),
+                            'PNVM_DURATION' : str(bench_config['duration']),
+                            'PNVM_YCSB_NUM_ROWS' : str(bench_config['ycsb_row']),
+                            'PNVM_YCSB_SAMPLER': str(bench_config['ycsb_sampler']),
+                            'PNVM_ZIPF_COEFF': str(zipf),
+                            'PNVM_YCSB_RW_MODE': str(mode),
+                            'PNVM_YCSB_RW_RATIO': str(rw_ratio),
+                            'PNVM_YCSB_TXN_NUM_OPS': str(bench_config['ycsb_txn_num_ops']),
+                            'PNVM_YCSB_OPS_CNT': str(bench_config['ycsb_ops_cnt']),
+                            }
+                    sys_env = dict(os.environ)
+                    env = {**sys_env, **exp_env}
+                    run_exp(env, command, out_fd)
 
 def run_exp(env, command, out_fd):
     #print(env)
 
     for i in range(0,3):
         os.system("rm -rf ../data/log*")
-        #subprocess.run(command,shell=True, env=env, stderr=out_fd, stdout=out_fd)
-        subprocess.run(command,shell=True, env=env)
+        subprocess.run(command,shell=True, env=env, stderr=out_fd, stdout=out_fd)
+        #subprocess.run(command,shell=True, env=env)
 
 
 
@@ -250,42 +252,31 @@ def do_pmem_drain_freq(bench_config, runs, partition):
                 run(bench_config, out_fd)
 
 def do_pmem_ycsb(bench_config, runs):
-    # pdrain_cmd = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog pdrain dir"'
-    # wdrain_cmd = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog wdrain dir"'
-    # tdrain_cmd = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog dir"'
-    pdrain_cmd = 'PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog pdrain dir"'
-    wdrain_cmd = 'PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog wdrain dir"'
-    tdrain_cmd = 'PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog dir"'
-
-    runs = {
-            "proto" : ['YCSB'],
-            "proto_names": ['occ'],
-            "thread_num" : [16],
-            "cont_names": '16thd',
-            #"thread_num" : [48],
-            #"cont_names": ['48thd'],
-            "zipf": np.linspace(0.000001, 1.0, num=10),
-            "cmd": [pdrain_cmd, wdrain_cmd, tdrain_cmd],
-            "drain_freq": ["pdrain", "wdrain", "tdrain"],
-    }
-
-    # os.system(compile_pmem)
 
     for (i, cmd) in enumerate(runs["cmd"]):
         # print(cmd)
         os.system(cmd)
         drain_freq = runs["drain_freq"][i]
-        bench_config["name"] ="YCSB_OCC"
-        bench_config["thread_num"] = runs["thread_num"]
-        bench_config["zipf"] = runs["zipf"]
-        cont_name = runs["cont_names"]
-        path  = "$PNVM_ROOT/pnvm/benchmark/ycsb-{}-pmem-{}-output.csv".format(cont_name, drain_freq)
-        with open(os.path.expandvars(path), "w+") as out_fd:
-            print_header_ycsb(out_fd)
-            run_ycsb(bench_config, out_fd)
+        for(j, proto) in enumerate(runs["proto"]):
+            bench_config["name"] = proto
+            bench_config["thread_num"] = runs["thread_num"]
+            bench_config["zipf"] = runs["zipf"]
+            bench_config["ycsb_rw_mode"] = runs["ycsb_rw_mode"]
+            exp_name = runs["exp_name"]
+            path  = "$PNVM_ROOT/pnvm/benchmark/ycsb-{}-pmem-{}-{}-output.csv".format(exp_name, drain_freq, runs["proto_names"][j])
+            with open(os.path.expandvars(path), "w+") as out_fd:
+                print_header_ycsb(out_fd)
+                run_ycsb(bench_config, out_fd)
 
 
 if __name__ == '__main__':
+    pdrain_cmd = 'PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog pdrain dir"'
+    wdrain_cmd = 'PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog wdrain dir"'
+    tdrain_cmd = 'PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog dir"'
+    #pdrain_cmd = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog pdrain dir"'
+    #wdrain_cmd = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog wdrain dir"'
+    #tdrain_cmd = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog dir"'
+
     # For TPCC
     bench_config = {
             "thread_num" :[1, 4, 8,16, 32, 48],
@@ -306,29 +297,77 @@ if __name__ == '__main__':
 
     # For YSBS
     ycsb_bench_config = {
-            "thread_num" :[1, 4, 8,16, 32, 48],
-            #"zipf": np.linspace(0.000001, 1.0, num=10),
-            "name": 'YCSB_OCC',
-            "wh_num" : [1, 1, 2, 4],
+            #"thread_num" :[1, 4, 8,16, 32, 48],            #From runs
+            #"zipf": np.linspace(0.000001, 1.0, num=10),    #From runs
+            #"name": 'YCSB_OCC',                            #From runs
             "ycsb_row": 1000000,
             "ycsb_sampler" : "Zipf",
-            "ycsb_rw_mode": "Random",
-            "ycsb_rw_ratio": [0.5],
+            # "ycsb_rw_mode": "Random",                     #From runs
+            "ycsb_rw_ratio": [0.5],                         # Array
             "ycsb_txn_num_ops": 20,
             "ycsb_ops_cnt": 1000000,
             "duration": 10,
             "no_warmup" : 'false',
             "warmup_time" : 8,
     }
+    ####################
+    #   Template
+    ####################
+    #runs = {
+    #        "proto": ['YCSB_OCC'],               # Array
+    #        "proto_names" : ['occ'],                    # Array
+    #        "zipf": np.linspace(0.000001, 1.0, num=10),     # Array
+    #        "ycsb_rw_mode" : ["Random"],                    # Array
+    #        "thread_num" : [1, 4, 8, 16, 32, 48],           # Array
+    #        "cmd": [pdrain_cmd, wdrain_cmd, tdrain_cmd],    # Array
+    #        "drain_freq": ["pdrain", "wdrain", "tdrain"],   # Array
+    #        "exp_name" : "drain-freq",
+    #}
 
+    # RW mode
     runs = {
-            "proto": ['YCSB_OCC', 'YCSB_PP'],
-            "proto_names" : ['occ, pp'],
-            "zipf": np.linspace(0.000001, 1.0, num=10),
+            "proto": ['YCSB_OCC'],               # Array
+            "proto_names" : ['occ'],                    # Array
+            "zipf": [0.1],     # Array
+            #Array
+            "ycsb_rw_mode" : ["Random", "WriteFirst", "ReadFirst", "Interleave"],
+            "thread_num" : [1, 4, 8, 16, 32, 48],           # Array
+            "cmd": [wdrain_cmd],    # Array
+            "drain_freq": ["wdrain"],   # Array
+            "exp_name" : "rw-mode",
     }
-
+    print("------------Running for rw-mode---------\n")
     do_pmem_ycsb(ycsb_bench_config, runs)
 
+    # drain-mode
+    runs = {
+            "proto": ['YCSB_OCC'],               # Array
+            "proto_names" : ['occ'],                    # Array
+            "zipf": [0.1],     # Array
+            #Array
+            "ycsb_rw_mode" : ["Random"],
+            "thread_num" : [1, 4, 8, 16, 32, 48],           # Array
+            "cmd": [wdrain_cmd, tdrain_cmd],    # Array
+            "drain_freq": ["wdrain", "tdrain"],   # Array
+            "exp_name" : "drain-mode",
+    }
+    print("------------Running for drain-mode---------\n")
+    do_pmem_ycsb(ycsb_bench_config, runs)
+
+    # zipf
+    runs = {
+            "proto": ['YCSB_OCC'],               # Array
+            "proto_names" : ['occ'],                    # Array
+            "zipf": np.linspace(0.0000001, 1.0, num=10),     # Array
+            #Array
+            "ycsb_rw_mode" : ["Random"],
+            "thread_num" : [1, 48],           # Array
+            "cmd": [wdrain_cmd, tdrain_cmd],    # Array
+            "drain_freq": ["wdrain", "tdrain"],   # Array
+            "exp_name" : "zipf",
+    }
+    print("------------Running for Zipf---------\n")
+    do_pmem_ycsb(ycsb_bench_config, runs)
 
     # With paritions
     # do_pmem_rel(bench_config)

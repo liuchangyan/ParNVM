@@ -16,6 +16,7 @@ use pnvm_lib::tcore::{
 
 use pnvm_lib::{
     occ::occ_txn::TransactionOCC,
+    parnvm::nvm_txn_occ::TransactionParOCC,
     txn::{Tid,TxnInfo, Transaction},
 
 };
@@ -370,6 +371,8 @@ pub fn do_transaction_occ(tx: &mut TransactionOCC,
     //println!("-------DONE------");
 
 }
+
+//pub fn do_transaction_pp(tx: &mut Transaction
 
 
 
