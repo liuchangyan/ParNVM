@@ -32,6 +32,7 @@ def run(bench_config, out_fd):
                 'PNVM_WARMUP_TIME' : str(bench_config['warmup_time']),
                 'PNVM_DURATION' : str(bench_config['duration']),
                 'PNVM_PARTITION' : str(bench_config['partition']),
+                'PMEM_NO_CLWB': str(bench_config['pmdk_no_clwb']),
                 }
         sys_env = dict(os.environ)
         env = {**sys_env, **exp_env}
@@ -197,6 +198,28 @@ def do_pmem_no_partition(bench_config, runs):
                 print_header(out_fd)
                 run(bench_config, out_fd)
 
+def do_pmem_occ(bench_config, runs, partition):
+    runs = {
+            "proto" : ['TPCC_OCC'],
+            "proto_names": ['occ'],
+            "cont" : [[1, 1, 1, 1,1,1], [1, 4, 8, 16, 32, 48]],
+            "cont_names": ['high', 'low'],
+    }
+
+    compile_pmem = 'cargo clean && PMEM_FILE_DIR=~/ParNVM/data PLOG_FILE_PATH=~/ParNVM/data/log cargo +nightly build --release --features "unstable pmem plog dir"'
+    os.system(compile_pmem)
+
+    for (i, proto) in enumerate(runs["proto"]):
+        protocol_name = runs["proto_names"][i]
+        bench_config["name"] = proto
+        bench_config["partition"] = partition
+        for (j,cont) in enumerate(runs["cont"]):
+            bench_config["wh_num"] = cont
+            cont_name = runs["cont_names"][j]
+            path  = "$PNVM_ROOT/pnvm/benchmark/{}-pmem-{}par-output.csv".format(cont_name,partition)
+            with open(os.path.expandvars(path), "w+") as out_fd:
+                print_header(out_fd)
+                run(bench_config, out_fd)
 
 def do_pmem_pdrain(bench_config):
     runs = {
@@ -246,7 +269,7 @@ def do_pmem_drain_freq(bench_config, runs, partition):
             path  = "$PNVM_ROOT/pnvm/benchmark/{}-pmem-{}-{}par-output.csv".format(cont_name, drain_freq, partition)
             with open(os.path.expandvars(path), "w+") as out_fd:
                 # print(bench_config)
-                # print(out_fd)
+                print(out_fd)
                 # print("\n")
                 print_header(out_fd)
                 run(bench_config, out_fd)
@@ -287,6 +310,7 @@ if __name__ == '__main__':
             "no_warmup" : 'false',
             "warmup_time" : 8,
             "partition" : 0,
+            "pmdk_no_clwb": 0,
             }
     runs = {
             "proto" : ['TPCC_OCC', 'TPCC_NVM', 'NO_2PL', 'NO_NVM'],
@@ -373,7 +397,6 @@ if __name__ == '__main__':
     # do_pmem_rel(bench_config)
     # do_pmem_pdrain(bench_config)
     # do_pmem_dir(bench_config, runs)
-    # do_pmem_no_partition(bench_config, runs)
 
     # do_vol_rel(bench_config,runs)
     # do_vol_no_partition(bench_config, runs)
@@ -381,7 +404,6 @@ if __name__ == '__main__':
     # do_pmem_drain_freq(bench_config, runs, 0)
     # without paritions
     #do_pmem_drain_freq(bench_config, runs, 1)
-
 
 
 
