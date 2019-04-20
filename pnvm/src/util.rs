@@ -8,26 +8,26 @@ extern crate flame;
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
     iter::FromIterator,
-    time::{Instant,Duration},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Barrier,
+    },
+    time::{Duration, Instant},
 };
-use std::{
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{fmt::Debug, hash::Hash};
 
 use parking_lot::RwLock;
 
 use rand::distributions::Distribution;
 use zipf::ZipfDistribution;
 
-use ycsb::generator::{YCSBSampler, YCSBConfig, YCSBMode};
+use ycsb::generator::{YCSBConfig, YCSBMode, YCSBSampler};
 
 use pnvm_lib::{
+    datatype::tbox::*,
     occ::{map::*, occ_txn::*},
-    parnvm::{map::*, nvm_txn_occ::*, nvm_txn_2pl::*, piece::*},
-    tbox::*,
+    parnvm::{map::*, nvm_txn_2pl::*, nvm_txn_occ::*, piece::*},
     tcore::*,
     txn::*,
 };
@@ -41,42 +41,38 @@ impl TestHelper {
             dataset_: WorkloadOCC::prepare_data(config),
         }
     }
-    
+
     pub fn prepare_workload_nvm_occ(config: &Config) -> WorkloadNVMOCC {
         WorkloadNVMOCC::new_parnvm_occ(config)
     }
 
- //   pub fn prepare_workload_nvm(config: &Config) -> WorkloadNVM {
- //       WorkloadNVM::new_parnvm(config)
- //   }
+    //   pub fn prepare_workload_nvm(config: &Config) -> WorkloadNVM {
+    //       WorkloadNVM::new_parnvm(config)
+    //   }
 
-    pub fn prepare_workload_single(config : &Config) -> WorkloadSingle {
+    pub fn prepare_workload_single(config: &Config) -> WorkloadSingle {
         WorkloadSingle::new(config)
     }
 }
 
-
 pub struct WorkloadSingle {
-    pub keys : ThreadData,
-    pub maps : Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>>
+    pub keys: ThreadData,
+    pub maps: Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>>,
 }
 
 impl WorkloadSingle {
-    pub fn new(conf:&Config) ->  WorkloadSingle {
-        let mut maps : Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>> = (0..conf.pc_num).map(|i| Arc::new(HashMap::new())).collect(); 
+    pub fn new(conf: &Config) -> WorkloadSingle {
+        let mut maps: Vec<Arc<HashMap<u32, RwLock<Box<u32>>>>> =
+            (0..conf.pc_num).map(|i| Arc::new(HashMap::new())).collect();
         let keys = generate_data(conf)[0].clone();
 
         for map in maps.iter_mut() {
             keys.fill_single(map);
         }
 
-        WorkloadSingle {
-            keys,
-            maps,
-        }
+        WorkloadSingle { keys, maps }
     }
 }
-
 
 pub struct WorkloadOCC {
     dataset_: DataSet,
@@ -88,7 +84,13 @@ impl WorkloadOCC {
     }
 
     fn prepare_data(conf: &Config) -> DataSet {
-        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.set_size * conf.thread_num*64) as u16))).collect();
+        let maps: Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num)
+            .map(|i| {
+                Arc::new(TMap::new_with_options(
+                    (conf.set_size * conf.thread_num * 64) as u16,
+                ))
+            })
+            .collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -100,31 +102,35 @@ impl WorkloadOCC {
         }
 
         DataSet {
-            keys : keys,
-            maps : maps,
+            keys: keys,
+            maps: maps,
         }
     }
-
 }
 
 pub struct WorkloadNVM {
     pub work_: Vec<TransactionParBase>,
-} 
+}
 
-pub struct WorkloadNVMOCC { 
+pub struct WorkloadNVMOCC {
     pub work_: Vec<TransactionParBaseOCC>,
 }
 
-impl WorkloadNVMOCC
-{
+impl WorkloadNVMOCC {
     pub fn new_parnvm_occ(conf: &Config) -> WorkloadNVMOCC {
         let mut threads_work = Vec::with_capacity(conf.thread_num);
 
         //Prepare maps
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps : Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(TMap::new_with_options((conf.set_size * conf.thread_num*64) as u16))).collect();
+        let maps: Vec<Arc<TMap<u32, u32>>> = (0..conf.pc_num)
+            .map(|i| {
+                Arc::new(TMap::new_with_options(
+                    (conf.set_size * conf.thread_num * 64) as u16,
+                ))
+            })
+            .collect();
         //Prepare data
-        let keys = generate_data(conf); 
+        let keys = generate_data(conf);
         for map in maps.iter() {
             for data in keys.iter() {
                 data.fill_tmap(map);
@@ -137,24 +143,23 @@ impl WorkloadNVMOCC
         for thread_i in 0..conf.thread_num {
             let txn_i = thread_i;
             let tx_name = WorkloadNVM::make_txn_name(thread_i);
-            let txn_base = WorkloadNVMOCC::make_txn_base_occ(txn_i, tx_name, conf, &maps, &keys[thread_i]);
+            let txn_base =
+                WorkloadNVMOCC::make_txn_base_occ(txn_i, tx_name, conf, &maps, &keys[thread_i]);
             threads_work.push(txn_base);
         }
 
         WorkloadNVMOCC {
             work_: threads_work,
         }
-
     }
 
     fn make_txn_base_occ(
         tx_id: usize,
         tx_name: String,
         conf: &Config,
-        data_map: &Vec<Arc<TMap<u32, u32>>>, 
+        data_map: &Vec<Arc<TMap<u32, u32>>>,
         data: &ThreadData,
-        ) -> TransactionParBaseOCC {
-
+    ) -> TransactionParBaseOCC {
         let mut pieces = Vec::new();
 
         //Create closures
@@ -165,18 +170,17 @@ impl WorkloadNVMOCC
 
             let set_size = conf.set_size;
 
+            let write_set: HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter());
+            let read_set: HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
 
-            let write_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter()); 
-            let read_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
-
-            let mut write_vec :Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
-            let mut read_vec : Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
+            let mut write_vec: Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
+            let mut read_vec: Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
 
             let mut comb_vec = vec![];
             comb_vec.append(&mut write_vec);
             comb_vec.append(&mut read_vec);
 
-            comb_vec.sort_unstable_by_key(|(x,r)| *x);
+            comb_vec.sort_unstable_by_key(|(x, r)| *x);
 
             let callback = move |tx: &mut TransactionParOCC| {
                 //let mut rw_v = vec![];
@@ -185,7 +189,8 @@ impl WorkloadNVMOCC
 
                 for (x, rw) in comb_vec.iter() {
                     let tref = TInt::new(data_map.get(&x).expect("map get panic").get().clone());
-                    if *rw == 1 { /* Read */
+                    if *rw == 1 {
+                        /* Read */
                         let v = tx.read::<u32>(Box::new(tref));
                         debug!("[{:?}] Read {:?}", id, v);
                     } else {
@@ -194,7 +199,6 @@ impl WorkloadNVMOCC
                         debug!("[{:?}] Write {:?}", id, val);
                     }
                 }
-
             };
 
             let piece = PieceOCC::new(
@@ -203,7 +207,7 @@ impl WorkloadNVMOCC
                 Arc::new(Box::new(callback)),
                 "cb",
                 piece_id,
-                );
+            );
 
             pieces.push(piece);
         }
@@ -212,7 +216,6 @@ impl WorkloadNVMOCC
 
         TransactionParBaseOCC::new(pieces, tx_name.clone())
     }
-
 }
 
 impl WorkloadNVM {
@@ -221,7 +224,14 @@ impl WorkloadNVM {
 
         //Prepare maps
         let txn_names: Vec<String> = WorkloadNVM::make_txn_names(conf.thread_num);
-        let maps : Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num).map(|i| Arc::new(PMap::new_with_size(0, (conf.thread_num * conf.set_size *64) as u16))).collect();
+        let maps: Vec<Arc<PMap<u32, u32>>> = (0..conf.pc_num)
+            .map(|i| {
+                Arc::new(PMap::new_with_size(
+                    0,
+                    (conf.thread_num * conf.set_size * 64) as u16,
+                ))
+            })
+            .collect();
 
         //Prepare data
         let keys = generate_data(conf);
@@ -238,8 +248,7 @@ impl WorkloadNVM {
         for thread_i in 0..conf.thread_num {
             let txn_i = thread_i;
             let tx_name = WorkloadNVM::make_txn_name(thread_i);
-            let txn_base =
-                WorkloadNVM::make_txn_base(txn_i, tx_name, conf, &maps, &keys[thread_i]);
+            let txn_base = WorkloadNVM::make_txn_base(txn_i, tx_name, conf, &maps, &keys[thread_i]);
             threads_work.push(txn_base);
         }
 
@@ -249,15 +258,13 @@ impl WorkloadNVM {
         }
     }
 
-
     fn make_txn_base(
         tx_id: usize,
         tx_name: String,
         conf: &Config,
-        data_map: &Vec<Arc<PMap<u32, u32>>>, 
+        data_map: &Vec<Arc<PMap<u32, u32>>>,
         data: &ThreadData,
-        ) -> TransactionParBase {
-
+    ) -> TransactionParBase {
         let mut pieces = Vec::new();
 
         //Create closures
@@ -268,23 +275,22 @@ impl WorkloadNVM {
 
             let set_size = conf.set_size;
 
+            let write_set: HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter());
+            let read_set: HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
 
-            let write_set : HashSet<u32> = HashSet::from_iter(write_keys.clone().into_iter()); 
-            let read_set : HashSet<u32> = HashSet::from_iter(read_keys.clone().into_iter());
-
-            let mut write_vec :Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
-            let mut read_vec : Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
+            let mut write_vec: Vec<_> = write_set.into_iter().map(|x| (x, 0)).collect();
+            let mut read_vec: Vec<_> = read_set.into_iter().map(|x| (x, 1)).collect();
 
             let mut comb_vec = vec![];
             comb_vec.append(&mut write_vec);
             comb_vec.append(&mut read_vec);
 
-            comb_vec.sort_unstable_by_key(|(x,r)| *x);
+            comb_vec.sort_unstable_by_key(|(x, r)| *x);
 
             let callback = move |tx: &mut TransactionPar| {
                 //let mut rw_v = vec![];
-                let mut w_g : Vec<PMutexGuard<u32>> = vec![];
-                let mut r_g : Vec<PMutexGuard<u32>>= vec![];
+                let mut w_g: Vec<PMutexGuard<u32>> = vec![];
+                let mut r_g: Vec<PMutexGuard<u32>> = vec![];
 
                 let mut vs = vec![];
 
@@ -293,11 +299,9 @@ impl WorkloadNVM {
                     flame::start("acquire locks");
                 }
 
-                
-
                 //Get the values references
                 for (x, rw) in comb_vec.iter() {
-                    if *rw == 1{
+                    if *rw == 1 {
                         let v = data_map.get(&x).expect("map get panic").get();
                         r_g.push(v.read(tx));
                         vs.push(v);
@@ -308,14 +312,12 @@ impl WorkloadNVM {
                     }
                 }
 
-
-
                 #[cfg(feature = "profile")]
                 {
                     flame::end("acquire locks");
                 }
 
-                #[cfg(feature="pmem")]
+                #[cfg(feature = "pmem")]
                 tx.persist_logs();
                 //TODO: Do persist here
 
@@ -325,7 +327,6 @@ impl WorkloadNVM {
                 }
                 //Do readsstart
                 for i in r_g.iter_mut() {
-
                     #[cfg(feature = "profile")]
                     {
                         flame::start("read");
@@ -339,14 +340,14 @@ impl WorkloadNVM {
                 }
 
                 //Do writes
-                let tid :u32 = tx.id().clone().into();
+                let tid: u32 = tx.id().clone().into();
                 for mut i in w_g.iter_mut() {
                     #[cfg(feature = "profile")]
                     {
                         flame::start("write");
                     }
                     let w = &mut i;
-                    *w.as_mut().expect("unwrapping writes") = tid ;
+                    *w.as_mut().expect("unwrapping writes") = tid;
                     //debug!("[{:?}] Write {:?}", tx.id(), tid);
                     #[cfg(feature = "profile")]
                     {
@@ -367,14 +368,14 @@ impl WorkloadNVM {
                 Arc::new(Box::new(callback)),
                 "cb",
                 piece_id,
-                );
+            );
 
             pieces.push(piece);
         }
 
         pieces.reverse();
 
-        TransactionParBase::new( pieces, tx_name.clone())
+        TransactionParBase::new(pieces, tx_name.clone())
     }
 
     //    fn add_dep(conf: &Config, pid: usize, tx_id: usize, dep: &mut Dep) {
@@ -409,12 +410,13 @@ impl WorkloadNVM {
 pub fn zipf_keys(set_size: usize, obj_num: usize, zipf: f64) -> Vec<usize> {
     let mut rng = rand::thread_rng();
     let dis = ZipfDistribution::new(obj_num - 1, zipf).unwrap();
-    (0..set_size).map(|_x| dis.sample(&mut rng) as usize).collect()
+    (0..set_size)
+        .map(|_x| dis.sample(&mut rng) as usize)
+        .collect()
 }
 
-pub fn generate_data(conf : &Config) -> Vec<ThreadData> {
-
-    let mut dataset : Vec<ThreadData> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
+pub fn generate_data(conf: &Config) -> Vec<ThreadData> {
+    let mut dataset: Vec<ThreadData> = (0..conf.thread_num).map(|i| ThreadData::new()).collect();
 
     let mut rng = rand::thread_rng();
     let dis = ZipfDistribution::new(conf.obj_num - 1, conf.zipf_coeff).unwrap();
@@ -423,13 +425,12 @@ pub fn generate_data(conf : &Config) -> Vec<ThreadData> {
         let data = &mut dataset[i];
 
         for _ in 0..conf.set_size {
-
             let rk = dis.sample(&mut rng) as u32;
             let mut wk = dis.sample(&mut rng) as u32;
 
-           // while data.has_read(wk) {
-           //     wk = dis.sample(&mut rng) as u32; 
-           // }
+            // while data.has_read(wk) {
+            //     wk = dis.sample(&mut rng) as u32;
+            // }
 
             data.add_read(rk);
             data.add_write(wk);
@@ -437,33 +438,26 @@ pub fn generate_data(conf : &Config) -> Vec<ThreadData> {
 
         data.read_keys.sort();
         data.write_keys.sort();
-
     }
     dataset
 }
 
-
 pub struct DataSet {
-    pub keys : Vec<ThreadData>,
-    pub maps : Vec<Arc<TMap<u32, u32>>>,
+    pub keys: Vec<ThreadData>,
+    pub maps: Vec<Arc<TMap<u32, u32>>>,
 }
 
-
-pub struct DataSetPar
-{
-    pub data : Vec<ThreadData>
+pub struct DataSetPar {
+    pub data: Vec<ThreadData>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ThreadData
-{
+pub struct ThreadData {
     pub read_keys: Vec<u32>,
-    pub write_keys:  Vec<u32>,
+    pub write_keys: Vec<u32>,
 }
 
-
-impl ThreadData
-{
+impl ThreadData {
     pub fn add_read(&mut self, m: u32) {
         self.read_keys.push(m);
     }
@@ -472,7 +466,7 @@ impl ThreadData
         self.write_keys.push(m);
     }
 
-    pub fn has_read(&self, m : u32) -> bool {
+    pub fn has_read(&self, m: u32) -> bool {
         for x in self.read_keys.iter() {
             if *x == m {
                 return true;
@@ -500,29 +494,29 @@ impl ThreadData
         for v in self.write_keys.iter() {
             map.insert(v.clone(), Arc::new(TBox::new_default(v.clone())));
         }
-
     }
 
     pub fn fill_single(&self, map: &mut Arc<HashMap<u32, RwLock<Box<u32>>>>) {
         for v in self.read_keys.iter() {
-            Arc::get_mut(map).unwrap().insert(v.clone(), RwLock::new(Box::new(v.clone())));
+            Arc::get_mut(map)
+                .unwrap()
+                .insert(v.clone(), RwLock::new(Box::new(v.clone())));
         }
 
         for v in self.write_keys.iter() {
-            Arc::get_mut(map).unwrap().insert(v.clone(), RwLock::new(Box::new(v.clone())));
+            Arc::get_mut(map)
+                .unwrap()
+                .insert(v.clone(), RwLock::new(Box::new(v.clone())));
         }
-
     }
 
-    pub fn new()-> ThreadData {
+    pub fn new() -> ThreadData {
         ThreadData {
             read_keys: vec![],
-            write_keys: vec![] 
+            write_keys: vec![],
         }
     }
 }
-
-
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -539,8 +533,8 @@ pub struct Config {
     pub wh_num: i32,
     pub d_num: i32,
     pub no_warmup: bool,
-    pub warmup_time :u64,
-    pub partition : usize,
+    pub warmup_time: u64,
+    pub partition: usize,
     //pub no_conflict: bool,
     pub ycsb_sampler: String,
     pub ycsb_num_rows: usize,
@@ -572,14 +566,16 @@ pub fn read_env() -> Config {
         pc_num: settings.get_int("PC_NUM").unwrap() as usize,
         duration: settings.get_int("DURATION").unwrap() as u64,
         wh_num: settings.get_int("WH_NUM").unwrap() as i32,
-        d_num : settings.get_int("D_NUM").unwrap() as i32,
+        d_num: settings.get_int("D_NUM").unwrap() as i32,
         no_warmup: settings.get_bool("NO_WARMUP").unwrap(),
         partition: settings.get_int("PARTITION").unwrap_or(0) as usize,
-        warmup_time : settings.get_int("WARMUP_TIME").unwrap_or(10) as u64,
+        warmup_time: settings.get_int("WARMUP_TIME").unwrap_or(10) as u64,
 
         //YCSB Config
         ycsb_num_rows: settings.get_int("YCSB_NUM_ROWS").unwrap_or(0) as usize,
-        ycsb_sampler: settings.get_str("YCSB_SAMPLER"). unwrap_or(String::from("None")),
+        ycsb_sampler: settings
+            .get_str("YCSB_SAMPLER")
+            .unwrap_or(String::from("None")),
         ycsb_rw_ratio: settings.get_float("YCSB_RW_RATIO").unwrap_or(0.5) as f64,
         ycsb_mode: settings.get_str("YCSB_RW_MODE").unwrap(),
         ycsb_ops_per_iter: settings.get_int("YCSB_OPS_CNT").unwrap_or(1000000) as usize,
@@ -587,12 +583,11 @@ pub fn read_env() -> Config {
     }
 }
 
-
 pub fn parse_ycsb_config(config: &Config) -> YCSBConfig {
     let sampler = match config.ycsb_sampler.as_ref() {
         "Uniform" => YCSBSampler::Uniform(config.ycsb_num_rows),
-        "Zipf" => YCSBSampler::Zipf(config.ycsb_num_rows-1, config.zipf_coeff),
-        _ => panic!("Unknown YCSB sampler method")
+        "Zipf" => YCSBSampler::Zipf(config.ycsb_num_rows - 1, config.zipf_coeff),
+        _ => panic!("Unknown YCSB sampler method"),
     };
 
     let mode = match config.ycsb_mode.as_ref() {
@@ -604,17 +599,16 @@ pub fn parse_ycsb_config(config: &Config) -> YCSBConfig {
     };
 
     YCSBConfig {
-        sampler_name_ : sampler, 
-        rw_ratio_ : config.ycsb_rw_ratio,
+        sampler_name_: sampler,
+        rw_ratio_: config.ycsb_rw_ratio,
         num_ops_: config.ycsb_ops_per_iter,
         txn_num_ops_: config.ycsb_txn_num_ops,
-        rw_mode_ : mode,
+        rw_mode_: mode,
     }
 }
 
 const N_PROBES_GET_TIME: u32 = 100_000_000;
 pub fn util_get_avg_get_time() -> Duration {
-
     let start = Instant::now();
 
     for _i in 0..N_PROBES_GET_TIME {
@@ -622,4 +616,30 @@ pub fn util_get_avg_get_time() -> Duration {
     }
 
     start.elapsed() / N_PROBES_GET_TIME
+}
+
+pub fn util_count_down(
+    total_done: Arc<AtomicBool>,
+    warm_up_done: Arc<AtomicBool>,
+    warm_up_time: Duration,
+    total_time: Duration,
+    start_barrier: Arc<Barrier>,
+    warm_up_barrier: Arc<Barrier>,
+) {
+    start_barrier.wait();
+    let warm_up_start = Instant::now();
+    let mut elapsed = Duration::default();
+    while elapsed < warm_up_time {
+        elapsed = warm_up_start.elapsed();
+    }
+
+    warm_up_done.store(true, Ordering::Release);
+    warm_up_barrier.wait();
+    let start = Instant::now();
+    elapsed = Duration::default();
+    while elapsed < total_time {
+        elapsed = start.elapsed();
+    }
+
+    total_done.store(true, Ordering::Release);
 }

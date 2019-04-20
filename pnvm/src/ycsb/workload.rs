@@ -1,24 +1,16 @@
-
 use std::{
-    sync::Arc,
-    fmt::{Debug,Formatter, Result},
-    ptr,
     any::Any,
-    mem,
+    fmt::{Debug, Formatter, Result},
+    mem, ptr,
+    sync::Arc,
 };
 
-use pnvm_lib::tcore::{
-    TVersion,
-    TRef, 
-    Operation,
-    ObjectId,
-};
+use pnvm_lib::tcore::{ObjectId, Operation, TRef, TVersion};
 
 use pnvm_lib::{
     occ::occ_txn::TransactionOCC,
     parnvm::nvm_txn_occ::TransactionParOCC,
-    txn::{Tid,TxnInfo, Transaction},
-
+    txn::{Tid, Transaction, TxnInfo},
 };
 
 use generator::YCSBOps;
@@ -34,18 +26,15 @@ use core::alloc::Layout;
 #[cfg(any(feature = "pmem", feature = "disk"))]
 use pnvm_sys::Layout;
 
-
-
 //FIXME: reusing code from TPCC
 use tpcc::table::{Key, Row};
-
 
 const YCSB_FIELD_LEN: usize = 100;
 
 #[derive(Clone, Default)]
 pub struct YCSBEntry {
     //idx_ : isize,
-    fields_ : Field,
+    fields_: Field,
 }
 
 impl Key<isize> for YCSBEntry {
@@ -57,8 +46,8 @@ impl Key<isize> for YCSBEntry {
         panic!("bucket_key not implemented for YCSBEntry");
     }
 
-    fn field_offset(&self) -> [isize;32] {
-        [-1;32]
+    fn field_offset(&self) -> [isize; 32] {
+        [-1; 32]
     }
 }
 
@@ -68,18 +57,15 @@ impl Debug for YCSBEntry {
     }
 }
 
-
-
 type YCSBRow = Row<YCSBEntry, isize>;
 
 pub struct YCSBTable {
-    rows_ : Vec<Arc<YCSBRow>>,
+    rows_: Vec<Arc<YCSBRow>>,
 }
-
 
 #[derive(Clone)]
 pub struct Field {
-    data_: [u8;YCSB_FIELD_LEN],
+    data_: [u8; YCSB_FIELD_LEN],
 }
 
 impl Debug for Field {
@@ -90,33 +76,30 @@ impl Debug for Field {
 
 impl Default for Field {
     fn default() -> Field {
-        let data : Vec<u8> = (0..YCSB_FIELD_LEN).map(|_x| rand::random::<u8>()).collect();
-        let mut field_data : [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
+        let data: Vec<u8> = (0..YCSB_FIELD_LEN).map(|_x| rand::random::<u8>()).collect();
+        let mut field_data: [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
         field_data.copy_from_slice(&data.as_slice()[..YCSB_FIELD_LEN]);
-        
-        Field {
-            data_: field_data
-        }
+
+        Field { data_: field_data }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct YCSBRef{
-    inner_ : Arc<YCSBRow>,
-    ops_ : Operation,
-    data_ : Option<Box<YCSBEntry>>,
+pub struct YCSBRef {
+    inner_: Arc<YCSBRow>,
+    ops_: Operation,
+    data_: Option<Box<YCSBEntry>>,
 
     #[cfg(all(feature = "pmem", feature = "wdrain"))]
     pd_ptr: *mut YCSBEntry,
 }
 
-
 impl TRef for YCSBRef {
-    fn install(&self,  id: Tid) {
+    fn install(&self, id: Tid) {
         match self.ops_ {
             Operation::Push => {
                 panic!("Ops::Push not implemented for YCSBRef");
-            },
+            }
 
             Operation::RWrite => {
                 #[cfg(all(feature = "pmem", feature = "wdrain"))]
@@ -128,13 +111,11 @@ impl TRef for YCSBRef {
                     }
                 }
 
-
                 #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
                 self.inner_.install_val(self.data_.as_ref().unwrap(), id);
-            }, 
-            _ => panic!("not impelented operation")
+            }
+            _ => panic!("not impelented operation"),
         }
-
     }
 
     #[cfg(any(feature = "pmem", feature = "disk"))]
@@ -183,7 +164,7 @@ impl TRef for YCSBRef {
     fn read(&self) -> &Any {
         self.inner_.get_data()
     }
-    
+
     #[cfg(all(feature = "pmem", feature = "wdrain"))]
     fn write(&mut self, ptr: *mut u8) {
         self.pd_ptr = ptr as *mut YCSBEntry;
@@ -193,7 +174,7 @@ impl TRef for YCSBRef {
     fn write(&mut self, val: Box<Any>) {
         match val.downcast::<YCSBEntry>() {
             Ok(val) => self.data_ = Some(val),
-            Err(_) => panic!("YCSBRef::write value should be Box<YCSBEntry>")
+            Err(_) => panic!("YCSBRef::write value should be Box<YCSBEntry>"),
         }
     }
 
@@ -209,7 +190,7 @@ impl TRef for YCSBRef {
         self.inner_.check(vers, tid)
     }
 
-    fn set_access_info(&mut self, txn_info : Arc<TxnInfo> ) {
+    fn set_access_info(&mut self, txn_info: Arc<TxnInfo>) {
         self.inner_.set_access_info(txn_info);
     }
 
@@ -225,7 +206,7 @@ impl TRef for YCSBRef {
     fn write_through(&self, val: Box<Any>, tid: Tid) {
         match val.downcast::<YCSBEntry>() {
             Ok(val) => self.inner_.install_val(&val, tid),
-            Err(_) => panic!("runtime value should be YCSBEntry")
+            Err(_) => panic!("runtime value should be YCSBEntry"),
         }
     }
     fn read_lock(&self, tid: u32) -> bool {
@@ -238,60 +219,44 @@ impl TRef for YCSBRef {
 
     fn write_lock(&self, tid: u32) -> bool {
         match self.ops_ {
-            Operation::RWrite => {
-                self.inner_.vers_.write_lock(tid)
-            },
-            _ => {
-                panic!("write_lock not implemented other than RWrite")
-            }
+            Operation::RWrite => self.inner_.vers_.write_lock(tid),
+            _ => panic!("write_lock not implemented other than RWrite"),
         }
     }
 
-    fn write_unlock(&self, tid: u32)  {
+    fn write_unlock(&self, tid: u32) {
         match self.ops_ {
             Operation::RWrite => {
                 self.inner_.vers_.write_unlock(tid);
-            },
-            _ => {
-                panic!("write_unlock not implemented other than RWrite")
             }
+            _ => panic!("write_unlock not implemented other than RWrite"),
         }
     }
-
 }
-
-
 
 impl YCSBTable {
     pub fn new() -> YCSBTable {
-        YCSBTable {
-            rows_: Vec::new(),
-        }
+        YCSBTable { rows_: Vec::new() }
     }
 
-    pub fn new_with_rows(rows : Vec<Arc<YCSBRow>>) -> YCSBTable {
-        YCSBTable {
-            rows_: rows,
-        }
+    pub fn new_with_rows(rows: Vec<Arc<YCSBRow>>) -> YCSBTable {
+        YCSBTable { rows_: rows }
     }
 
-
-    pub fn insert_raw(&mut self, row: Arc<YCSBRow>){
+    pub fn insert_raw(&mut self, row: Arc<YCSBRow>) {
         self.rows_.push(row)
     }
 
     pub fn retrieve_tref(&self, idx: usize) -> Box<dyn TRef> {
         if idx < self.len() {
             let row = &self.rows_[idx];
-            let tref = Box::new(
-                    YCSBRef {
-                        inner_ : row.clone(),
-                        ops_: Operation::RWrite,
-                        data_ : None,
-                        #[cfg(all(feature = "pmem", feature = "wdrain"))]
-                        pd_ptr: ptr::null_mut(),
-                    }
-                );
+            let tref = Box::new(YCSBRef {
+                inner_: row.clone(),
+                ops_: Operation::RWrite,
+                data_: None,
+                #[cfg(all(feature = "pmem", feature = "wdrain"))]
+                pd_ptr: ptr::null_mut(),
+            });
             tref
         } else {
             panic!("Missing Index {}", idx);
@@ -303,25 +268,20 @@ impl YCSBTable {
     }
 }
 
-
-
 pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
     let mut table = YCSBTable::new();
 
     for _i in 0..conf.ycsb_num_rows {
-        let data : Vec<u8> = (0..YCSB_FIELD_LEN).map(|_x| rand::random::<u8>()).collect();
-        let mut field_data : [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
+        let data: Vec<u8> = (0..YCSB_FIELD_LEN).map(|_x| rand::random::<u8>()).collect();
+        let mut field_data: [u8; YCSB_FIELD_LEN] = [0; YCSB_FIELD_LEN];
         field_data.copy_from_slice(&data.as_slice()[..YCSB_FIELD_LEN]);
-        let field = Field{data_ : field_data};
-        let ycsb_entry = YCSBEntry { 
-           fields_ : field
-        };
+        let field = Field { data_: field_data };
+        let ycsb_entry = YCSBEntry { fields_: field };
 
-        
         #[cfg(not(all(feature = "pmem", feature = "dir")))]
         {
             let arc = Arc::new(Row::new(ycsb_entry));
-            table.insert_raw(arc);
+            table.insert_raw(arc.clone());
 
             #[cfg(feature = "pmem")]
             {
@@ -330,11 +290,10 @@ pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
             }
         }
 
-
         #[cfg(all(feature = "pmem", feature = "dir"))]
         {
             let p = PmemFac::alloc(mem::size_of::<YCSBEntry>()) as *mut YCSBEntry;
-            unsafe{p.write(ycsb_entry)};
+            unsafe { p.write(ycsb_entry) };
             let arc = Arc::new(Row::new_from_ptr(p));
             table.insert_raw(arc);
         }
@@ -343,39 +302,32 @@ pub fn prepare_workload(conf: &Config) -> Arc<YCSBTable> {
     return Arc::new(table);
 }
 
-pub fn do_transaction_occ(tx: &mut TransactionOCC, 
-                          table: &Arc<YCSBTable>,
-                          ops: &Arc<Vec<YCSBOps>>,
-                          op_idx: &mut usize,
-                          num_ops: usize)
-    
-{
+pub fn do_transaction_occ(
+    tx: &mut TransactionOCC,
+    table: &Arc<YCSBTable>,
+    ops: &Arc<Vec<YCSBOps>>,
+    op_idx: &mut usize,
+    num_ops: usize,
+) {
     for _ in 0..num_ops {
         let op = ops[*op_idx].clone();
-        *op_idx = (*op_idx +1) % ops.len();
+        *op_idx = (*op_idx + 1) % ops.len();
 
         match op {
             YCSBOps::Read(idx) => {
                 let tref = table.retrieve_tref(idx);
                 let entry = tx.read::<YCSBEntry>(tref);
                 //println!("Read: Next Op Idx: {}, Key: {}", op_idx, idx);
-            },
-            YCSBOps::Update(idx,val) => {
+            }
+            YCSBOps::Update(idx, val) => {
                 let tref = table.retrieve_tref(idx);
                 tx.write(tref, val);
                 //println!("Write: Next Op Idx: {}, Key: {}", op_idx, idx);
-            },
+            }
         }
     }
 
     //println!("-------DONE------");
-
 }
 
 //pub fn do_transaction_pp(tx: &mut Transaction
-
-
-
-
-
-

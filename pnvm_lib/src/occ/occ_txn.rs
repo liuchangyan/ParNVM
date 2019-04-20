@@ -1,39 +1,31 @@
-use std::{
-    collections::HashMap,
-    rc::Rc,
-    sync::{Arc},
-};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use txn::{self, AbortReason, Tid,  TxState, TxnInfo, Transaction};
-
+use txn::{self, AbortReason, Tid, Transaction, TxState, TxnInfo};
 
 //#[cfg(any(feature = "pmem", feature="disk"))]
+use tcore::{self, BenchmarkCounter, BoxRef, FieldArray, ObjectId, Operation, TRef, TTag};
 use {plog, pnvm_sys};
-use tcore::{self, ObjectId, TTag, TRef, BoxRef, Operation, FieldArray, BenchmarkCounter};
 
 #[cfg(feature = "profile")]
 use flame;
 
+const INITIAL_DEP_MAP_CAP: usize = 32;
+const INITIAL_LOCK_VEC_CAP: usize = 32;
+const INITIAL_RECORDS_VEC_CAP: usize = 32;
 
-
-pub struct TransactionOCC
-{
-
-    tid_:   Tid,
-    state_: TxState,
-    deps_:  HashMap<(ObjectId, Operation), TTag>,
-    records_ :     Vec<(Box<dyn TRef>, Option<FieldArray>)>,
-    locks_ : Vec<*const TTag>,
-    txn_info_ : Arc<TxnInfo>,
+pub struct TransactionOCC {
+    tid_:          Tid,
+    state_:        TxState,
+    deps_:         HashMap<(ObjectId, Operation), TTag>,
+    records_:      Vec<(Box<dyn TRef>, Option<FieldArray>)>,
+    locks_:        Vec<*const TTag>,
+    txn_info_:     Arc<TxnInfo>,
     should_abort_: bool,
-
 }
 
-impl Transaction for TransactionOCC
-{
-
-     #[cfg_attr(feature = "profile", flame)]
-     fn try_commit(&mut self) -> bool {
+impl Transaction for TransactionOCC {
+    #[cfg_attr(feature = "profile", flame)]
+    fn try_commit(&mut self) -> bool {
         if self.should_abort_ {
             return self.abort(AbortReason::IndexErr);
         }
@@ -54,13 +46,11 @@ impl Transaction for TransactionOCC
         true
     }
 
-     fn read<'b, T:'static + Clone>(&'b mut self, tref: Box<dyn TRef>) -> &'b T 
-    {
-        
+    fn read<'b, T: 'static>(&'b mut self, tref: Box<dyn TRef>) -> &'b T {
         //Get the tx id
         let id = *tref.get_id();
 
-        //Get the current object's version 
+        //Get the current object's version
         let vers = tref.get_version();
 
         //Insert a tag
@@ -71,53 +61,50 @@ impl Transaction for TransactionOCC
         tag.get_data()
     }
 
-
     //#[cfg_attr(feature = "profile", flame)]
-     fn write<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T) 
-    {
+    fn write<T: 'static>(&mut self, tref: Box<dyn TRef>, val: T) {
         //Get the object id
         let id = *tref.get_id();
 
         //Create tag and store the temporary value
-        let tag = self.retrieve_tag(&id,tref, Operation::RWrite);
+        let tag = self.retrieve_tag(&id, tref, Operation::RWrite);
         tag.write::<T>(val);
     }
 
-     fn write_field<T:'static + Clone>(&mut self, tref: Box<dyn TRef>, val: T, fields: FieldArray) 
-     {
-         let o_id = *tref.get_id(); 
-         let tag = self.retrieve_tag(&o_id, tref, Operation::RWrite);
-         tag.write::<T>(val);
-         tag.set_fields(fields);
-     }
+    fn write_field<T: 'static>(&mut self, tref: Box<dyn TRef>, val: T, fields: FieldArray) {
+        let o_id = *tref.get_id();
+        let tag = self.retrieve_tag(&o_id, tref, Operation::RWrite);
+        tag.write::<T>(val);
+        tag.set_fields(fields);
+    }
 
-     fn id(&self) -> Tid {
+    fn id(&self) -> Tid {
         self.tid_
     }
 
-     fn txn_info(&self) -> &Arc<TxnInfo>  {
+    fn txn_info(&self) -> &Arc<TxnInfo> {
         &self.txn_info_
     }
 
-     fn should_abort(&mut self) {
+    fn should_abort(&mut self) {
         self.should_abort_ = true;
     }
 
     //#[cfg_attr(feature = "profile", flame)]
     #[inline(always)]
-     fn retrieve_tag(&mut self,
-                        id: &ObjectId, 
-                        tobj_ref: Box<dyn TRef>,
-                        ops: Operation
-                        ) 
-        -> &mut TTag
-        {
-            self.deps_.entry((*id, ops)).or_insert(TTag::new(*id, tobj_ref))
-        }
+    fn retrieve_tag(
+        &mut self,
+        id: &ObjectId,
+        tobj_ref: Box<dyn TRef>,
+        ops: Operation,
+    ) -> &mut TTag {
+        self.deps_
+            .entry((*id, ops))
+            .or_insert(TTag::new(*id, tobj_ref))
+    }
 }
 
-impl TransactionOCC
-{
+impl TransactionOCC {
     pub fn new(tid_: Tid) -> TransactionOCC {
         //txn::mark_start(tid_);
         TransactionOCC {
@@ -126,11 +113,10 @@ impl TransactionOCC
             deps_: HashMap::with_capacity(32),
             locks_: Vec::with_capacity(32),
             txn_info_: Arc::new(TxnInfo::new(tid_)),
-            should_abort_ : false,
+            should_abort_: false,
             records_: Vec::with_capacity(32),
         }
     }
-
 
     #[cfg_attr(feature = "profile", flame)]
     pub fn abort(&mut self, reason: AbortReason) -> bool {
@@ -145,7 +131,7 @@ impl TransactionOCC
     #[cfg_attr(feature = "profile", flame)]
     pub fn lock(&mut self) -> bool {
         warn!("Tx[{:?}] is LOCKING", self.tid_);
-        let me  = self.id();
+        let me = self.id();
         for tag in self.deps_.values_mut() {
             if !tag.has_write() {
                 continue;
@@ -153,7 +139,7 @@ impl TransactionOCC
             if !tag.lock(me) {
                 warn!("{:?} LOCKED FAILED -----", me);
                 return false;
-            } 
+            }
             debug!("{:#?} locked!", tag);
         }
 
@@ -171,16 +157,19 @@ impl TransactionOCC
             }
 
             //Check if the versions match
-            if !tag.check(tag.vers_, self.id().into())  {
-                warn!("{:?} CHECKED FAILED ---- EXPECT: {}, BUT: {}",
-                      self.tid_, tag.get_version(), tag.vers_);
+            if !tag.check(tag.vers_, self.id().into()) {
+                warn!(
+                    "{:?} CHECKED FAILED ---- EXPECT: {}, BUT: {}",
+                    self.tid_,
+                    tag.get_version(),
+                    tag.vers_
+                );
                 return false;
             }
         }
         warn!("Tx[{:?}] CHECKED OK", self.tid_);
         true
     }
-
 
     #[cfg_attr(feature = "profile", flame)]
     fn commit(&mut self) -> bool {
@@ -189,7 +178,6 @@ impl TransactionOCC
         tcore::BenchmarkCounter::success();
         self.state_ = TxState::COMMITTED;
 
-
         //Persist the write set logs
         //#[cfg(any(feature = "pmem", feature="disk"))]
         self.do_log();
@@ -197,9 +185,8 @@ impl TransactionOCC
         //Install write sets into the underlying data
         self.install_data();
 
-
         //Persist the data
-        #[cfg(any(feature = "pmem", feature="disk"))]
+        #[cfg(any(feature = "pmem", feature = "disk"))]
         self.persist_data();
 
         //Persist commit the transaction
@@ -231,14 +218,15 @@ impl TransactionOCC
                 logs.push(tag.make_log(id));
 
                 #[cfg(not(all(feature = "pmem", feature = "wdrain")))]
-                self.records_.push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
+                self.records_
+                    .push((tag.tobj_ref_.box_clone(), tag.fields_.clone()));
             }
         }
 
         plog::persist_log(logs);
     }
 
-    #[cfg(any(feature = "pmem", feature="disk"))]
+    #[cfg(any(feature = "pmem", feature = "disk"))]
     #[cfg_attr(feature = "profile", flame)]
     fn persist_data(&mut self) {
         for (record, fields) in self.records_.drain(..) {
@@ -246,7 +234,7 @@ impl TransactionOCC
             {
                 match fields {
                     Some(ref fields) => {
-                        for field in fields.iter(){
+                        for field in fields.iter() {
                             let paddr = record.get_pmem_field_addr(*field);
                             let size = record.get_field_size(*field);
                             BenchmarkCounter::flush(size);
@@ -260,38 +248,32 @@ impl TransactionOCC
                                 pnvm_sys::memcpy_nodrain(paddr, vaddr, size);
                             }
                         }
-
-                    },
-                    None=> {
+                    }
+                    None => {
                         let paddr = record.get_pmem_addr();
-                        let layout  = record.get_layout();
+                        let layout = record.get_layout();
 
                         BenchmarkCounter::flush(layout.size());
                         #[cfg(feature = "dir")]
                         pnvm_sys::flush(paddr, layout.size());
-
 
                         #[cfg(not(feature = "dir"))]
                         {
                             let vaddr = record.get_ptr();
                             pnvm_sys::memcpy_nodrain(paddr, vaddr, layout.size());
                         }
-
                     }
                 }
             }
-
-
 
             #[cfg(feature = "disk")]
             {
                 let paddr = record.get_pmem_addr();
                 let vaddr = record.get_ptr();
-                let layout  = record.get_layout();
+                let layout = record.get_layout();
                 pnvm_sys::disk_memcpy(paddr, vaddr, layout.size());
                 pnvm_sys::disk_msync(paddr, layout.size());
             }
-
         }
 
         //for tag in self.deps_.values() {
@@ -319,6 +301,18 @@ impl TransactionOCC
 
         debug!("All cleaned up");
     }
+}
 
-
+impl Default for TransactionOCC {
+    fn default() -> Self {
+        TransactionOCC {
+            tid_:          Tid::default(),
+            state_:        TxState::EMBRYO,
+            deps_:         HashMap::with_capacity(INITIAL_DEP_MAP_CAP),
+            locks_:        Vec::with_capacity(INITIAL_LOCK_VEC_CAP),
+            txn_info_:     Arc::new(TxnInfo::default()),
+            should_abort_: false,
+            records_:      Vec::with_capacity(INITIAL_RECORDS_VEC_CAP),
+        }
+    }
 }

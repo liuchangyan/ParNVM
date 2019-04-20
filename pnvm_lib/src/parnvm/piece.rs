@@ -1,4 +1,3 @@
-
 //#[cfg(any(feature = "pmem", feature = "disk"))]
 use plog::PLog;
 
@@ -8,7 +7,7 @@ use txn::Tid;
 
 use std::mem;
 
-use super::nvm_txn_2pl::{TransactionPar};
+use super::nvm_txn_2pl::TransactionPar;
 use super::nvm_txn_occ::TransactionParOCC;
 
 //FIXME: core
@@ -26,25 +25,23 @@ impl Pid {
 type FnPtr = Arc<Box<Fn(&mut TransactionPar) -> i32 + Send + Sync>>;
 type FnPtrOCC = Arc<Box<Fn(&mut TransactionParOCC) + Send + Sync>>;
 
-
 #[derive(Clone)]
 pub struct Piece {
     callback_: FnPtr,
     pid_:      Pid,
     tname_:    String, /* FIXME: use str */
     title_:    String,
-    rank_:       usize,
+    rank_:     usize,
     //R/W sets?
 }
 
 #[derive(Clone)]
-pub struct PieceOCC
-{
+pub struct PieceOCC {
     callback_: FnPtrOCC,
     pid_:      Pid,
     tname_:    String,
     title_:    String,
-    rank_:       usize,
+    rank_:     usize,
     //R/W sets?
 }
 
@@ -58,8 +55,7 @@ impl Debug for Piece {
     }
 }
 
-impl Debug for PieceOCC
-{
+impl Debug for PieceOCC {
     fn fmt(&self, f: &mut Formatter) -> Result {
         write!(
             f,
@@ -70,24 +66,18 @@ impl Debug for PieceOCC
 }
 
 impl Piece {
-    pub fn new(
-        pid: Pid,
-        tname: String,
-        cb: FnPtr,
-        title: &str,
-        rank: usize
-    ) -> Piece {
+    pub fn new(pid: Pid, tname: String, cb: FnPtr, title: &str, rank: usize) -> Piece {
         Piece {
             callback_: cb,
             pid_:      pid,
             tname_:    tname,
             title_:    String::from(title),
-            rank_ :     rank,
+            rank_:     rank,
         }
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&self, tx : &mut TransactionPar) -> i32 {
+    pub fn run(&self, tx: &mut TransactionPar) -> i32 {
         (self.callback_)(tx)
     }
 
@@ -100,26 +90,19 @@ impl Piece {
     }
 }
 
-impl PieceOCC
-{
-    pub fn new(
-        pid: Pid,
-        tname: String,
-        cb: FnPtrOCC,
-        title: &str,
-        rank: usize
-    ) -> PieceOCC {
+impl PieceOCC {
+    pub fn new(pid: Pid, tname: String, cb: FnPtrOCC, title: &str, rank: usize) -> PieceOCC {
         PieceOCC {
             callback_: cb,
             pid_:      pid,
             tname_:    tname,
             title_:    String::from(title),
-            rank_ :     rank,
+            rank_:     rank,
         }
     }
 
     #[cfg_attr(feature = "profile", flame)]
-    pub fn run(&self, tx : &mut TransactionParOCC){
+    pub fn run(&self, tx: &mut TransactionParOCC) {
         (self.callback_)(tx)
     }
 
@@ -131,7 +114,6 @@ impl PieceOCC
         self.rank_
     }
 }
-
 
 #[derive(Debug, Copy, Clone)]
 pub enum PieceState {
@@ -152,13 +134,13 @@ impl DataRecord {
     pub fn new<T: ?Sized>(t: &T) -> Self {
         let ptr = unsafe { mem::transmute::<&T, *const T>(t) };
         DataRecord {
-            ptr:   ptr as *mut u8, 
+            ptr:    ptr as *mut u8,
             layout: Layout::for_value(t),
         }
     }
 
     //FIXME: can it be self here?
-//#[cfg(any(feature = "pmem", feature = "disk"))]
+    //#[cfg(any(feature = "pmem", feature = "disk"))]
     pub fn as_log(&self, id: Tid) -> PLog {
         PLog::new(self.ptr, self.layout.clone(), id)
     }

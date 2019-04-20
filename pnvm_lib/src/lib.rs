@@ -12,8 +12,8 @@
 #![cfg_attr(feature = "profile", plugin(flamer))]
 
 //#[cfg(any(feature = "pmem", feature ="disk"))]
-extern crate pnvm_sys;
 extern crate alloc;
+extern crate pnvm_sys;
 
 extern crate core;
 #[cfg(feature = "profile")]
@@ -25,35 +25,34 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 
+extern crate chashmap;
+extern crate concurrent_hashmap;
 extern crate crossbeam;
 extern crate libc;
 extern crate test;
-extern crate concurrent_hashmap;
-extern crate chashmap;
 
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
 
-
 //#[cfg(any(feature = "pmem", feature ="disk"))]
 pub mod plog;
 
-pub mod tbox;
-pub mod tcore;
-pub mod txn;
+pub mod datatype;
+pub mod lock;
 pub mod occ;
 pub mod parnvm;
-pub mod lock;
+pub mod tcore;
+pub mod txn;
 
 #[cfg(test)]
 mod tests {
     extern crate crossbeam;
     extern crate env_logger;
 
-    use super::occ::occ_txn::{TransactionOCC};
     use super::occ::map::TMap;
-    use super::tbox::TBox;
+    use super::occ::occ_txn::TransactionOCC;
+    //use super::tbox::TBox;
     use super::tcore::TObject;
     use super::txn;
 
@@ -229,39 +228,39 @@ mod tests {
     //     assert_eq!(*(x.borrow()), 2);
     // }
 
-    use super::parnvm::{dep::*, nvm_txn::*, piece::*, map::*};
+    use super::parnvm::{dep::*, map::*, nvm_txn::*, piece::*};
     use std::{
         fs::File,
-        sync::{Arc, RwLock, Barrier},
+        sync::{Arc, Barrier, RwLock},
         thread,
     };
 
-   // use super::table::*;
-   // use super::entry::*;
-   // #[test]
-   // fn test_table_new() {
-   //     let table = Table::<Warehouse, i32>::new(); 
-   //     let warehouse1 = Warehouse {
-   //         w_id: 1,
-   //         w_name: "Singapore".to_string(),
-   //     };
-   //     table.push(warehouse1);
-   //     let wh2 = table.retrieve(&1).expect("non empty").get_ref();
-   //     assert_eq!(wh2.w_name, "Singapore".to_string());
+    // use super::table::*;
+    // use super::entry::*;
+    // #[test]
+    // fn test_table_new() {
+    //     let table = Table::<Warehouse, i32>::new();
+    //     let warehouse1 = Warehouse {
+    //         w_id: 1,
+    //         w_name: "Singapore".to_string(),
+    //     };
+    //     table.push(warehouse1);
+    //     let wh2 = table.retrieve(&1).expect("non empty").get_ref();
+    //     assert_eq!(wh2.w_name, "Singapore".to_string());
 
-   //     let mut wh2 = table.retrieve(&1).expect("non empty").get_mut();
-   //     (*wh2).w_name = "China".to_string(); 
-   //     
-   //     let wh3 = table.retrieve(&1).expect("non empty").get_ref();
-   //     assert_eq!(wh3.w_name, "China".to_string());
-   // }
+    //     let mut wh2 = table.retrieve(&1).expect("non empty").get_mut();
+    //     (*wh2).w_name = "China".to_string();
+    //
+    //     let wh3 = table.retrieve(&1).expect("non empty").get_ref();
+    //     assert_eq!(wh3.w_name, "China".to_string());
+    // }
 
     //#[test]
     //fn test_single_piece_run() {
-    //    
+    //
     //    let data_map = Arc::new(PMap::new());
     //    let barrier = Arc::new(Barrier::new(1));
-    //    
+    //
     //    let piece = Piece::new(
     //        Pid::new(1),
     //        "TXN_1".to_string(),
@@ -273,7 +272,7 @@ mod tests {
     //            let g1 = data_map.get(&1).unwrap();
     //            println!("Read {}", (*g.read(tx).as_ref().unwrap()));
 
-    //            let id :u32 = tx.id().into(); 
+    //            let id :u32 = tx.id().into();
     //            let mut write_g = g1.write(tx);
     //            let mut i = 0;
     //            *write_g.as_mut().unwrap() = id * 100;
@@ -283,12 +282,12 @@ mod tests {
     //        })),
     //        "insert-read",
     //        1);
-    //    
-    //    let txn_base = TransactionParBase::new(vec![piece], "TXN_1".to_string()); 
+    //
+    //    let txn_base = TransactionParBase::new(vec![piece], "TXN_1".to_string());
 
     //    let tx = TransactionPar::new_from_base(&txn_base, Tid::new(1));
-    //    
-    //    
+    //
+    //
     //    crossbeam::scope(|scope| {
     //        //Prepare TXN1
     //        let txn_base = txn_base.clone();
@@ -300,7 +299,7 @@ mod tests {
     //            TransactionPar::register(tx);
     //            TransactionPar::execute();
     //        });
-    //        
+    //
     //        barrier.wait();
     //        TransactionPar::register(tx);
     //        TransactionPar::execute();
@@ -310,7 +309,6 @@ mod tests {
 
     //    // Dump the report to disk
     //}
-
 
     use test::Bencher;
 
@@ -322,7 +320,7 @@ mod tests {
     //    }
 
     //    let mut tx = TransactionOCC::new(Tid::new(1));
-    //    
+    //
     //    b.iter(|| {
     //        let g = map.get(&1).unwrap();
     //        let tag = tx.retrieve_tag(g.get_id(), g.clone());

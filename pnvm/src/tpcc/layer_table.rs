@@ -1,10 +1,4 @@
 //TODO
-
-
-
-
-
-
 pub struct LTable<Entry>
 where Entry : Clone + Debug
 {

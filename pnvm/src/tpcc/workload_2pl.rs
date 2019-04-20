@@ -1,85 +1,93 @@
+use super::{entry::*, numeric::*, table::*, tpcc_tables::*, workload_common::*};
 
+use pnvm_lib::lock::lock_txn::*;
 
-use super::{
-    table::*,
-    entry::*,
-    tpcc_tables::*,
-    numeric::*,
-    workload_common::*,
-};
+use std::{result, str, sync::Arc, time};
 
-use pnvm_lib::{
-    lock::lock_txn::*,
-};
-
-use std::{
-    result,
-    time,
-    sync::Arc,
-    str,
-};
-
-use rand::{
-    thread_rng,
-    rngs::SmallRng,
-    Rng,
-};
+use rand::{rngs::SmallRng, thread_rng, Rng};
 
 type Result2PL = result::Result<(), ()>;
 
-
-fn new_order(tx: &mut Transaction2PL, 
-             tables: &TablesRef,
-             w_id: i32,
-             d_id: i32,
-             c_id: i32,
-             ol_cnt: i32,
-             src_whs : &[i32],
-             item_ids: &[i32],
-             qty: &[i32],
-             now: i32)
-    -> Result2PL
-{
+fn new_order(
+    tx: &mut Transaction2PL,
+    tables: &TablesRef,
+    w_id: i32,
+    d_id: i32,
+    c_id: i32,
+    ol_cnt: i32,
+    src_whs: &[i32],
+    item_ids: &[i32],
+    qty: &[i32],
+    now: i32,
+) -> Result2PL {
     let tid = tx.id();
     warn!("[{:?}][TXN-NEWORDER] ------STARTS------", tid);
-    
+
     /* Acquiring Lock Phase */
     let dis_num = num_district_get();
-    let warehouse_ref = tables.warehouse.retrieve(&w_id, w_id as usize).unwrap().into_table_ref(None, None);
+    let warehouse_ref = tables
+        .warehouse
+        .retrieve(&w_id, w_id as usize)
+        .unwrap()
+        .into_table_ref(None, None);
     tx.read_lock_tref(&warehouse_ref)?;
-    let customer_ref = tables.customer.retrieve(&(w_id, d_id, c_id)).unwrap().into_table_ref(None, None);
+    let customer_ref = tables
+        .customer
+        .retrieve(&(w_id, d_id, c_id))
+        .unwrap()
+        .into_table_ref(None, None);
     tx.read_lock_tref(&customer_ref)?;
-    let district_ref = tables.district.retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize).unwrap().into_table_ref(None, None);
+    let district_ref = tables
+        .district
+        .retrieve(&(w_id, d_id), (w_id * dis_num + d_id) as usize)
+        .unwrap()
+        .into_table_ref(None, None);
     tx.write_lock_tref(&district_ref)?;
-   
+
     //Order
     let order_bucket = tables.order.retrieve_bucket(&(w_id, d_id));
     order_bucket.write_lock(tx.id().into())?;
-    tx.add_locks((*order_bucket.get_id(), LockType::Write), order_bucket.get_tvers());
-    
+    tx.add_locks(
+        (*order_bucket.get_id(), LockType::Write),
+        order_bucket.get_tvers(),
+    );
+
     //NewOrder
     let no_bucket = tables.neworder.retrieve_bucket(&(w_id, d_id));
     no_bucket.write_lock(tx.id().into())?;
-    tx.add_locks((*no_bucket.get_id(), LockType::Write), no_bucket.get_tvers());
+    tx.add_locks(
+        (*no_bucket.get_id(), LockType::Write),
+        no_bucket.get_tvers(),
+    );
 
     let mut item_trefs = vec![];
     let mut stock_trefs = vec![];
-    
+
     let ol_bucket = tables.orderline.retrieve_bucket(&(w_id, d_id));
     ol_bucket.write_lock(tx.id().into())?;
-    tx.add_locks((*ol_bucket.get_id(), LockType::Write), ol_bucket.get_tvers());
+    tx.add_locks(
+        (*ol_bucket.get_id(), LockType::Write),
+        ol_bucket.get_tvers(),
+    );
 
     for i in 0..ol_cnt as usize {
         let id = item_ids[i];
-        let item_ref = tables.item.retrieve(&id, id as usize).unwrap().into_table_ref(None, None);
+        let item_ref = tables
+            .item
+            .retrieve(&id, id as usize)
+            .unwrap()
+            .into_table_ref(None, None);
         tx.read_lock_tref(&item_ref)?;
         item_trefs.push(item_ref);
-        
-        let stock_ref = tables.stock.retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize).unwrap().into_table_ref(None, None);
+
+        let stock_ref = tables
+            .stock
+            .retrieve(&(src_whs[i], item_ids[i]), src_whs[i] as usize)
+            .unwrap()
+            .into_table_ref(None, None);
         tx.write_lock_tref(&stock_ref)?;
         stock_trefs.push(stock_ref);
     }
-
 
     /* Locks Acquired */
     let w_tax = tx.read::<Warehouse>(&warehouse_ref).w_tax;
@@ -92,110 +100,140 @@ fn new_order(tx: &mut Transaction2PL,
     district.d_next_o_id = o_id + 1;
     tx.write_field(&district_ref, district, vec![D_NEXT_O_ID]);
 
-     let mut all_local :i64 = 1;
-     for i in 0..ol_cnt as usize {
-         if w_id != src_whs[i] {
-             all_local = 0;
+    let mut all_local: i64 = 1;
+    for i in 0..ol_cnt as usize {
+        if w_id != src_whs[i] {
+            all_local = 0;
 
-             #[cfg(feature = "noconflict")]
-             panic!("no_conflict!");
-         }
-     }
-      
-     info!("[{:?}][TXN-NEWORDER] push_lock ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]", tid, o_id, w_id, d_id, o_id, c_id, ol_cnt);
+            #[cfg(feature = "noconflict")]
+            panic!("no_conflict!");
+        }
+    }
 
-     tables.order
-         .push_lock(tx,
-               Order {
-                   o_id: o_id, o_d_id: d_id, o_w_id: w_id, 
-                   o_c_id: c_id, o_entry_d: now,
-                   o_carrier_id: 0, o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
-                   o_all_local: Numeric::new(all_local, 1, 0)
-               },
-               tables);
+    info!(
+        "[{:?}][TXN-NEWORDER] push_lock ORDER {:?}, [w_id:{}, d_id:{}, o_id: {}, c_id: {}, cnt {}]",
+        tid, o_id, w_id, d_id, o_id, c_id, ol_cnt
+    );
 
-     info!("[{:?}][TXN-NEWORDER] push_lock NEWORDER  {:?}", tid, o_id);
-     tables.neworder.push_lock(tx,
-                          NewOrder { no_o_id: o_id, no_d_id: d_id, no_w_id: w_id },
-                          tables);
+    tables.order.push_lock(
+        tx,
+        Order {
+            o_id: o_id,
+            o_d_id: d_id,
+            o_w_id: w_id,
+            o_c_id: c_id,
+            o_entry_d: now,
+            o_carrier_id: 0,
+            o_ol_cnt: Numeric::new(ol_cnt as i64, 1, 0),
+            o_all_local: Numeric::new(all_local, 1, 0),
+        },
+        tables,
+    );
 
-     for i in 0..ol_cnt as usize {
-         //let i_price = tables.item.retrieve(item_ids[i]).unwrap().read(tx).i_price;
-         let item_ref = &item_trefs[i];
-         let i_price = tx.read::<Item>(&item_ref).i_price;
-         let stock_ref = &stock_trefs[i];
-         let mut stock = tx.read::<Stock>(&stock_ref).clone();
-         
-         let s_quantity = stock.s_quantity;
-         let s_remote_cnt = stock.s_remote_cnt;
-         let s_order_cnt = stock.s_order_cnt;
-         let s_dist = match d_id {
-             1 => stock.s_dist_01.clone(),
-             2 => stock.s_dist_02.clone(),
-             3 => stock.s_dist_03.clone(),
-             4 => stock.s_dist_04.clone(),
-             5 => stock.s_dist_05.clone(),
-             6 => stock.s_dist_06.clone(),
-             7 => stock.s_dist_07.clone(),
-             8 => stock.s_dist_08.clone(),
-             9 => stock.s_dist_09.clone(),
-             10=> stock.s_dist_10.clone(),
-             _ => panic!("invalid d_id: {}", d_id)
-         };
+    info!("[{:?}][TXN-NEWORDER] push_lock NEWORDER  {:?}", tid, o_id);
+    tables.neworder.push_lock(
+        tx,
+        NewOrder {
+            no_o_id: o_id,
+            no_d_id: d_id,
+            no_w_id: w_id,
+        },
+        tables,
+    );
 
-         let qty = Numeric::new(qty[i] as i64, 4, 0);
-         stock.s_quantity = if s_quantity > qty {
-             stock.s_quantity - qty
-         } else {
-             stock.s_quantity + Numeric::new(91, 4, 0) - qty
-         };
+    for i in 0..ol_cnt as usize {
+        //let i_price = tables.item.retrieve(item_ids[i]).unwrap().read(tx).i_price;
+        let item_ref = &item_trefs[i];
+        let i_price = tx.read::<Item>(&item_ref).i_price;
+        let stock_ref = &stock_trefs[i];
+        let mut stock = tx.read::<Stock>(&stock_ref).clone();
 
-         if src_whs[i] != w_id {
-             stock.s_remote_cnt = stock.s_remote_cnt + s_remote_cnt;
-         } else {
-             stock.s_order_cnt = s_order_cnt + Numeric::new(1, 4, 0);
-         }
-         info!("[{:?}][TXN-NEWORDER] Update STOCK \n\t {:?}", tid, stock);
-         //tx.write(stock_ref, stock);
-         tx.write_field(&stock_ref, stock, vec![S_QUANTITY, S_ORDER_CNT, S_REMOTE_CNT]);
+        let s_quantity = stock.s_quantity;
+        let s_remote_cnt = stock.s_remote_cnt;
+        let s_order_cnt = stock.s_order_cnt;
+        let s_dist = match d_id {
+            1 => stock.s_dist_01.clone(),
+            2 => stock.s_dist_02.clone(),
+            3 => stock.s_dist_03.clone(),
+            4 => stock.s_dist_04.clone(),
+            5 => stock.s_dist_05.clone(),
+            6 => stock.s_dist_06.clone(),
+            7 => stock.s_dist_07.clone(),
+            8 => stock.s_dist_08.clone(),
+            9 => stock.s_dist_09.clone(),
+            10 => stock.s_dist_10.clone(),
+            _ => panic!("invalid d_id: {}", d_id),
+        };
 
-         let ol_amount = qty * i_price * (Numeric::new(1, 1, 0) + w_tax + d_tax) *
-             (Numeric::new(1, 1, 0) - c_discount);
-            
-         //println!("{}", s_dist);
-         info!("[{:?}][TXN-NEWORDER] push_lockING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
-         tables.orderline
-             .push_lock(tx, 
-                   OrderLine {
-                       ol_o_id: o_id, ol_d_id: d_id, ol_w_id: w_id, 
-                       ol_number: i as i32 + 1, ol_i_id: item_ids[i],
-                       ol_supply_w_id: src_whs[i], ol_delivery_d: 0, 
-                       ol_quantity: qty, ol_amount: ol_amount,
-                       ol_dist_info: s_dist
-                   }, tables);
-     }
+        let qty = Numeric::new(qty[i] as i64, 4, 0);
+        stock.s_quantity = if s_quantity > qty {
+            stock.s_quantity - qty
+        } else {
+            stock.s_quantity + Numeric::new(91, 4, 0) - qty
+        };
 
-     Ok(())
+        if src_whs[i] != w_id {
+            stock.s_remote_cnt = stock.s_remote_cnt + s_remote_cnt;
+        } else {
+            stock.s_order_cnt = s_order_cnt + Numeric::new(1, 4, 0);
+        }
+        info!("[{:?}][TXN-NEWORDER] Update STOCK \n\t {:?}", tid, stock);
+        //tx.write(stock_ref, stock);
+        tx.write_field(
+            &stock_ref,
+            stock,
+            vec![S_QUANTITY, S_ORDER_CNT, S_REMOTE_CNT],
+        );
+
+        let ol_amount = qty
+            * i_price
+            * (Numeric::new(1, 1, 0) + w_tax + d_tax)
+            * (Numeric::new(1, 1, 0) - c_discount);
+
+        //println!("{}", s_dist);
+        info!("[{:?}][TXN-NEWORDER] push_lockING ORDERLINE  (w_id:{:?}, d_id:{}, o_id: {}, ol_cnt: {})", tid, w_id, d_id, o_id, i+1);
+        tables.orderline.push_lock(
+            tx,
+            OrderLine {
+                ol_o_id: o_id,
+                ol_d_id: d_id,
+                ol_w_id: w_id,
+                ol_number: i as i32 + 1,
+                ol_i_id: item_ids[i],
+                ol_supply_w_id: src_whs[i],
+                ol_delivery_d: 0,
+                ol_quantity: qty,
+                ol_amount: ol_amount,
+                ol_dist_info: s_dist,
+            },
+            tables,
+        );
+    }
+
+    Ok(())
 }
 
-pub fn new_order_random(tx: &mut Transaction2PL,
-                        tables: &Arc<Tables>, 
-                        w_home : i32,
-                        rng: &mut SmallRng) 
-    -> Result2PL
-{
+pub fn new_order_random(
+    tx: &mut Transaction2PL,
+    tables: &Arc<Tables>,
+    w_home: i32,
+    rng: &mut SmallRng,
+) -> Result2PL {
     let num_wh = num_warehouse_get();
     let num_dis = num_district_get();
-    let now = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs() as i32;     
+    let now = time::SystemTime::now()
+        .duration_since(time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i32;
     //let w_id = urand(1, NUM_WAREHOUSES, rng);
     let w_id = w_home;
     let d_id = urand(1, num_dis, rng);
     let c_id = nurand(1023, 1, 3000, rng);
     let ol_cnt = urand(5, 15, rng);
 
-    let mut supware = [0 as i32;15];
-    let mut itemid = [0 as i32;15];
-    let mut qty = [0 as i32;15];
+    let mut supware = [0 as i32; 15];
+    let mut itemid = [0 as i32; 15];
+    let mut qty = [0 as i32; 15];
 
     for i in 0..ol_cnt as usize {
         //supware[i] = if true {
@@ -205,25 +243,25 @@ pub fn new_order_random(tx: &mut Transaction2PL,
             urandexcept(1, num_wh, w_id, rng)
         };
 
-
         itemid[i] = nurand(8191, 1, 100000, rng);
         qty[i] = urand(1, 10, rng);
-       
+
         #[cfg(feature = "noconflict")]
         {
             supware[i] = w_id;
         }
     }
 
-    new_order(tx, tables, w_id, d_id, c_id, ol_cnt, &supware, &itemid, &qty, now)
+    new_order(
+        tx, tables, w_id, d_id, c_id, ol_cnt, &supware, &itemid, &qty, now,
+    )
 }
 
-
-//pub fn payment_random(tx: &mut Transaction2PL, 
+//pub fn payment_random(tx: &mut Transaction2PL,
 //                      tables: &Arc<Tables>,
 //                      w_home : i32,
 //                      rng : &mut SmallRng,
-//                      ) 
+//                      )
 //    -> bool
 //{
 //    //let w_id = w_home;
@@ -233,13 +271,13 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //    //let w_id = urand(1, NUM_WAREHOUSES, rng);
 //    let w_id = w_home;
 //    let d_id = urand(1, num_dis, rng);
-//        
+//
 //    let x = urand(1, 100, rng);
 //    let y = urand(1, 100, rng);
 //
 //    let mut c_w_id : i32;
 //    let mut c_d_id : i32;
-//     
+//
 //    if num_wh == 1 || x <= 85 {
 //        //85% paying throuhg won house
 //        c_w_id = w_id;
@@ -258,7 +296,7 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //    }
 //
 //    let h_amount = rand_numeric(1.00, 5000.00, 10, 2, rng);
-//    let h_date = gen_now();     
+//    let h_date = gen_now();
 //    //if y<= 60 {
 //    if y <= 60 {
 //        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
@@ -330,13 +368,13 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //    let c_row = match c_id {
 //        Some(c_id) => {
 //            /* Case 1 , by C_ID*/
-//            info!("[{:?}][TXN-PAYMENT] Getting by id {:?}", 
+//            info!("[{:?}][TXN-PAYMENT] Getting by id {:?}",
 //                   tid, c_id);
 //            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
-//        }, 
+//        },
 //        None => {
 //            assert!(c_last.is_some());
-//            info!("[{:?}][TXN-PAYMENT] Getting by Name {:?}", 
+//            info!("[{:?}][TXN-PAYMENT] Getting by Name {:?}",
 //                   tid, c_last);
 //            let c_last = c_last.unwrap();
 //            match tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id)) {
@@ -348,7 +386,7 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //            }
 //        }
 //    };
-//    
+//
 //    let mut c = match tx.read::<Customer>(&c_row) {
 //        Ok(v) => v.clone(),
 //        Err(_) => {
@@ -363,7 +401,7 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //    c.c_ytd_payment += h_amount;
 //    c.c_payment_cnt += Numeric::new(1, 4, 0);
 //    let c_id = c.c_id;
-//    let c_credit = c.c_credit.clone(); 
+//    let c_credit = c.c_credit.clone();
 //    let c_credit = str::from_utf8(&c_credit).unwrap();
 //    match c_credit {
 //        "BC" => {
@@ -408,18 +446,18 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //}
 //
 //
-//pub fn orderstatus_random(tx: &mut Transaction2PL, 
+//pub fn orderstatus_random(tx: &mut Transaction2PL,
 //                      tables: &Arc<Tables>,
 //                      w_home : i32,
 //                      rng : &mut SmallRng,
-//                      ) 
+//                      )
 //    -> bool
 //{
 //    let d_id = urand(1, 10, rng);
 //    let w_id = w_home;
-//    
+//
 //    let y = urand(1, 100, rng);
-//    
+//
 //    if y <= 60 {
 //        let c_last = rand_last_name(nurand(255, 0, 999, rng),rng);
 //        orderstatus(tx, tables, w_id, d_id, w_id , d_id, Some(c_last), None)
@@ -448,10 +486,10 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //        Some(c_id) => {
 //            tables.customer.retrieve(&(c_w_id, c_d_id, c_id)).expect("customer by id empty").into_table_ref(None, None)
 //        },
-//        
+//
 //        None => {
 //            assert!(c_last.is_some());
-//            info!("[{:?}][ORDER-STATUS] Getting by Name {:?}", 
+//            info!("[{:?}][ORDER-STATUS] Getting by Name {:?}",
 //                   tid, c_last);
 //            let c_last = c_last.unwrap();
 //            match tables.customer.find_by_name_id(&(c_last.clone(), c_w_id, c_d_id)) {
@@ -512,7 +550,7 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //            )
 //    -> bool
 //{
-//    let tid = tx.id();    
+//    let tid = tx.id();
 //    info!("[{:?}][DELIVERY STARTs]", tid);
 //    warn!("[{:?}][TXN-DELIVERY] ------STARTS------ ", tid);
 //    let num_dis = num_district_get();
@@ -565,7 +603,7 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //                }
 //            }
 //
-//            
+//
 //            let c_row = tables.customer.retrieve(&(w_id, d_id, o_c_id)).expect("deliver::customer not empty").into_table_ref(None, None);
 //            let mut c = match tx.read::<Customer>(&c_row) {
 //                Ok(c) => c.clone(),
@@ -603,10 +641,10 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //    };
 //    let d_next_o_id = d.d_next_o_id;
 //    info!("[{:?}][STOCK-LEVEL] GETTING NEXT_O_ID [W_D: {}-{}, NEXT_O_ID: {}]", tid, w_id, d_id, d_next_o_id);
-//    
+//
 //    //TODO
 //    let ol_arcs = tables.orderline.find_range(w_id, d_id, d_next_o_id - 20, d_next_o_id);
-//    
+//
 //    let mut ol_i_ids = vec![];
 //    for ol_arc in ol_arcs {
 //        let ol_row = ol_arc.into_table_ref(None, None);
@@ -617,11 +655,11 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //        ol_i_ids.push(ol.ol_i_id);
 //        info!("[{:?}][STOCK-LEVEL] RECENT ORDER LINE [W_D: {}-{}, OL_I_ID: {}]", tid, w_id, d_id, ol.ol_i_id);
 //    }
-//    
+//
 //    let mut low_stock = 0;
 //    for ol_i_id in ol_i_ids.into_iter() {
 //        let stock_row = tables.stock.retrieve(&(w_id, ol_i_id), w_id as usize).expect("no stock").into_table_ref(None,None);
-//        
+//
 //        let stock = match tx.read::<Stock>(&stock_row) {
 //            Ok(s) => s,
 //            Err(_) => return false,
@@ -634,6 +672,3 @@ pub fn new_order_random(tx: &mut Transaction2PL,
 //
 //    true
 //}
-               
-
-

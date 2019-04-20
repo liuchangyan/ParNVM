@@ -1,3 +1,4 @@
+use super::tcore::BenchmarkCounter;
 use libc;
 use pnvm_sys;
 use std::{
@@ -5,7 +6,6 @@ use std::{
     ptr::{self, Unique},
 };
 use txn::Tid;
-use super::tcore::BenchmarkCounter;
 
 //This is the nightly api. Waiting for alloc::allocator::Layout to be stable
 use core::alloc::Layout;
@@ -43,7 +43,7 @@ impl PLog {
                 log_kind: LOG_KIND_DATA,
                 len:      layout.size(),
                 txn_id:   id.into(),
-                is_none: false,
+                is_none:  false,
             },
             data:   PLogData {
                 addr: ptr,
@@ -56,14 +56,14 @@ impl PLog {
         PLog {
             header: PLogHeader {
                 log_kind: LOG_KIND_DATA,
-                len:    layout.size(),
-                txn_id: id.into(),
-                is_none: true,
+                len:      layout.size(),
+                txn_id:   id.into(),
+                is_none:  true,
             },
-            data: PLogData {
+            data:   PLogData {
                 addr: ptr::null_mut(),
                 size: layout.size(),
-            }
+            },
         }
     }
 
@@ -128,23 +128,23 @@ pub fn persist_log(logs: Vec<PLog>) {
 
     iovecs.shrink_to_fit();
     debug_assert!(iovecs.capacity() == iovecs.len());
-    
-    #[cfg(feature="pmem")]
+
+    #[cfg(feature = "pmem")]
     pnvm_sys::persist_log(&iovecs);
 
-    #[cfg(feature="disk")]
+    #[cfg(feature = "disk")]
     pnvm_sys::disk_persist_log(&iovecs);
 }
 
 pub fn persist_txn(id: u32) {
-    let mut iovecs :Vec<libc::iovec> = Vec::with_capacity(2);
+    let mut iovecs: Vec<libc::iovec> = Vec::with_capacity(2);
 
     let log = PLog {
         header: PLogHeader {
             log_kind: LOG_KIND_TXN,
             len:      size_of::<u32>(),
             txn_id:   id,
-            is_none: false,
+            is_none:  false,
         },
 
         data: PLogData {
@@ -159,10 +159,10 @@ pub fn persist_txn(id: u32) {
     iovecs.shrink_to_fit();
     debug_assert!(iovecs.capacity() == iovecs.len());
 
-    #[cfg(feature="pmem")]
+    #[cfg(feature = "pmem")]
     pnvm_sys::persist_log(&iovecs);
 
-    #[cfg(feature="disk")]
+    #[cfg(feature = "disk")]
     pnvm_sys::disk_persist_log(&iovecs);
     //pnvm_sys::walk(0, visit_log);
 }

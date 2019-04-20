@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![feature(alloc, allocator_api)]
 #![feature(ptr_internals)]
 #![feature(box_into_raw_non_null)]
@@ -12,7 +13,7 @@ extern crate core;
 extern crate log;
 
 extern crate errno;
-use errno::{Errno, errno};
+use errno::errno;
 
 use libc::*;
 
@@ -24,25 +25,13 @@ pub use alloc::allocator::{Alloc, AllocErr, Layout};
 
 extern crate rand;
 
-use std::{
-    cell::RefCell,
-    ffi::{CStr, CString},
-    fmt,
-    mem::*,
-    ptr,
-    rc::Rc,
-    str,
-    string::String,
-    thread,
-    ptr::NonNull,
-};
+use std::{cell::RefCell, ffi::CString, ptr::NonNull, rc::Rc, str, string::String, thread};
 
 const LPREFIX: &'static str = "pnvm_sys::";
-const PMEM_FILE_CREATE : c_int = 1 << 0;
-const PMEM_FILE_EXCL:   c_int = 1<<1;
-const PMEM_FILE_SPARSE : c_int = 1<<2;
-const PMEM_FILE_TMPFILE: c_int = 1<<3;
-
+const PMEM_FILE_CREATE: c_int = 1 << 0;
+const PMEM_FILE_EXCL: c_int = 1 << 1;
+const PMEM_FILE_SPARSE: c_int = 1 << 2;
+const PMEM_FILE_TMPFILE: c_int = 1 << 3;
 
 /* *************
  * Exposed APIS
@@ -64,30 +53,25 @@ pub fn flush(ptr: *mut u8, size: usize) {
 }
 
 pub fn drain() {
-    unsafe {pmem_drain()};
+    unsafe { pmem_drain() };
 }
 
-
 /* Disk Operations*/
-pub fn disk_memcpy(dest: *mut u8, src: *mut u8, n : size_t) -> *mut u8 {
-    unsafe { memcpy(dest as *mut c_void, src as *const c_void, n) as *mut u8}
+pub fn disk_memcpy(dest: *mut u8, src: *mut u8, n: size_t) -> *mut u8 {
+    unsafe { memcpy(dest as *mut c_void, src as *const c_void, n) as *mut u8 }
 }
 
 pub fn disk_msync(addr: *mut u8, len: size_t) -> c_int {
-    unsafe { msync(addr as *mut c_void, len, MS_ASYNC)}
+    unsafe { msync(addr as *mut c_void, len, MS_ASYNC) }
 }
 
 pub fn disk_persist_log(iovecs: &Vec<iovec>) {
-    DISK_LOGGER.with(|disk_log| disk_log.borrow_mut().append_many(iovecs, iovecs.len() as i32));
+    DISK_LOGGER.with(|disk_log| {
+        disk_log
+            .borrow_mut()
+            .append_many(iovecs, iovecs.len() as i32)
+    });
 }
-
-
-
-
-//pub fn persist_single(addr : *const c_void, size : usize) {
-//    trace!("persit_single::(addr : {:p}, size : {})", addr, size);
-//    PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_single(addr, size));
-//}
 
 pub fn persist_log(iovecs: &Vec<iovec>) {
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().append_many(iovecs, iovecs.len()));
@@ -96,7 +80,7 @@ pub fn persist_log(iovecs: &Vec<iovec>) {
 pub fn walk(
     chunksize: usize,
     callback: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
-    ) {
+) {
     trace!("walk : chunksize = {}", chunksize);
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().walk(chunksize, callback));
 }
@@ -106,81 +90,76 @@ pub fn init() {
     PMEM_LOGGER.with(|pmem_log| pmem_log.borrow_mut().check());
 }
 
-pub fn mmap_file(path: String, len: usize) -> *mut u8 
-{
-    let path = CString::new(path).unwrap();    
+pub fn mmap_file(path: String, len: usize) -> *mut u8 {
+    let path = CString::new(path).unwrap();
     let pathp = path.as_ptr();
 
-    let mut mapped_len : NonNull<usize> = Box::into_raw_non_null(Box::new(0));
-    let mut is_pmem: NonNull<c_int> = Box::into_raw_non_null(Box::new(0));
+    let mapped_len: NonNull<usize> = Box::into_raw_non_null(Box::new(0));
+    let is_pmem: NonNull<c_int> = Box::into_raw_non_null(Box::new(0));
 
     let ret = unsafe {
-        pmem_map_file(pathp, len, PMEM_FILE_CREATE | PMEM_FILE_TMPFILE, 0777, 
-                      mapped_len.as_ptr(), 
-                      is_pmem.as_ptr())
+        pmem_map_file(
+            pathp,
+            len,
+            PMEM_FILE_CREATE | PMEM_FILE_TMPFILE,
+            0777,
+            mapped_len.as_ptr(),
+            is_pmem.as_ptr(),
+        )
     };
 
-    if(ret.is_null()) {
+    if ret.is_null() {
         panic!("[pmem_map_file] failed {}", errno());
     }
 
-
-    if(!mapped_len.as_ptr().is_null()) {
+    if !mapped_len.as_ptr().is_null() {
         //unsafe {assert_eq!(mapped_len.as_ref(), &len)};
         //unsafe{ debug!("[pmem_map_file]: mapped_len is {}", mapped_len.as_ref())};
     } else {
         panic!("[pmem_map_file]:mapped_len is null");
     }
 
-    if(!is_pmem.as_ptr().is_null()) {
+    if !is_pmem.as_ptr().is_null() {
         unsafe {
             debug!("[pmem_map_file]: is_pmem: {}", is_pmem.as_ref());
             //    IS_PMEM.with(|is_pmem_ref| is_pmem_ref.borrow_mut() = is_pmem);
         }
-        //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
+    //unsafe { debug!("[pmem_map_file] is_pmem: {}", is_pmem.as_ref())};
     } else {
         panic!("[pmem_map_file]: is_pmeme is null");
     }
 
     debug!("mmap_file(): {:p}", ret);
     ret as *mut u8
-
 }
 
-
-
-pub fn memcpy_persist(pmemaddr: *mut u8, src: *mut u8, len: usize) 
-{
-    unsafe {pmem_memcpy_persist(pmemaddr as *mut c_void, src as *mut c_void, len)};
+pub fn memcpy_persist(pmemaddr: *mut u8, src: *mut u8, len: usize) {
+    unsafe { pmem_memcpy_persist(pmemaddr as *mut c_void, src as *mut c_void, len) };
 }
 
-pub fn memcpy_nodrain(pmemaddr: *mut u8, src: *mut u8, len: usize) 
-{
-    unsafe {pmem_memcpy_nodrain(pmemaddr as *mut c_void, src as *mut c_void, len)};
+pub fn memcpy_nodrain(pmemaddr: *mut u8, src: *mut u8, len: usize) {
+    unsafe { pmem_memcpy_nodrain(pmemaddr as *mut c_void, src as *mut c_void, len) };
 }
 
-pub fn memset_persist(pmemaddr: *mut u8, c : i32, len: usize) 
-{
-    unsafe {pmem_memset_persist(pmemaddr as *mut c_void, c as c_int, len)};
+pub fn memset_persist(pmemaddr: *mut u8, c: i32, len: usize) {
+    unsafe { pmem_memset_persist(pmemaddr as *mut c_void, c as c_int, len) };
 }
 
 pub fn unmap(pmemaddr: *mut u8, len: usize) {
-    unsafe {pmem_unmap(pmemaddr as *mut c_void, len)};
+    unsafe { pmem_unmap(pmemaddr as *mut c_void, len) };
 }
 
 pub fn has_hw_drain() -> c_int {
-    unsafe {pmem_has_hw_drain()}
+    unsafe { pmem_has_hw_drain() }
 }
 
 pub fn has_auto_flush() -> c_int {
-    unsafe {pmem_has_auto_flush()}
+    unsafe { pmem_has_auto_flush() }
 }
-
 
 /* *****************
  *   Mappings
  * ****************/
-
 
 #[link(name = "pmem")]
 extern "C" {
@@ -201,13 +180,21 @@ extern "C" {
         mode: mode_t,
         mapped_lenp: *mut usize,
         is_pmemp: *mut c_int,
-        ) -> *mut c_void;
+    ) -> *mut c_void;
     pub fn pmem_msync(addr: *const c_void, len: usize) -> c_int;
     pub fn pmem_persist(addr: *const c_void, len: usize);
     pub fn pmem_unmap(addr: *mut c_void, len: usize) -> c_int;
-    pub fn pmem_memset_persist(pmemdest : *mut c_void, c: c_int, len: usize) -> *mut c_void;
-    pub fn pmem_memcpy_persist(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
-    pub fn pmem_memcpy_nodrain(pmemdest: *mut c_void, src: *const c_void, len: usize) -> *mut c_void;
+    pub fn pmem_memset_persist(pmemdest: *mut c_void, c: c_int, len: usize) -> *mut c_void;
+    pub fn pmem_memcpy_persist(
+        pmemdest: *mut c_void,
+        src: *const c_void,
+        len: usize,
+    ) -> *mut c_void;
+    pub fn pmem_memcpy_nodrain(
+        pmemdest: *mut c_void,
+        src: *const c_void,
+        len: usize,
+    ) -> *mut c_void;
 
 }
 
@@ -225,25 +212,8 @@ extern "C" {
         chunksize: usize,
         process_chunk: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
         arg: *mut c_void,
-        );
+    );
 }
-
-//#[link(name = "memkind")]
-//extern "C" {
-//    //Memkind Wrappers
-//    pub fn memkind_create_pmem(
-//        dir: *const c_char,
-//        max_size: size_t,
-//        kind: *mut *mut MemKind,
-//    ) -> c_int;
-//
-//    pub fn memkind_malloc(kind: *mut MemKind, size: size_t) -> *mut u8;
-//    pub fn memkind_free(kind: *mut MemKind, ptr: *mut u8);
-//    pub fn memkind_check_available(kind: *mut MemKind) -> c_int;
-//
-//    pub fn memkind_pmem_destroy(kind: *mut MemKind) -> c_int;
-//}
-
 
 pub const PMEM_MIN_SIZE: usize = 1024 * 1024 * 16;
 pub const PMEM_DEFAULT_SIZE: usize = 48 * PMEM_MIN_SIZE;
@@ -253,23 +223,9 @@ pub const PMEM_FILE_DIR: Option<&'static str> = option_env!("PMEM_FILE_DIR");
 pub const PMEM_FILE_DIR_BYTES: &'static [u8] = b"/home/v-xuc/ParNVM/data\0";
 //FIXME:
 pub const PLOG_FILE_PATH: Option<&'static str> = option_env!("PLOG_FILE_PATH");
-const DISK_LOG_FILE : &'static str = "/home/v-xuc/ParNVM/v-data/log";
+const DISK_LOG_FILE: &'static str = "/home/v-xuc/ParNVM/v-data/log";
 const PLOG_MIN_SIZE: usize = 1024 * 1024 * 2;
 const PLOG_DEFAULT_SIZE: usize = 2 * PLOG_MIN_SIZE;
-
-//#[repr(C)]
-//pub struct MemKind {
-//    ops_ptr: *mut c_void,
-//    partitions: c_uint,
-//    name: [u8; 64],
-//    init_once: c_int, //No matching type in libc tho
-//    arena_map_len: c_uint,
-//    arena_map: *mut c_uint,
-//    arena_key: pthread_key_t,
-//    _priv: *mut c_void,
-//    arena_map_mask: c_uint,
-//    arena_zero: c_uint,
-//}
 
 #[repr(C)]
 pub struct LogPool {
@@ -296,12 +252,12 @@ pub struct LogHeader {
     compat_feat: uint32_t,
     incompat_feat: uint32_t,
     ro_compat_feat: uint32_t,
-    poolset_uuid: uuid_t,
-    uuid: uuid_t,
-    prev_part_uuid: uuid_t,
-    next_part_uuid: uuid_t,
-    prev_repl_uuid: uuid_t,
-    next_repl_uuid: uuid_t,
+    poolset_uuid: Uuid,
+    uuid: Uuid,
+    prev_part_uuid: Uuid,
+    next_part_uuid: Uuid,
+    prev_repl_uuid: Uuid,
+    next_repl_uuid: Uuid,
 
     crtime: uint64_t,
     arch_flags: ArchFlags,
@@ -313,7 +269,7 @@ pub struct LogHeader {
     checksum: uint64_t,
 }
 
-type uuid_t = [c_uchar; 16];
+type Uuid = [c_uchar; 16];
 
 #[repr(C)]
 pub struct ArchFlags {
@@ -333,20 +289,11 @@ pub struct ShutdownState {
     checksum: uint64_t,
 }
 
-//#[derive(Debug, Copy, Clone)]
-//pub struct PMem {
-//    pub kind: *mut MemKind,
-//    pub size: usize,
-//}
-
 thread_local!{
-    //This init should just be dummy
-    //    pub static PMEM_ALLOCATOR : Rc<RefCell<PMem>> = Rc::new(RefCell::new(PMem::new(String::from(PMEM_FILE_DIR.expect("PMEM_FILE_DIR env must be set at compile time")), PMEM_DEFAULT_SIZE)));
 
     pub static PMEM_LOGGER : Rc<RefCell<PLog>> = Rc::new(RefCell::new(PLog::new(String::from(PLOG_FILE_PATH.expect("plog_file_path should be set at compile time")), PLOG_DEFAULT_SIZE, !std::env::var("DEBUG").unwrap_or("false".to_string()).parse::<bool>().unwrap())));
 
     pub static DISK_LOGGER: Rc<RefCell<DLogger>>= Rc::new(RefCell::new(DLogger::new(String::from(DISK_LOG_FILE))));
-    //pub static IS_PMEM: Rc<RefCell<i32>> = Rc::new(RefCell::new(0));
 
 }
 
@@ -469,51 +416,44 @@ pub struct PLog {
 }
 
 pub struct DLogger {
-    fd : c_int,
+    fd: c_int,
     path: String,
 }
 
-
-//TODO:
+//Logger for Disk
 impl DLogger {
-    fn new(path: String)  -> DLogger {
-        //Open a disk file 
+    fn new(path: String) -> DLogger {
+        //Open a disk file
         let mut path_cpy = String::clone(&path);
         path_cpy.push_str(
             thread::current()
-            .name()
-            .expect("thrad local needs to have named threads"),
-            );
+                .name()
+                .expect("thrad local needs to have named threads"),
+        );
         let path_cstr = CString::new(path_cpy).unwrap();
         let pathp = path_cstr.as_ptr();
 
-        let mut mode = String::from("a+");
-        let mode_cstr = CString::new(mode).unwrap(); 
+        let mode = String::from("a+");
+        let mode_cstr = CString::new(mode).unwrap();
         let modep = mode_cstr.as_ptr();
 
-        let file = unsafe { fopen(pathp,  modep)};
-        let fd = unsafe {fileno(file)};
+        let file = unsafe { fopen(pathp, modep) };
+        let fd = unsafe { fileno(file) };
 
-        DLogger {
-            fd: fd,
-            path: path,
-        }
+        DLogger { fd: fd, path: path }
     }
 
     fn append_many(&self, iovecs: &Vec<iovec>, size: c_int) {
         warn!("writev : {} items", size);
-        unsafe { writev(self.fd, iovecs.as_ptr() as *const iovec, size)};
+        unsafe { writev(self.fd, iovecs.as_ptr() as *const iovec, size) };
     }
-
 }
 
 impl Drop for DLogger {
-    fn drop(&mut self)  {
-        unsafe { close(self.fd)};  
+    fn drop(&mut self) {
+        unsafe { close(self.fd) };
     }
-
 }
-
 
 impl PLog {
     fn new(path: String, size: usize, thread_local: bool) -> PLog {
@@ -522,9 +462,9 @@ impl PLog {
         if thread_local {
             _path.push_str(
                 thread::current()
-                .name()
-                .expect("thrad local needs to have named threads"),
-                );
+                    .name()
+                    .expect("thrad local needs to have named threads"),
+            );
         }
         let path = CString::new(String::clone(&_path)).unwrap();
         let pathp = path.as_ptr();
@@ -561,7 +501,7 @@ impl PLog {
         &self,
         chunk_size: usize,
         callback: extern "C" fn(buf: *const c_void, len: size_t, arg: *mut c_void) -> c_int,
-        ) {
+    ) {
         unsafe {
             let arg = &1 as *const _ as *mut c_void;
             pmemlog_walk(self.plp, chunk_size, callback, arg)
@@ -581,37 +521,6 @@ impl Drop for PLog {
     }
 }
 
-//impl fmt::Debug for MemKind {
-//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//        //  write!(f, "heyehe")
-//        write!(
-//            f,
-//            "MemKind {{
-//           ops_ptr : {:p}
-//           partitions : {:?}
-//           name : {:?}
-//           init_once : {:?}
-//           arena_map_len : {:?}
-//           arena_map : {:p}
-//           arena_key: {:?}
-//           _priv: {:p}
-//           arena_map_mask : {:}
-//           arena_zero: {:?}
-//       }}",
-//            self.ops_ptr,
-//            self.partitions,
-//            unsafe { str::from_utf8_unchecked(&(self.name)) },
-//            self.init_once,
-//            self.arena_map_len,
-//            self.arena_map,
-//            self.arena_key,
-//            self._priv,
-//            self.arena_map_mask,
-//            self.arena_zero
-//        )
-//    }
-//}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -621,7 +530,7 @@ mod tests {
 
     const PMEM_TEST_PATH_ABS: &str = "/home/v-xuc/ParNVM/data";
 
-#[derive(Clone)]
+    #[derive(Clone)]
     pub struct Customer {
         pub c_id: i32,
         pub c_d_id: i32,
@@ -645,113 +554,105 @@ mod tests {
         pub c_delivery_cnt: i32, // i32(4,0)
         pub c_data: [u8; 500],
     }
-    
+
     impl Customer {
-        pub fn new( )-> Self {
-                let  c_first : [u8;16] = Default::default();
-                let  c_middle :[u8;2] = Default::default();
-                let  c_last : [u8;16] = Default::default();
-                let  c_street_1 : [u8;20] = Default::default();
-                let  c_street_2 : [u8;20] = Default::default();
-                let  c_city : [u8;20] = Default::default();
-                let  c_state : [u8;2] = Default::default();
-                let  c_zip : [u8;9] = Default::default();
-                let  c_phone : [u8;16] = Default::default();
-                let  c_credit : [u8;2] = Default::default();
-                let  c_data : [u8;500] = [1 ; 500]; 
+        pub fn new() -> Self {
+            let c_first: [u8; 16] = Default::default();
+            let c_middle: [u8; 2] = Default::default();
+            let c_last: [u8; 16] = Default::default();
+            let c_street_1: [u8; 20] = Default::default();
+            let c_street_2: [u8; 20] = Default::default();
+            let c_city: [u8; 20] = Default::default();
+            let c_state: [u8; 2] = Default::default();
+            let c_zip: [u8; 9] = Default::default();
+            let c_phone: [u8; 16] = Default::default();
+            let c_credit: [u8; 2] = Default::default();
+            let c_data: [u8; 500] = [1; 500];
 
-                let c_id = 0;
-                let c_d_id =  1;
-                let c_w_id = 1;
-                let c_since = 1;
-                let c_credit_lim = 1;
-                let c_discount = 1;
-                let c_balance = 1;
-                let c_ytd_payment = 1;
-                let c_payment_cnt = 1;
-                let c_delivery_cnt = 1;
+            let c_id = 0;
+            let c_d_id = 1;
+            let c_w_id = 1;
+            let c_since = 1;
+            let c_credit_lim = 1;
+            let c_discount = 1;
+            let c_balance = 1;
+            let c_ytd_payment = 1;
+            let c_payment_cnt = 1;
+            let c_delivery_cnt = 1;
 
-
-                Customer {
-                    c_id,
-                    c_d_id,
-                    c_w_id,
-                    c_first,
-                    c_middle,
-                    c_last,
-                    c_street_1,
-                    c_street_2,
-                    c_city,
-                    c_state,
-                    c_zip,
-                    c_phone,
-                    c_since, // Timestamp
-                    c_credit,
-                    c_credit_lim,   // i32(12,2)
-                    c_discount,     // i32(4, 4)
-                    c_balance,      // i32(12,2)
-                    c_ytd_payment,  // i32(12,2)
-                    c_payment_cnt,  // i32(4,0)
-                    c_delivery_cnt, // i32(4,0)
-                    c_data,
-                }
+            Customer {
+                c_id,
+                c_d_id,
+                c_w_id,
+                c_first,
+                c_middle,
+                c_last,
+                c_street_1,
+                c_street_2,
+                c_city,
+                c_state,
+                c_zip,
+                c_phone,
+                c_since, // Timestamp
+                c_credit,
+                c_credit_lim,   // i32(12,2)
+                c_discount,     // i32(4, 4)
+                c_balance,      // i32(12,2)
+                c_ytd_payment,  // i32(12,2)
+                c_payment_cnt,  // i32(4,0)
+                c_delivery_cnt, // i32(4,0)
+                c_data,
             }
-
+        }
     }
-    
-    use std::time::{Duration, Instant};
+
     use std::mem;
+    use std::time::{Duration, Instant};
     #[test]
     fn single_write_dram() {
         let mut counter = 0;
-        let size =  1 << 30;
+        let size = 1 << 30;
         let pmem = mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
         let dram_data = Box::into_raw(Box::new(Customer::new()));
-        let offset_max =  size/ mem::size_of::<Customer>();
+        let offset_max = size / mem::size_of::<Customer>();
         let start = Instant::now();
-        let duration = Duration::new(10, 0); //10 seconds 
+        let duration = Duration::new(10, 0); //10 seconds
         let cus_size = mem::size_of::<Customer>();
-        //let offset = rand::random::<usize>() % offset_max; 
-        let  mut prev = 0;
-        unsafe{
+        //let offset = rand::random::<usize>() % offset_max;
+        let mut prev = 0;
+        unsafe {
             while start.elapsed() < duration {
-                let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
-                prev = (prev+100) % offset_max;
-                memcpy_persist(paddr, 
-                               dram_data as *mut u8, 
-                               cus_size);
+                let paddr = pmem.offset((((prev + 1000) % offset_max) * cus_size) as isize);
+                prev = (prev + 100) % offset_max;
+                memcpy_persist(paddr, dram_data as *mut u8, cus_size);
                 counter += 1;
             }
         }
-        println!("write:counter : {}, time: {:?}",  counter, duration);
+        println!("write:counter : {}, time: {:?}", counter, duration);
     }
-
 
     #[test]
     fn single_write_drain() {
         let mut counter = 0;
-        let size =  1 << 30;
+        let size = 1 << 30;
         let pmem = mmap_file(String::from(PMEM_TEST_PATH_ABS), size);
         let dram_data = Box::into_raw(Box::new(Customer::new()));
-        let offset_max =  size/ mem::size_of::<Customer>();
+        let offset_max = size / mem::size_of::<Customer>();
         let start = Instant::now();
-        let duration = Duration::new(10, 0); //10 seconds 
+        let duration = Duration::new(10, 0); //10 seconds
         let cus_size = mem::size_of::<Customer>();
-        //let offset = rand::random::<usize>() % offset_max; 
-        let  mut prev = 0;
-        unsafe{
+        //let offset = rand::random::<usize>() % offset_max;
+        let mut prev = 0;
+        unsafe {
             while start.elapsed() < duration {
-                let paddr = pmem.offset((((prev+1000) % offset_max) * cus_size) as isize);
-                prev = (prev+100) % offset_max;
-                memcpy_persist(paddr, 
-                               dram_data as *mut u8, 
-                               cus_size);
+                let paddr = pmem.offset((((prev + 1000) % offset_max) * cus_size) as isize);
+                prev = (prev + 100) % offset_max;
+                memcpy_persist(paddr, dram_data as *mut u8, cus_size);
                 pmem_drain();
                 counter += 1;
             }
         }
-        println!("drain(): counter : {}, time: {:?}",  counter, duration);
-
+        println!("drain(): counter : {}, time: {:?}", counter, duration);
     }
 
 }
