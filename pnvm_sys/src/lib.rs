@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-#![feature(alloc, allocator_api)]
-#![feature(ptr_internals)]
-#![feature(box_into_raw_non_null)]
+// #![feature(alloc)]
+// #![feature(ptr_internals)]
+// #![feature(box_into_raw_non_null)]
 extern crate libc;
 
 #[cfg(not(any(feature = "profile", feature = "unstable")))]
@@ -21,7 +21,8 @@ use libc::*;
 pub use core::alloc::{Alloc, AllocErr, GlobalAlloc, Layout};
 
 #[cfg(not(any(feature = "profile", feature = "unstable")))]
-pub use alloc::allocator::{Alloc, AllocErr, Layout};
+pub use alloc::alloc::{alloc, Layout};
+// pub use core::alloc::{Alloc, AllocErr, Layout};
 
 extern crate rand;
 
@@ -94,11 +95,11 @@ pub fn mmap_file(path: String, len: usize) -> *mut u8 {
     let path = CString::new(path).unwrap();
     let pathp = path.as_ptr();
 
-    let mapped_len: NonNull<usize> = Box::into_raw_non_null(Box::new(0));
-    let is_pmem: NonNull<c_int> = Box::into_raw_non_null(Box::new(0));
+    let mapped_len: NonNull<usize> = NonNull::<usize>::dangling();
+    let is_pmem: NonNull<c_int> = NonNull::<c_int>::dangling();
 
     let ret = unsafe {
-        pmem_map_file(
+         pmem_map_file(
             pathp,
             len,
             PMEM_FILE_CREATE | PMEM_FILE_TMPFILE,
